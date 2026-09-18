@@ -119,4 +119,38 @@ describe("qoder and qoder-cn quota normalization", () => {
     expect(intlNormalized[1].name).toBe("Resource Package");
     expect(intlNormalized[1].total).toBe(100);
   });
+
+  it("expands addOn packs into per-pack rows (soonest-expiring first)", () => {
+    const raw = {
+      quotas: {
+        user: { total: 0, used: 0, remaining: 0, unit: "credits" },
+        addOn: {
+          total: 600,
+          used: 100,
+          remaining: 500,
+          unit: "credits",
+          resetAt: "2026-09-30T15:59:00.000Z",
+          packs: [
+            { total: 500, used: 100, remaining: 400, expiresAt: "2026-09-30T15:59:00.000Z" },
+            { total: 100, used: 0, remaining: 100, expiresAt: "2026-10-18T02:00:00.000Z" },
+          ],
+        },
+        organization: { total: 0, used: 0, remaining: 0, unit: "credits" },
+      },
+    };
+
+    const normalized = parseQuotaData("qoder-cn", raw);
+    expect(normalized).toHaveLength(4);
+    expect(normalized[0].name).toBe("Subscription");
+    expect(normalized[1].name).toBe("Resource Package");
+    expect(normalized[1].total).toBe(600);
+    expect(normalized[2].name).toBe("Bonus Pack 1");
+    expect(normalized[2].used).toBe(100);
+    expect(normalized[2].total).toBe(500);
+    expect(normalized[2].resetAt).toBe("2026-09-30T15:59:00.000Z");
+    expect(normalized[3].name).toBe("Bonus Pack 2");
+    expect(normalized[3].used).toBe(0);
+    expect(normalized[3].total).toBe(100);
+    expect(normalized[3].resetAt).toBe("2026-10-18T02:00:00.000Z");
+  });
 });

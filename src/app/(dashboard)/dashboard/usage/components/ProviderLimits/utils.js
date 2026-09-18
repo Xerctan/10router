@@ -557,6 +557,25 @@ export function parseQuotaData(provider, data) {
               resetAt,
               unlimited: quota.unlimited === true,
             });
+            // Qoder's addOn aggregates every gifted pack; when the usage
+            // service resolved the per-campaign breakdown, surface each one
+            // as its own row (soonest-expiring first), mirroring the web
+            // account page's "包含 N 个资源包" list.
+            if (quotaType === "addOn" && Array.isArray(quota.packs)) {
+              quota.packs.forEach((pack, i) => {
+                normalizedQuotas.push({
+                  name: `Bonus Pack ${i + 1}`,
+                  used: pack.used || 0,
+                  total: pack.total || 0,
+                  unit: quota.unit,
+                  resetAt:
+                    pack.expiresAt && new Date(pack.expiresAt).getFullYear() <= 2099
+                      ? pack.expiresAt
+                      : null,
+                  unlimited: false,
+                });
+              });
+            }
           });
         }
         break;
