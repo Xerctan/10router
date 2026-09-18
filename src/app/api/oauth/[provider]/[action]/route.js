@@ -421,6 +421,8 @@ export async function POST(request, { params }) {
                   ...sessionExtras,
                 },
                 testStatus: "active",
+                // Browser re-authorize supersedes the stored failure text.
+                resetErrorState: true,
               })
             : await createProviderConnection({
                 provider: "xiaomi-mimo",

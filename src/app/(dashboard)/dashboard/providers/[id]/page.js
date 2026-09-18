@@ -1038,6 +1038,9 @@ export default function ProviderDetailPage() {
       setOneByOneRunning(false);
       setOneByOneStopping(false);
       stopOneByOneRef.current = false;
+      // The test route has just rewritten testStatus/lastError in the DB —
+      // pull the fresh rows so the badges and red error text match reality.
+      fetchConnections();
     }
   };
 
@@ -1092,6 +1095,12 @@ export default function ProviderDetailPage() {
   };
 
   const handleOAuthSuccess = () => {
+    // Fresh credentials supersede every stale test verdict on this page —
+    // consume the red error chips/banner instead of waiting for a reload.
+    setModelsTestError("");
+    setModelTestResults({});
+    setOneByOneResults({});
+    setOneByOneSummary(null);
     fetchConnections();
     setShowOAuthModal(false);
   };
@@ -1118,6 +1127,10 @@ export default function ProviderDetailPage() {
       }
 
       if (res.ok) {
+        // A first working credential retires the "no valid connections"-style
+        // banner and the red per-model icons from the previous attempt.
+        setModelsTestError("");
+        setModelTestResults({});
         await refreshAfterConnectionChange();
         setShowAddApiKeyModal(false);
         return;
@@ -1138,6 +1151,12 @@ export default function ProviderDetailPage() {
         body: JSON.stringify(formData),
       });
       if (res.ok) {
+        // Same rationale as handleOAuthSuccess: saved (possibly new)
+        // credentials make prior failure chips stale.
+        setModelsTestError("");
+        setModelTestResults({});
+        setOneByOneResults({});
+        setOneByOneSummary(null);
         await fetchConnections();
         setShowEditModal(false);
       }
@@ -1410,6 +1429,11 @@ export default function ProviderDetailPage() {
       setModelTestResults((prev) => ({ ...prev, [modelId]: "error" }));
       setModelsTestError("Network error");
     } finally {
+      // The chat pipeline persists/clears the connection row's lastError
+      // around the response (success cleanup is fire-and-forget) — refetch
+      // shortly after so the red error text on the row tracks the test
+      // result without needing a page reload.
+      setTimeout(() => { fetchConnections(); }, 600);
       setTestingModelIds((prev) => { const n = new Set(prev); n.delete(modelId); return n; });
     }
   };

@@ -124,6 +124,8 @@ export async function POST(request) {
           modelCount: modelCount || existing.providerSpecificData?.modelCount,
         },
         testStatus: validated ? "active" : existing.testStatus,
+        // Re-imported key/session supersedes any stored failure text.
+        resetErrorState: true,
       });
       return NextResponse.json({
         success: true,

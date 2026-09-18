@@ -152,6 +152,14 @@ export async function createProviderConnection(data) {
 
     if (existing) {
       const merged = { ...existing, ...data, updatedAt: now };
+      // Re-provisioned credentials merged onto an existing row: the stored
+      // failure belongs to the superseded key/token — drop it so the red
+      // dashboard error is consumed by the re-auth itself, not only by the
+      // next successful request. Explicit values in `data` still win.
+      for (const f of ["lastError", "lastErrorAt", "errorCode"]) {
+        if (data[f] === undefined) merged[f] = null;
+      }
+      if (data.testStatus === undefined && merged.testStatus === "unavailable") merged.testStatus = "active";
       upsert(db, merged);
       result = merged;
       return;
@@ -226,6 +234,22 @@ export async function updateProviderConnection(id, data) {
     if (!row) { result = null; return; }
     const existing = rowToConn(row);
     const merged = { ...existing, ...data, updatedAt: new Date().toISOString() };
+    // Opt-in "credentials were replaced" reset. A stored failure belongs to the
+    // OLD credential set — once the user re-adds a key / re-authorizes, the red
+    // dashboard error is stale and must not linger until the next successful
+    // request. Explicit error fields in `data` still win (e.g. a failed
+    // validation may pass its own testStatus).
+    if ("resetErrorState" in merged) {
+      const shouldReset = merged.resetErrorState === true;
+      delete merged.resetErrorState;
+      if (shouldReset) {
+        const reset = { lastError: null, lastErrorAt: null, errorCode: null, testStatus: null };
+        for (const f of Object.keys(reset)) {
+          if (data[f] !== undefined) delete reset[f];
+        }
+        Object.assign(merged, reset);
+      }
+    }
     upsert(db, merged);
     if (data.priority !== undefined) reorderInTx(db, existing.provider);
     result = merged;
