@@ -1,16 +1,20 @@
 /**
- * Xiaomi MiMo usage — weekly quota from the Xiaomi account session.
+ * Xiaomi MiMo usage — weekly quota + billing balance, both from the account session.
  *
- * Primary path: GET {mimo-server}/api/user/usage authorized by the account-session
+ * Weekly: GET {mimo-server}/api/user/usage authorized by the mimopc account-session
  * cookie (see shared/mimoAccount.js). Response: { code: 0, data: { percent (remaining
  * %), resetDate, resetAt } }.
+ *
+ * Balance: GET {platform}/api/v1/balance on the web console's api-platform session
+ * (same passport cookie, different SSO scope). Response: { code: 0, data: { balance,
+ * giftBalance, cashBalance, frozenBalance, currency } } — CNY amounts as strings.
  *
  * Fallback: the sk- API key cannot read the quota, so when no account session is
  * available we surface a graceful message instead of failing.
  */
 
 import { proxyAwareFetch } from "../../utils/proxyFetch.js";
-import { getMimoAccountUsage } from "../../shared/mimoAccount.js";
+import { getMimoAccountUsage, getMimoAccountBalance } from "../../shared/mimoAccount.js";
 
 const USAGE_URL = "https://aistudio.xiaomimimo.com/open-apis/v1/user/usage";
 
@@ -20,13 +24,23 @@ const USAGE_URL = "https://aistudio.xiaomimimo.com/open-apis/v1/user/usage";
  * @param {object|null} proxyOptions
  */
 export async function getXiaomiMimoUsage(accessToken = null, providerSpecificData = null, proxyOptions = null) {
-  // Preferred path: the weekly quota comes from the account service session
-  // (mimo-server /api/user/usage), which the sk- key cannot reach. The session is
-  // derived from MiMo Desktop's persisted passToken via the SSO/sts handshake.
-  const account = await getMimoAccountUsage(providerSpecificData, proxyOptions);
+  // Preferred path: both rows come from the account session (mimopc for the weekly
+  // quota, api-platform for the balance) — the sk- key can reach neither. The
+  // sessions are derived from MiMo Desktop's persisted passToken via the SSO/sts
+  // handshakes, cached per passToken.
+  const [account, balance] = await Promise.all([
+    getMimoAccountUsage(providerSpecificData, proxyOptions),
+    getMimoAccountBalance(providerSpecificData, proxyOptions),
+  ]);
+
+  const quotas = {};
   if (typeof account.percent === "number" && Number.isFinite(account.percent)) {
-    return { plan: "Xiaomi MiMo Desktop", quotas: { Weekly: toWeeklyQuota(account.percent, account.resetAt, account.resetDate) } };
+    quotas.Weekly = toWeeklyQuota(account.percent, account.resetAt, account.resetDate);
   }
+  if (typeof balance.balance === "number" && Number.isFinite(balance.balance)) {
+    quotas[`Balance (${balance.currency || "CNY"})`] = toBalanceQuota(balance);
+  }
+  if (Object.keys(quotas).length) return { plan: "Xiaomi MiMo Desktop", quotas };
 
   // Fallback: no account session available (Desktop never logged in, or its cookie
   // store is locked). The sk- key cannot read the quota, so surface a clear message.
@@ -75,6 +89,23 @@ export async function getXiaomiMimoUsage(accessToken = null, providerSpecificDat
   } catch (error) {
     return { message: `Xiaomi MiMo Desktop usage error: ${error.message}` };
   }
+}
+
+/**
+ * Cash pot for the platform balance (CNY). Mirrors the DeepSeek balance shape:
+ * full-remaining against the current pot, never an absolute `remaining` (the
+ * QuotaTable reads that field as a 0–100 percentage).
+ * @param {{balance:number, gift?:number|null, cash?:number|null, currency?:string}} b
+ */
+function toBalanceQuota(b) {
+  const total = Math.max(0, b.balance);
+  return {
+    used: 0,
+    total,
+    remainingPercentage: total > 0 ? 100 : 0,
+    resetAt: null,
+    unlimited: total > 0,
+  };
 }
 
 /**

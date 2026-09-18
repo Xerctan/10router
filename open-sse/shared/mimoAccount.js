@@ -27,6 +27,14 @@ const API_UA =
   "miNative PC/Normal Windows_NT/10.0.19045 SDKV/1.0.0 DEVT/PC DEVS/Windows APP/miaccount_desktop APPV/0.1.0";
 const SSO_UA = "MiClaw/1.0";
 const COOKIE_TTL_MS = 30 * 60 * 1000;
+// After a failed handshake, don't re-walk the SSO chain on every dashboard poll:
+// Xiaomi's passport risk control step-ups (captcha / interactive login) when it
+// sees repeated serviceLogin attempts, so hammering makes an outage permanent.
+// Negative-cache the failure for a cooldown window instead.
+const SSO_BACKOFF_MS = 10 * 60 * 1000;
+// Console sessions live for days in a browser; re-handshaking every 30min only
+// risks the step-up above. Stale sessions are caught by the 401 re-handshake.
+const PLATFORM_TTL_MS = 12 * 60 * 60 * 1000;
 // Windows surfaces a sharing violation on the Desktop's cookie db as EBUSY;
 // POSIX gives EACCES/EPERM (or EBUSY under flock).
 const LOCKED_CODES = new Set(["EBUSY", "EPERM", "EACCES"]);
@@ -35,6 +43,10 @@ const LOCKED_CODES = new Set(["EBUSY", "EPERM", "EACCES"]);
 // accounts / connections can rotate without clobbering each other.
 const _cache = new Map(); // key -> { cookie, at }
 const _inflight = new Map(); // key -> Promise<cookie|null>
+// Platform (api-platform) sessions are a separate cookie scope from the mimo-server
+// (mimopc) session, so they get their own cache — an account may hold both at once.
+const _platformCache = new Map();
+const _platformInflight = new Map();
 
 // ─── MiMo Desktop on-disk layout ───────────────────────────────────────────
 // MiMo Desktop is an Electron app and keeps TWO independent stores:
@@ -268,30 +280,44 @@ async function acquireServiceCookie(passJar, proxyOptions) {
 }
 
 /**
+ * Resolve the passport cookie jar for an account: per-connection `mimoPassToken`
+ * override first (multi-account rotation), else MiMo Desktop's persisted session.
+ * @returns {Promise<{jar?:object, reason?:string}>}
+ */
+async function resolvePassJar(providerSpecificData) {
+  if (providerSpecificData?.mimoPassToken) {
+    return {
+      jar: {
+        passToken: providerSpecificData.mimoPassToken,
+        userId: providerSpecificData.mimoUserId,
+        cUserId: providerSpecificData.mimoCUserId,
+      },
+    };
+  }
+  try {
+    const jar = await readDesktopAccountCookies();
+    return jar ? { jar } : { reason: "no-pass-token" };
+  } catch (err) {
+    // Usage must degrade, never throw — but keep the reason diagnosable.
+    if (err?.code === "DESKTOP_LOCKED") return { reason: "desktop-locked" };
+    throw err;
+  }
+}
+
+/**
  * Get (and cache) the mimo-server account cookie.
  * @param {object|null} providerSpecificData - may carry `mimoPassToken` override
  */
 async function getServiceCookie(providerSpecificData, proxyOptions) {
-  let passJar = providerSpecificData?.mimoPassToken
-    ? { passToken: providerSpecificData.mimoPassToken, userId: providerSpecificData.mimoUserId, cUserId: providerSpecificData.mimoCUserId }
-    : null;
-  if (!passJar) {
-    try {
-      passJar = await readDesktopAccountCookies();
-    } catch (err) {
-      // Usage must degrade, never throw — but keep the reason diagnosable.
-      if (err?.code === "DESKTOP_LOCKED") return { cookie: null, reason: "desktop-locked" };
-      throw err;
-    }
-  }
-  if (!passJar) return { cookie: null, reason: "no-pass-token" };
+  const { jar: passJar, reason } = await resolvePassJar(providerSpecificData);
+  if (!passJar) return { cookie: null, reason };
 
   // One cached session per passToken — accounts/connections rotate independently.
   const key = crypto.createHash("sha256").update(passJar.passToken).digest("hex");
 
   const cached = _cache.get(key);
-  if (cached && Date.now() - cached.at < COOKIE_TTL_MS) {
-    return { cookie: cached.cookie };
+  if (cached && Date.now() - cached.at < (cached.cookie ? COOKIE_TTL_MS : SSO_BACKOFF_MS)) {
+    return cached.cookie ? { cookie: cached.cookie } : { cookie: null, reason: "sso-failed" };
   }
 
   // De-dupe concurrent handshakes for the same account: a burst of requests must
@@ -314,7 +340,10 @@ async function getServiceCookie(providerSpecificData, proxyOptions) {
   _inflight.set(key, promise);
 
   const cookie = await promise;
-  if (!cookie) return { cookie: null, reason: "sso-failed" };
+  if (!cookie) {
+    _cache.set(key, { cookie: null, at: Date.now() }); // backoff: don't re-walk immediately
+    return { cookie: null, reason: "sso-failed" };
+  }
   _cache.set(key, { cookie, at: Date.now() });
   return { cookie };
 }
@@ -322,6 +351,7 @@ async function getServiceCookie(providerSpecificData, proxyOptions) {
 /** Drop cached sessions so the next call re-runs the handshake (e.g. after a 401). */
 export function invalidateMimoAccountCookieCache() {
   _cache.clear();
+  _platformCache.clear();
 }
 
 /** mimo-server account API base + the User-Agent its backend expects. */
@@ -339,6 +369,150 @@ export async function getMimoAccountCookie(providerSpecificData = null, proxyOpt
   } catch {
     return null;
   }
+}
+
+// ─── Platform console session (billing balance) ────────────────────────────────
+// The web console API (platform.xiaomimimo.com/api/v1/balance) is authorized by a
+// browser session cookie, sid=api-platform — a different scope from the mimopc
+// weekly-quota session above. Its 401 body hands us the serviceLogin loginUrl;
+// walking that chain with the passport jar stamps `api-platform_*` session cookies
+// that unlock the balance API. (Verified live 2026-09-18.)
+
+const PLATFORM_BASE = "https://platform.xiaomimimo.com";
+// The console sits behind MiFE and answered the browser fetch as a normal web app;
+// mimic a desktop Chrome — the passport endpoints keyed off the app UA never apply
+// on this leg of the chain.
+const PLATFORM_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36";
+const PLATFORM_COOKIE_KEYS = ["api-platform_serviceToken", "api-platform_ph", "api-platform_slh", "userId"];
+
+/**
+ * Walk the api-platform SSO chain: 401 -> loginUrl -> serviceLogin -> sts.
+ * @returns {Promise<string|null>} Cookie header for the platform session, or null.
+ */
+async function acquirePlatformCookie(passJar, proxyOptions) {
+  const r0 = await proxyAwareFetch(
+    `${PLATFORM_BASE}/api/v1/balance`,
+    { headers: { Accept: "application/json", "User-Agent": PLATFORM_UA }, signal: AbortSignal.timeout(10000) },
+    proxyOptions,
+  );
+  const j0 = await r0.json().catch(() => null);
+  let url = j0 && j0.loginUrl;
+  if (!url) return null;
+
+  const jar = { ...passJar };
+  for (let hop = 0; hop < 5 && url; hop++) {
+    const res = await proxyAwareFetch(
+      url,
+      {
+        redirect: "manual",
+        headers: { Cookie: cookieHeader(jar), Accept: "*/*", "User-Agent": PLATFORM_UA },
+        signal: AbortSignal.timeout(10000),
+      },
+      proxyOptions,
+    );
+    absorbSetCookie(jar, res);
+    // The session is minted once sts stamps api-platform_serviceToken — stop there.
+    // Walking the followup would re-GET the balance API carrying the passport jar
+    // (a browser never sends the account-scoped passToken to the platform origin).
+    if (jar["api-platform_serviceToken"]) break;
+    const loc = res.headers.get("location");
+    url = loc ? new URL(loc, url).href : null;
+  }
+  if (!jar["api-platform_serviceToken"]) return null;
+  const out = {};
+  for (const k of PLATFORM_COOKIE_KEYS) if (jar[k]) out[k] = jar[k];
+  return cookieHeader(out);
+}
+
+/**
+ * Get (and cache) the platform.xiaomimimo.com session cookie (per passToken).
+ */
+async function getPlatformCookie(providerSpecificData, proxyOptions) {
+  const { jar: passJar, reason } = await resolvePassJar(providerSpecificData);
+  if (!passJar) return { cookie: null, reason };
+
+  const key = crypto.createHash("sha256").update(passJar.passToken).digest("hex");
+  const cached = _platformCache.get(key);
+  if (cached && Date.now() - cached.at < (cached.cookie ? PLATFORM_TTL_MS : SSO_BACKOFF_MS)) {
+    return cached.cookie ? { cookie: cached.cookie, key } : { cookie: null, reason: "sso-failed", key };
+  }
+
+  const inflight = _platformInflight.get(key);
+  if (inflight) {
+    const cookie = await inflight;
+    return cookie ? { cookie, key } : { cookie: null, reason: "sso-failed" };
+  }
+
+  const promise = (async () => {
+    try {
+      return await acquirePlatformCookie(passJar, proxyOptions);
+    } catch {
+      return null; // network/parse failure — callers degrade, never throw
+    } finally {
+      _platformInflight.delete(key);
+    }
+  })();
+  _platformInflight.set(key, promise);
+
+  const cookie = await promise;
+  if (!cookie) {
+    _platformCache.set(key, { cookie: null, at: Date.now() }); // backoff: don't re-walk immediately
+    return { cookie: null, reason: "sso-failed", key };
+  }
+  _platformCache.set(key, { cookie, at: Date.now() });
+  return { cookie, key };
+}
+
+function toMoney(v) {
+  const n = typeof v === "number" ? v : Number.parseFloat(String(v ?? "").replace(/[,\s]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Fetch the account's billing balance from the platform console.
+ * @returns {Promise<{balance?:number, gift?:number, cash?:number, frozen?:number, currency?:string, error?:string}>}
+ */
+export async function getMimoAccountBalance(providerSpecificData = null, proxyOptions = null) {
+  let { cookie, key, reason } = await getPlatformCookie(providerSpecificData, proxyOptions);
+  if (!cookie) {
+    return { error: reason === "no-pass-token" || reason === "desktop-locked" ? "no-session" : "session-failed" };
+  }
+
+  const read = async (ck) => {
+    const res = await proxyAwareFetch(
+      `${PLATFORM_BASE}/api/v1/balance`,
+      {
+        headers: { Accept: "application/json", "User-Agent": PLATFORM_UA, Cookie: ck, "X-Timezone": "Asia/Shanghai" },
+        signal: AbortSignal.timeout(10000),
+      },
+      proxyOptions,
+    );
+    if (res.status === 401) return { auth: false };
+    if (!res.ok) return { error: `http-${res.status}` };
+    const data = await res.json().catch(() => null);
+    if (!data || data.code !== 0 || !data.data) return { error: "bad-response" };
+    return { data: data.data };
+  };
+
+  let out = await read(cookie);
+  if (out.auth === false) {
+    // Server-side session died inside our 30-min cache window — one re-handshake.
+    _platformCache.delete(key);
+    ({ cookie, key } = await getPlatformCookie(providerSpecificData, proxyOptions));
+    if (!cookie) return { error: "session-failed" };
+    out = await read(cookie);
+    if (out.auth === false) return { error: "session-failed" };
+  }
+  if (out.error) return { error: out.error };
+  const d = out.data;
+  return {
+    balance: toMoney(d.balance),
+    gift: toMoney(d.giftBalance),
+    cash: toMoney(d.cashBalance),
+    frozen: toMoney(d.frozenBalance),
+    currency: typeof d.currency === "string" && d.currency ? d.currency.toUpperCase() : "CNY",
+  };
 }
 
 /**
