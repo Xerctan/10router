@@ -27,7 +27,7 @@ vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
   default: (...args) => fetchMock(...args),
 }));
 
-import { readDesktopPassToken, getMimoAccountUsage, getMimoAccountCookie, getMimoAccountBalance, invalidateMimoAccountCookieCache, desktopCookiePath } from "../../open-sse/shared/mimoAccount.js";
+import { readDesktopPassToken, getMimoAccountUsage, getMimoAccountCookie, invalidateMimoAccountCookieCache, desktopCookiePath } from "../../open-sse/shared/mimoAccount.js";
 import { getXiaomiMimoUsage } from "../../open-sse/services/usage/xiaomi-mimo.js";
 
 // The module owns the on-disk layout now (including APPDATA/XDG overrides), so the
@@ -250,91 +250,5 @@ describe("xiaomi-mimo usage adapter", () => {
 
     const out = await getXiaomiMimoUsage("sk-x", null, null);
     expect(out.message).toContain("socket hang up");
-  });
-});
-
-// ─── Platform console balance (api-platform session) ─────────────────────────
-describe("xiaomi-mimo platform balance", () => {
-  const P = "https://platform.xiaomimimo.com/api/v1/balance";
-  const STS = "https://platform.xiaomimimo.com/sts?sign=abc&followup=" + encodeURIComponent(P);
-  const LOGIN = "https://account.xiaomi.com/pass/serviceLogin?sid=api-platform&_group=DEFAULT&callback=" + encodeURIComponent(STS);
-  const BALANCE_BODY = {
-    code: 0,
-    message: "",
-    data: { balance: "163.61", frozenBalance: "0.00", currency: "CNY", giftBalance: "163.61", cashBalance: "0.00" },
-  };
-
-  const res = (status, { location = null, setCookies = [], json = null, ok } = {}) => ({
-    ok: ok ?? (status >= 200 && status < 300),
-    status,
-    headers: { get: (k) => (String(k).toLowerCase() === "location" ? location : null), getSetCookie: () => setCookies },
-    json: async () => json,
-    text: async () => (json ? JSON.stringify(json) : ""),
-  });
-
-  // Routes the whole api-platform chain; mimo-server (weekly) is failed fast so
-  // balance-only flows can be asserted without a second SSO mock.
-  function mockPlatformChain() {
-    fetchMock.mockImplementation(async (url, opts = {}) => {
-      const u = String(url);
-      const ck = (opts.headers && opts.headers.Cookie) || "";
-      if (u.startsWith("https://mimo-server")) return res(500, {});
-      if (u === P || u.startsWith(P + "?")) {
-        return ck.includes("api-platform_serviceToken")
-          ? res(200, { json: BALANCE_BODY })
-          : res(401, { json: { code: 401, loginUrl: LOGIN } });
-      }
-      if (u.startsWith("https://account.xiaomi.com/pass/serviceLogin")) {
-        return res(302, {
-          location: STS,
-          setCookies: [
-            "api-platform_serviceToken=sess-1; Domain=.xiaomimimo.com; Path=/; HttpOnly",
-            "api-platform_ph=ph-1; Domain=.xiaomimimo.com; Path=/",
-            "api-platform_slh=slh-1; Domain=.xiaomimimo.com; Path=/",
-            "userId=6786673; Domain=.xiaomimimo.com; Path=/",
-          ],
-        });
-      }
-      if (u.startsWith("https://platform.xiaomimimo.com/sts")) {
-        return res(307, { location: P + "?userId=6786673" });
-      }
-      throw new Error("unrouted fetch: " + u);
-    });
-  }
-
-  it("degrades without a passToken and touches no network", async () => {
-    expect(await getMimoAccountBalance(null, null)).toEqual({ error: "no-session" });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("exchanges the passport jar for an api-platform session and reads the balance", async () => {
-    mockPlatformChain();
-    const out = await getMimoAccountBalance({ mimoPassToken: "pt-secret", mimoUserId: "6786673", mimoCUserId: "c-9" }, null);
-    expect(out).toEqual({ balance: 163.61, gift: 163.61, cash: 0, frozen: 0, currency: "CNY" });
-  });
-
-  it("sends only platform-scoped cookies to the balance call — never the passToken", async () => {
-    mockPlatformChain();
-    await getMimoAccountBalance({ mimoPassToken: "pt-secret", mimoUserId: "6786673", mimoCUserId: "c-9" }, null);
-    const calls = fetchMock.mock.calls.filter(([u, o]) => String(u).startsWith(P) && (o?.headers?.Cookie || "").includes("api-platform_serviceToken"));
-    expect(calls.length).toBeGreaterThan(0);
-    for (const [, o] of calls) expect(o.headers.Cookie).not.toMatch(/passToken/);
-  });
-
-  it("reuses the cached platform session without re-walking the chain", async () => {
-    mockPlatformChain();
-    const psd = { mimoPassToken: "pt-secret" };
-    await getMimoAccountBalance(psd, null);
-    const afterFirst = fetchMock.mock.calls.length;
-    await getMimoAccountBalance(psd, null);
-    expect(fetchMock.mock.calls.length).toBe(afterFirst + 1);
-  });
-
-  it("surfaces a Balance quota even when the weekly session fails", async () => {
-    mockPlatformChain();
-    const out = await getXiaomiMimoUsage(null, { mimoPassToken: "pt-secret" }, null);
-    expect(out.plan).toBe("Xiaomi MiMo Desktop");
-    expect(out.quotas["Balance (CNY)"]).toMatchObject({ used: 0, total: 163.61, remainingPercentage: 100 });
-    expect(out.quotas.Weekly).toBeUndefined();
   });
 });
