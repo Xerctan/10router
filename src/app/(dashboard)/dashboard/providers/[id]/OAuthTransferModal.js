@@ -63,7 +63,11 @@ export default function OAuthTransferModal({ isOpen, mode, provider, providerNam
         body: JSON.stringify({ provider, passphrase }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || `Request failed: ${res.status}`);
+      // Server-side rejections ("Unauthorized" from the guard = expired
+      // session, "Invalid password" from the route) must appear translated —
+      // raw English error bodies read like "密码被拒" to users typing the
+      // exact right characters.
+      if (!res.ok) throw new Error(translate(data?.error) || `Request failed: ${res.status}`);
       const blobJson = JSON.stringify(data.blob, null, 2);
       const url = URL.createObjectURL(new Blob([blobJson], { type: "application/json" }));
       const a = document.createElement("a");
@@ -129,7 +133,7 @@ export default function OAuthTransferModal({ isOpen, mode, provider, providerNam
         if (res.status === 401 && /passphrase/i.test(data?.error || "")) {
           throw new Error(translate("Wrong passphrase"));
         }
-        throw new Error(data?.error || `Request failed: ${res.status}`);
+        throw new Error(translate(data?.error) || `Request failed: ${res.status}`);
       }
       setResult(data);
       if (typeof onSuccess === "function") onSuccess();

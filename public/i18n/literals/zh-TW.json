@@ -1,5 +1,7 @@
 {
   "Models refreshed": "模型已重新整理",
+  "No connections to export": "没有可匯出的連線",
+  "Unauthorized": "會話已過期或無存取權限，請重新登入後重試",
   "Refresh Official Models": "重新整理官方模型",
   "Refreshing...": "重新整理中...",
   "Cached": "快取",
