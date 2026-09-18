@@ -17,7 +17,12 @@ Architecture and engineering notes for the 10Router gateway + dashboard. All doc
 - [SQLite Driver Chain](/docs/en/sqlite-driver-chain.md) — how `bun:sqlite → better-sqlite3 → node:sqlite → sql.js` is selected, and why `better-sqlite3` is build-time-required but barely used at runtime.
 - [Usage Dedup usageKey Contract](/docs/en/usage-usageKey-contract.md) — the per-attempt `usageKey` dedup contract that prevents same-millisecond count loss (5 call sites).
 - [Earliest Expiry First Architecture](/docs/zh-CN/earliest-expiry-first-architecture.md) (zh-only) — multi-account "Earliest Expiry First" quota scheduling: why critical path avoids sync billing queries, SWR lightweight caching, and fallback matrix.
-- [API Key Signing & Secret Rotation](/docs/zh-CN/api-key-signing-rotation.md) — key format `sk-{machineId}-{keyId}-{crc8}`, the secret resolution chain, why local validation is a DB lookup (CRC not enforced yet — transition design), and the future strict-CRC plan (zh-only).
+- [API Key Signing &amp; Secret Rotation](/docs/zh-CN/api-key-signing-rotation.md) — key format `sk-{machineId}-{keyId}-{crc8}`, the secret resolution chain, why local validation is a DB lookup (CRC not enforced yet — transition design), and the future strict-CRC plan (zh-only).
+- [Model JSON Catalog Mechanism](/docs/en/json-model-catalog-mechanism.md) — `modelsJsonUrl` per-connection JSON model catalogs: storage, fetch/refresh, and how `/v1/models` merges them (v1.0.1 → v1.0.4).
+- [Antigravity Integration Guide](/docs/zh-CN/antigravity-integration-guide.md) (zh-only) — connecting/debugging the `antigravity` channel: how to tell an egress-IP problem from account risk control from a code bug, before re-logging tokens.
+- [Usage Import Rows Contract](/docs/zh-CN/usage-import-rows.md) (zh-only) — the `meta.imported` display contract for imported usage rows: usageHistory vs requestDetails, tag-and-backfill, read-side synthesis, and the double-display boundary.
+- [Mirasim Usage Ledger](/docs/zh-CN/mirasim-usage-ledger.md) (zh-only) — the mirasim desktop local usage ledger as a sync data source: full insights field table, anti-double-count rules, and known boundaries.
+- [ZCode × CodeBuddy CN Compatibility &amp; Plugin Design](/docs/zh-CN/zcode-cbcn-compatibility-and-plugin-design.md) (zh-only) — governance of the CodeBuddy CN 11128 channel-scope risk control, session-size control, and the `10router-sync` plugin collaboration design.
 - [MITM Proxy Security Hardening](/docs/en/mitm-security-hardening.md) — the four security fixes (TLS verification, 0600 root CA key, no blind port-443 kill, hosts cleanup).
 - [Mirasim-bundled dsh tool_call id/name loss](/docs/en/mirasim-dsh-toolcall-loss.md) — third-party bug causing 11133/`unknown tool ""`; 10Router does not work around it.
 - [Monochrome Tray Icons](/docs/en/tray-icon-monochrome.md) — the alpha-channel trap of macOS template images and Windows' dual theme registries (taskbar ≠ app mode).
@@ -45,6 +50,7 @@ Architecture and engineering notes for the 10Router gateway + dashboard. All doc
   - [v1.0.7 Release Review](/docs/zh-CN/archive/reviews/release-review-v1.0.7.md)
   - [v1.1.0 Release Review](/docs/zh-CN/archive/reviews/release-review-v1.1.0.md)
   - [v1.1.1 Release Review](/docs/zh-CN/archive/reviews/release-review-v1.1.1.md)
+  - [v1.1.2 Release Review](/docs/zh-CN/archive/reviews/release-review-v1.1.2.md)
 - Historical triages & reports (zh-only):
   - [Upstream v0.5.69 → v0.5.75 triage](/docs/zh-CN/archive/upstream-triage-v0.5.75.md)
   - [Open issues status snapshot (2026-09-11)](/docs/zh-CN/archive/open-issues-status.md)
@@ -67,6 +73,11 @@ Architecture and engineering notes for the 10Router gateway + dashboard. All doc
 - [用量去重 usageKey 契约](/docs/zh-CN/usage-usageKey-contract.md) — 每次上游尝试打 `usageKey` 的去重契约，防止同毫秒丢计数（5 处调用点）。
 - [跨账号「配额包到期优先」调度架构](/docs/zh-CN/earliest-expiry-first-architecture.md) — 为什么主路径绝不发起同步账单查询、SWR（Stale-While-Revalidate）轻量缓存设计与异常回退容错矩阵。
 - [API Key 签名与密钥签名轮换](/docs/zh-CN/api-key-signing-rotation.md) — 密钥格式 `sk-{machineId}-{keyId}-{crc8}`、签名密文解析链、为何本地校验是 DB 查找（CRC 暂不强制——过渡态设计）、Rotate all 幂等防护与未来强校验规划。
+- [模型 JSON 目录机制（modelsJsonUrl）](/docs/en/json-model-catalog-mechanism.md)（英文）— 每连接 JSON 模型目录的存储、拉取刷新，以及 `/v1/models` 如何合并（v1.0.1 → v1.0.4）。
+- [Antigravity（反重力）接入指南与踩坑实录](/docs/zh-CN/antigravity-integration-guide.md) — 接入/排查 `antigravity` 渠道：先分清是出口 IP 问题、账号风控还是代码问题，避免一看到 403 就重登 token。
+- [用量导入行展示契约（meta.imported）](/docs/zh-CN/usage-import-rows.md) — usageHistory 与 requestDetails 的分工、打标/去重回填/读侧合成三件套、归并分页正确性证明与撞签打标的双显示边界。
+- [mirasim 桌面端本地用量账本](/docs/zh-CN/mirasim-usage-ledger.md) — 作为同步数据源：insights 账本字段全表、"走了 10Router" 的识别信号、防双计规则与已知边界。
+- [ZCode × CodeBuddy CN 兼容治理与插件协同设计](/docs/zh-CN/zcode-cbcn-compatibility-and-plugin-design.md) — CodeBuddy 11128 渠道级风控、会话体积控制与 `10router-sync` 插件扩展的协同方案。
 - [MITM 代理安全加固](/docs/zh-CN/mitm-security-hardening.md) — 四项安全修复（TLS 校验、root CA 私钥 0600、不再盲杀 443、hosts 清理）。
 - [Mirasim 内嵌 dsh 工具调用 id/name 丢失](/docs/zh-CN/mirasim-dsh-toolcall-loss.md) — 第三方 bug 导致 11133 / `unknown tool ""`，10Router 不做适配。
 - [托盘图标单色化](/docs/zh-CN/tray-icon-monochrome.md) — mac template 的 alpha 陷阱与 Windows 双主题注册表（任务栏 ≠ 应用模式）。
@@ -94,6 +105,7 @@ Architecture and engineering notes for the 10Router gateway + dashboard. All doc
   - [v1.0.7 发版审查](/docs/zh-CN/archive/reviews/release-review-v1.0.7.md) — 23 笔提交逐笔审查记录
   - [v1.1.0 发版范围评审](/docs/zh-CN/archive/reviews/release-review-v1.1.0.md) — 1.1.0 发版范围与决策记录（原 1.0.9 决策原貌）
   - [v1.1.1 发版前审计报告](/docs/zh-CN/archive/reviews/release-review-v1.1.1.md) — 全部 81 笔提交逐笔审读、全量回归门禁与发版最终检查单
+  - [v1.1.2 全量审查报告](/docs/zh-CN/archive/reviews/release-review-v1.1.2.md) — v1.1.1 → HEAD 共 87 笔提交（150 文件，+8013/−621）安全/熔断/退避/凭据刷新/数据账本/i18n/供应商治理逐项审查、三注册表基线复核与发版检查单
 - 阶段性调研与历史排查：
   - [上游 v0.5.69 → v0.5.75 分诊](/docs/zh-CN/archive/upstream-triage-v0.5.75.md) — 上游 7 个版本 26 笔提交内容分诊记录（已在 v1.1.0 落地）
   - [未关闭 Issue 现状汇总（2026-09-11 快照）](/docs/zh-CN/archive/open-issues-status.md) — 历史 issue 核对快照（其中 #12、#13、#14 现已全部关闭）
