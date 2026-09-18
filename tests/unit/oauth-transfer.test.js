@@ -183,3 +183,84 @@ describe("Xiaomi MiMo modal — session-only detection wiring", () => {
     expect(modal).toContain("Connect with Desktop Session");
   });
 });
+
+describe("export route — dashboard password header contract", () => {
+  const originalDataDir = process.env.DATA_DIR;
+  const originalInitial = process.env.INITIAL_PASSWORD;
+  let tempDir;
+  let route;
+
+  beforeAll(async () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "10router-xfer-route-"));
+    process.env.DATA_DIR = tempDir;
+    process.env.INITIAL_PASSWORD = "dash-pw-test";
+    vi.resetModules();
+    const db = await import("@/lib/db/index.js");
+    await db.initDb();
+    await db.createProviderConnection({
+      provider: "gemini",
+      authType: "oauth",
+      email: "seeded@example.com",
+      accessToken: "tok-live",
+      refreshToken: "rt-live",
+    });
+    route = await import("@/app/api/oauth/transfer/export/route.js");
+  });
+
+  afterAll(() => {
+    process.env.DATA_DIR = originalDataDir;
+    if (originalInitial === undefined) delete process.env.INITIAL_PASSWORD;
+    else process.env.INITIAL_PASSWORD = originalInitial;
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch { /* best-effort on Windows */ }
+  });
+
+  const post = (headers, body) =>
+    route.POST(new Request("http://localhost/api/oauth/transfer/export", {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify(body),
+    }));
+
+  it("rejects an export without the x-9r-password header (401)", async () => {
+    const res = await post({}, { provider: "gemini", passphrase: "abcd-1234" });
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a wrong dashboard password", async () => {
+    const res = await post({ "x-9r-password": "nope" }, { provider: "gemini", passphrase: "abcd-1234" });
+    expect(res.status).toBe(401);
+  });
+
+  it("with the right dashboard password: seals a blob the passphrase reopens", async () => {
+    const res = await post({ "x-9r-password": "dash-pw-test" }, { provider: "gemini", passphrase: "abcd-1234" });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.count).toBeGreaterThanOrEqual(1);
+    const opened = openTransfer(JSON.parse(JSON.stringify(data.blob)), "abcd-1234");
+    expect(opened.accounts.some((a) => a.accessToken === "tok-live")).toBe(true);
+  });
+});
+
+describe("export wiring — provider page must hand the verified password to the modal", () => {
+  // Regression guard: ce2c5a54 moved the password check to a preflight dialog
+  // but dropped the prop wiring, so the modal posted an EMPTY x-9r-password
+  // header and every export died with "Invalid password" — no matter how
+  // correct the typed password was. The route still requires the header.
+  it("passes dashboardPassword to OAuthTransferModal and captures it on preflight success", () => {
+    const page = readFileSync(
+      new URL("../../src/app/(dashboard)/dashboard/providers/[id]/page.js", import.meta.url),
+      "utf8",
+    );
+    const usage = page.match(/<OAuthTransferModal[\s\S]*?\/>/)?.[0] || "";
+    expect(usage).toContain("dashboardPassword={");
+    expect(page).toContain("setOauthTransferPassword(verifiedPassword)");
+    // The modal must forward the prop into the header the route checks.
+    const modal = readFileSync(
+      new URL("../../src/app/(dashboard)/dashboard/providers/[id]/OAuthTransferModal.js", import.meta.url),
+      "utf8",
+    );
+    expect(modal).toMatch(/"x-9r-password":\s*dashboardPassword\s*\|\|/);
+  });
+});

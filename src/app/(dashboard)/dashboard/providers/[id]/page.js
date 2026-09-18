@@ -180,9 +180,10 @@ export default function ProviderDetailPage() {
         setCbPwError(data?.error || translate("Invalid password"));
         return;
       }
-      const { action } = cbPw;
+      const { action, value: verifiedPassword } = cbPw;
       setCbPw({ open: false, action: null, value: "" });
       if (action === "export") {
+        setOauthTransferPassword(verifiedPassword);
         setOauthTransferMode(action);
         setShowOAuthTransfer(true);
       }
@@ -202,6 +203,12 @@ export default function ProviderDetailPage() {
   // sibling of the codebuddy-cn wb-format routes which stay API-compatible).
   const [showOAuthTransfer, setShowOAuthTransfer] = useState(false);
   const [oauthTransferMode, setOauthTransferMode] = useState("export");
+  // The export route re-authenticates the dashboard password on every request
+  // (defense in depth: the JWT cookie alone must not dump tokens). The
+  // preflight dialog verifies the password first so a wrong one errors where
+  // it was typed; on success we hand the verified value to the modal —
+  // dropping this wiring makes EVERY export die with "Invalid password".
+  const [oauthTransferPassword, setOauthTransferPassword] = useState("");
 
   // Manual CodeBuddy CN daily check-in trigger (only shown when the auto
   // check-in experimental toggle is on). Per-account results surface via the
@@ -2346,7 +2353,8 @@ export default function ProviderDetailPage() {
         mode={oauthTransferMode}
         provider={providerId}
         providerName={providerInfo?.name}
-        onClose={() => setShowOAuthTransfer(false)}
+        dashboardPassword={oauthTransferPassword}
+        onClose={() => { setShowOAuthTransfer(false); setOauthTransferPassword(""); }}
         onSuccess={fetchConnections}
       />
 
