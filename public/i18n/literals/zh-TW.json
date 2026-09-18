@@ -585,9 +585,11 @@
   "accounts": "個帳號",
   "Qoder auto daily credit claim": "Qoder 每日自動領積分",
   "Automatically claim daily campaign credits for Qoder and Qoder CN accounts": "自動領取 Qoder 和 Qoder CN 帳號的每日活動積分（全天重試，當日確認完成即停）",
-  "Resource Package": "資源包",
-  "resource package": "資源包",
-  "addOn": "資源包",
-  "user": "個人",
+  "Resource Package": "個人資源包",
+  "resource package": "個人資源包",
+  "addOn": "個人資源包",
+  "Subscription": "訂閱",
+  "subscription": "訂閱",
+  "user": "訂閱",
   "organization": "組織"
 }

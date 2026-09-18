@@ -102,7 +102,7 @@ describe("qoder and qoder-cn quota normalization", () => {
 
     const cnNormalized = parseQuotaData("qoder-cn", raw);
     expect(cnNormalized).toHaveLength(2);
-    expect(cnNormalized[0].name).toBe("Personal");
+    expect(cnNormalized[0].name).toBe("Subscription");
     expect(cnNormalized[0].total).toBe(0);
     expect(cnNormalized[1].name).toBe("Resource Package");
     expect(cnNormalized[1].total).toBe(600);
@@ -115,7 +115,7 @@ describe("qoder and qoder-cn quota normalization", () => {
       },
     });
     expect(intlNormalized).toHaveLength(2);
-    expect(intlNormalized[0].name).toBe("Personal");
+    expect(intlNormalized[0].name).toBe("Subscription");
     expect(intlNormalized[1].name).toBe("Resource Package");
     expect(intlNormalized[1].total).toBe(100);
   });

@@ -543,7 +543,7 @@ export function parseQuotaData(provider, data) {
                 : null;
             const displayName =
               quotaType === "user"
-                ? "Personal"
+                ? "Subscription"
                 : quotaType === "addOn"
                   ? "Resource Package"
                   : quotaType === "organization"

@@ -4,6 +4,10 @@
 
 import { proxyAwareFetch } from "../../utils/proxyFetch.js";
 import { U } from "./shared.js";
+import {
+  QODER_OPENAPI_BASE,
+  QODER_CN_OPENAPI_BASE,
+} from "../../shared/qoder/constants.js";
 
 // GLM quota endpoints (region-aware) — url from registry transport.usage
 const GLM_QUOTA_URLS = {
@@ -292,6 +296,51 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
       : null;
     const isSentinelExpiry = expiresAtMs && (expiresAtMs >= 253400000000000 || new Date(expiresAtMs).getFullYear() > 2099);
     const resetAt = expiresAtMs && !isSentinelExpiry ? new Date(expiresAtMs).toISOString() : null;
+    // Fetch active campaigns to resolve exact resource package expiration
+    let addOnResetAt = null;
+    try {
+      const campBase = providerId === "qoder-cn" ? QODER_CN_OPENAPI_BASE : QODER_OPENAPI_BASE;
+      const campUrl = `${campBase}/sash/api/v1/me/campaigns?clientType=10`;
+      const campRes = await proxyAwareFetch(
+        campUrl,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Cosy-ClientType": "10",
+            "Cosy-Version": "0.3.3",
+            "User-Agent": "Qoder",
+            Accept: "application/json",
+          },
+        },
+        proxyOptions,
+      );
+      if (campRes.ok) {
+        const campBody = await campRes.json().catch(() => null);
+        const claimed = (campBody?.campaigns || []).filter(
+          (c) => c.claimStatus === "CLAIMED" && c.benefit
+        );
+        const expiries = claimed
+          .map((c) => {
+            const v = c.benefit?.validity;
+            if (v?.mode === "FIXED_END" && v.fixedEnd) {
+              return new Date(v.fixedEnd).getTime();
+            }
+            if (v?.mode === "RELATIVE_DAYS" && v.days && c.startAt) {
+              return c.startAt * 1000 + v.days * 86400000;
+            }
+            return null;
+          })
+          .filter((t) => Number.isFinite(t) && t > Date.now());
+        if (expiries.length > 0) {
+          expiries.sort((a, b) => a - b);
+          addOnResetAt = new Date(expiries[0]).toISOString();
+        }
+      }
+    } catch {
+      // Best-effort expiration fetch
+    }
+
     const quotas = {
       user: {
         total: Number(userQuota.total) || 0,
@@ -306,7 +355,7 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
         used: Number(addOnQuota.used) || 0,
         remaining: Number(addOnQuota.remaining) || 0,
         unit: addOnQuota.unit || "credits",
-        resetAt: null,
+        resetAt: addOnResetAt,
         unlimited: false,
       },
       organization: {
