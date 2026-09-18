@@ -8,7 +8,6 @@ const ICON_ALIASES = {
   "b.ai": "bai",
   "b-ai": "bai",
   "siliconflow-cn": "siliconflow",
-  "qoder-cn": "qoder",
 };
 
 // Providers whose asset ships as SVG (everything else is .png).
