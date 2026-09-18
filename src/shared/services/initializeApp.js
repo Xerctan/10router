@@ -134,9 +134,8 @@ async function runHeavyStartup() {
       .catch((e) => console.log("[CodeBuddyCheckin] scheduler start failed:", e.message));
   }
 
-  // Qoder auto daily credit claim (both Domestic CN and Intl).
-  // Active by default; user can toggle off via settings.qoderCheckin = false.
-  if (settings.qoderCheckin !== false) {
+  // Auto daily credit claim for Qoder & Qoder CN.
+  if (settings.qoderCheckin === true) {
     import("@/sse/services/qoderCheckin.js")
       .then(({ startQoderCheckin }) => startQoderCheckin())
       .catch((e) => console.log("[QoderCheckin] scheduler start failed:", e.message));

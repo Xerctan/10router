@@ -1,4 +1,4 @@
-// Qoder auto daily check-in (both Domestic/CN and International).
+// Qoder auto daily credit claim (both Domestic/CN and International).
 //
 // Automatically claims daily Credits (e.g. 100 Credits refreshed at 10:00 UTC+8,
 // and other platform campaign benefits) for all active Qoder accounts without
@@ -18,8 +18,22 @@ const TICK_JITTER_MS = 10 * 60 * 1000;
 
 let started = false;
 let timerHandle = null;
-
 let doneMap = null;
+
+function isNonServerRuntime() {
+  if (typeof window !== "undefined") return true;
+  const phase = process.env.NEXT_PHASE || "";
+  if (phase === "phase-production-build" || phase === "phase-export" || phase === "phase-static") {
+    return true;
+  }
+  if (process.env.NEXT_RUNTIME === "edge") return true;
+  return false;
+}
+
+export function msUntilNextTick(nowMs = Date.now(), rand = Math.random) {
+  const jitter = Math.floor(rand() * TICK_JITTER_MS);
+  return Math.max(TICK_MS + jitter, 1000);
+}
 
 async function loadSettingsSafe() {
   try {
@@ -235,29 +249,6 @@ export async function checkinOneQoder(conn, deps = {}) {
 }
 
 /**
- * Checkin if not already done today.
- */
-async function checkinIfNotDone(conn, deps) {
-  const memo = deps.doneMap || (await getDoneMap());
-  const today = dayKey(deps.nowMs);
-  if (memo[conn.id] === today) {
-    return {
-      connectionId: conn.id,
-      account: conn.name || conn.email || conn.id,
-      provider: conn.provider,
-      status: "already",
-      memoized: true,
-    };
-  }
-
-  const res = await checkinOneQoder(conn, deps);
-  if (res.status === "checked-in" || res.status === "already") {
-    memo[conn.id] = today;
-  }
-  return res;
-}
-
-/**
  * Execute a check-in run across all eligible Qoder / Qoder CN connections.
  */
 export async function runQoderCheckinTick(deps = {}) {
@@ -265,24 +256,70 @@ export async function runQoderCheckinTick(deps = {}) {
   const conns = await getProviderConnections();
 
   const eligible = conns.filter(isEligibleQoderConnection);
-  if (eligible.length === 0) return [];
+  if (eligible.length === 0) {
+    log.debug("QODER_CHECKIN", "Tick: no eligible Qoder connections");
+    return [];
+  }
+
+  log.info("QODER_CHECKIN", "Daily credit-claim pass started", {
+    eligible: eligible.length,
+    ids: eligible.map((c) => c.id).filter(Boolean),
+  });
 
   const memo = deps.doneMap || (await getDoneMap());
-  const checkinFn = deps.checkinConnection || (deps.skipIfCheckedToday ? checkinIfNotDone : checkinOneQoder);
-
+  const today = dayKey(deps.nowMs);
   const results = [];
-  for (const conn of eligible) {
-    const outcome = await checkinFn(conn, { ...deps, doneMap: memo });
-    results.push(outcome);
 
-    if (outcome.status === "checked-in") {
-      memo[conn.id] = dayKey(deps.nowMs);
-      log.info("QODER_CHECKIN", `Successfully claimed Credits for ${outcome.account}`, {
-        provider: outcome.provider,
-        amount: outcome.claimedAmount,
+  for (const conn of eligible) {
+    try {
+      if (deps.skipIfCheckedToday && memo[conn.id] === today) {
+        log.debug("QODER_CHECKIN", `${conn.name || conn.id}: 今日已确认完成，跳过`, {
+          id: conn.id,
+        });
+        results.push({
+          connectionId: conn.id,
+          account: conn.name || conn.email || conn.id,
+          provider: conn.provider,
+          status: "already",
+          memoized: true,
+        });
+        continue;
+      }
+
+      const checkinFn = deps.checkinConnection || checkinOneQoder;
+      const outcome = await checkinFn(conn, { ...deps, doneMap: memo });
+      results.push(outcome);
+
+      if (outcome.status === "checked-in") {
+        memo[conn.id] = today;
+        log.info("QODER_CHECKIN", `${conn.name || conn.id}: 领取成功 (+${outcome.claimedAmount} Credits)`, {
+          id: conn.id,
+          provider: outcome.provider,
+          amount: outcome.claimedAmount,
+        });
+      } else if (outcome.status === "already") {
+        memo[conn.id] = today;
+        log.info("QODER_CHECKIN", `${conn.name || conn.id}: ${outcome.message || "今日已领或无待领活动"}`, {
+          id: conn.id,
+          provider: outcome.provider,
+        });
+      } else {
+        log.warn("QODER_CHECKIN", `${conn.name || conn.id}: 领取失败 (${outcome.error || outcome.status})`, {
+          id: conn.id,
+          provider: outcome.provider,
+        });
+      }
+    } catch (err) {
+      results.push({
+        connectionId: conn.id,
+        account: conn.name || conn.id,
+        provider: conn.provider,
+        status: "failed",
+        error: err?.message || String(err),
       });
-    } else if (outcome.status === "already") {
-      memo[conn.id] = dayKey(deps.nowMs);
+      log.warn("QODER_CHECKIN", `${conn.name || conn.id}: 异常 (${err?.message || err})`, {
+        id: conn.id,
+      });
     }
   }
 
@@ -290,49 +327,71 @@ export async function runQoderCheckinTick(deps = {}) {
   return results;
 }
 
-export function startQoderCheckin() {
-  if (started) return;
-  started = true;
-
-  const scheduleNext = () => {
-    const jitter = Math.floor(Math.random() * TICK_JITTER_MS);
-    const delay = TICK_MS + jitter;
-    timerHandle = setTimeout(async () => {
-      try {
-        const settings = await loadSettingsSafe();
-        if (settings.qoderCheckin !== false) {
-          await runQoderCheckinTick({ skipIfCheckedToday: true });
-        }
-      } catch (e) {
-        log.warn("QODER_CHECKIN", "Tick failed", { error: e.message });
-      } finally {
-        if (started) scheduleNext();
-      }
-    }, delay);
-    if (timerHandle && typeof timerHandle.unref === "function") {
-      timerHandle.unref();
+async function safeTick(how) {
+  try {
+    const settings = await loadSettingsSafe();
+    if (settings.qoderCheckin !== true) {
+      log.debug("QODER_CHECKIN", `Scheduled ${how}: setting off, skipping`);
+      return;
     }
-  };
-
-  // Run initial tick shortly after startup
-  setTimeout(async () => {
-    try {
-      const settings = await loadSettingsSafe();
-      if (settings.qoderCheckin !== false) {
-        await runQoderCheckinTick({ skipIfCheckedToday: true });
-      }
-    } catch (e) {
-      log.warn("QODER_CHECKIN", "Initial tick failed", { error: e.message });
-    } finally {
-      if (started) scheduleNext();
-    }
-  }, 15000);
+    const done = await getDoneMap();
+    await runQoderCheckinTick({ skipIfCheckedToday: true, doneMap: done });
+    await persistDoneMap();
+  } catch (err) {
+    log.warn("QODER_CHECKIN", `Scheduled ${how} rejected (swallowed)`, {
+      error: err?.message ?? String(err),
+    });
+  }
 }
 
-export function stopQoderCheckin() {
-  started = false;
+function clearTimer() {
   if (timerHandle) {
     clearTimeout(timerHandle);
     timerHandle = null;
+  }
+}
+
+function scheduleNext() {
+  if (!started) return;
+  const delayMs = msUntilNextTick();
+  clearTimer();
+  timerHandle = setTimeout(() => {
+    safeTick("tick").finally(() => scheduleNext());
+  }, delayMs);
+  if (timerHandle && typeof timerHandle.unref === "function") {
+    timerHandle.unref();
+  }
+  log.info("QODER_CHECKIN", "Next all-day credit-claim tick scheduled", {
+    delaySec: Math.round(delayMs / 1000),
+  });
+}
+
+/**
+ * Start the scheduler. Runs an immediate boot pass then ticks every ~2h.
+ * @param {{ skipBoot?: boolean }} [opts]
+ * @returns {boolean} true if started this call
+ */
+export function startQoderCheckin(opts = {}) {
+  if (started) return false;
+  if (isNonServerRuntime()) {
+    log.debug("QODER_CHECKIN", "Skip start outside long-running server runtime");
+    return false;
+  }
+  started = true;
+
+  if (opts.skipBoot !== true) {
+    safeTick("boot");
+  }
+  scheduleNext();
+
+  log.info("QODER_CHECKIN", "Scheduler started (all-day cadence)");
+  return true;
+}
+
+export function stopQoderCheckin() {
+  clearTimer();
+  if (started) {
+    started = false;
+    log.info("QODER_CHECKIN", "Scheduler stopped");
   }
 }

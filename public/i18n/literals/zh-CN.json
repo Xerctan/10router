@@ -1751,5 +1751,15 @@
   "Unit abbreviation": "单位缩写",
   "This Week": "当周",
   "Auto-matched region based on network location ({country})": "已根据网络出口（{country}）自动匹配节点",
-  "Current network location ({country}) recommended region: {region}": "当前网络出口（{country}）推荐节点：{region}"
+  "Current network location ({country}) recommended region: {region}": "当前网络出口（{country}）推荐节点：{region}",
+  "Claim Credits": "领取积分",
+  "Claiming...": "正在领取…",
+  "Claim daily activity Credits": "领取每日活动积分",
+  "Daily credits already claimed for today": "今日活动积分已领取完毕",
+  "Claim successful": "积分领取成功",
+  "Claim failed": "积分领取失败",
+  "No active Qoder connections found": "未找到有效的 Qoder 连接",
+  "accounts": "个账号",
+  "Qoder auto daily credit claim": "Qoder 每日自动领积分",
+  "Automatically claim daily campaign credits for Qoder and Qoder CN accounts": "自动领取 Qoder 和 Qoder CN 账号的每日活动积分（全天重试，当日确认完成即停）"
 }

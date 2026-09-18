@@ -71,6 +71,10 @@ const DEFAULT_SETTINGS = {
   // Persisted so a restart doesn't re-verify already-done accounts; entries
   // are pruned to today on every write.
   codeBuddyDailyDone: {},
+  // Auto daily credit claim for Qoder & Qoder CN accounts.
+  qoderCheckin: false,
+  // Daily-done memo for Qoder: { [connectionId]: "YYYY-MM-DD" }
+  qoderDailyDone: {},
   // Provider-wide channel blocks: { [provider]: { until, lastAt, strikes } }.
   // Set when an upstream answers with a channel-scope error (e.g. CodeBuddy
   // 11128 "unapproved channel"): the failure belongs to the channel, so every

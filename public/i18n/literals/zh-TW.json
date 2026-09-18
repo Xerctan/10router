@@ -574,5 +574,15 @@
   "Unit abbreviation": "單位縮寫",
   "This Week": "當週",
   "Auto-matched region based on network location ({country})": "已根據網路出口（{country}）自動匹配節點",
-  "Current network location ({country}) recommended region: {region}": "目前網路出口（{country}）推薦節點：{region}"
+  "Current network location ({country}) recommended region: {region}": "目前網路出口（{country}）推薦節點：{region}",
+  "Claim Credits": "領取積分",
+  "Claiming...": "正在領取…",
+  "Claim daily activity Credits": "領取每日活動積分",
+  "Daily credits already claimed for today": "今日活動積分已領取完畢",
+  "Claim successful": "積分領取成功",
+  "Claim failed": "積分領取失敗",
+  "No active Qoder connections found": "未找到有效的 Qoder 連接",
+  "accounts": "個帳號",
+  "Qoder auto daily credit claim": "Qoder 每日自動領積分",
+  "Automatically claim daily campaign credits for Qoder and Qoder CN accounts": "自動領取 Qoder 和 Qoder CN 帳號的每日活動積分（全天重試，當日確認完成即停）"
 }

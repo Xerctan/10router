@@ -120,6 +120,19 @@ export async function PATCH(request) {
         .catch((error) => console.warn("[CodeBuddyCheckin] start failed:", error.message));
     }
 
+    // Auto daily credit claim for Qoder & Qoder CN
+    if (Object.prototype.hasOwnProperty.call(body, "qoderCheckin")) {
+      if (settings.qoderCheckin === true) {
+        import("@/sse/services/qoderCheckin.js")
+          .then(({ startQoderCheckin }) => startQoderCheckin())
+          .catch((error) => console.warn("[QoderCheckin] start failed:", error.message));
+      } else {
+        import("@/sse/services/qoderCheckin.js")
+          .then(({ stopQoderCheckin }) => stopQoderCheckin())
+          .catch((error) => console.warn("[QoderCheckin] stop failed:", error.message));
+      }
+    }
+
     const { password, oidcClientSecret, ...safeSettings } = settings;
     safeSettings.oidcConfigured = !!(safeSettings.oidcIssuerUrl && safeSettings.oidcClientId && oidcClientSecret);
     return NextResponse.json(safeSettings, { headers: SETTINGS_RESPONSE_HEADERS });
