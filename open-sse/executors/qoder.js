@@ -35,6 +35,7 @@ import {
   QODER_CHAT_BASE_ALT,
   QODER_CHAT_SIG_PATH,
   QODER_MODEL_MAP,
+  QODER_CN_GATEWAY_BASE,
 } from "../shared/qoder/constants.js";
 import { getQoderModelConfig, resolveQoderModels, isQoderPat, resolveQoderCredentials } from "../services/qoderModels.js";
 import { OPENAI_BLOCK, CLAUDE_BLOCK } from "../translator/schema/blocks.js";
@@ -488,16 +489,27 @@ async function wrapQoderSSE(response, model) {
 }
 
 export class QoderExecutor extends BaseExecutor {
-  constructor() {
-    super("qoder", PROVIDERS.qoder);
+  /**
+   * @param {string} providerId - "qoder" (global) or "qoder-cn"
+   * @param {string} chatBaseAlt - api2-equivalent host for jt- tokens
+   */
+  constructor(providerId = "qoder", chatBaseAlt = QODER_CHAT_BASE_ALT) {
+    super(providerId, PROVIDERS[providerId] || PROVIDERS.qoder);
+    this.providerId = providerId;
+    this.chatBaseAlt = chatBaseAlt;
+    this.isCn = providerId === "qoder-cn";
   }
 
   buildUrl(credentials) {
-    // Job-token (jt-...) traffic must hit api2.qoder.sh — api3 rejects jt-
-    // with "Login expired" (403). Device tokens (dt-...) stay on api3.
+    // Job-token (jt-...) traffic must hit the alt gateway — api3/gateway
+    // rejects jt- with "Login expired" (403). Device tokens stay on the
+    // primary host.
     const raw = credentials?.apiKey || credentials?.accessToken;
     if (typeof raw === "string" && !raw.startsWith("pt-") && (raw.startsWith("jt-") || (credentials?.accessToken || "").startsWith("jt-"))) {
-      return `${QODER_CHAT_BASE_ALT}/algo${QODER_CHAT_SIG_PATH}?FetchKeys=llm_model_result&AgentId=agent_common&Encode=1`;
+      return `${this.chatBaseAlt}/algo${QODER_CHAT_SIG_PATH}?FetchKeys=llm_model_result&AgentId=agent_common&Encode=1`;
+    }
+    if (this.isCn) {
+      return `${QODER_CN_GATEWAY_BASE}/algo${QODER_CHAT_SIG_PATH}?FetchKeys=llm_model_result&AgentId=agent_common&Encode=1`;
     }
     return QODER_CHAT_URL_ENCODED;
   }

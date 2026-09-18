@@ -132,6 +132,7 @@ import p132 from "./ollama-search.js";
 import p133 from "./xquik.js";
 import p134 from "./amd.js";
 import p135 from "./siliconflow-cn.js";
+import p136 from "./qoder-cn.js";
 
 export default [
   p0,
@@ -265,4 +266,5 @@ export default [
   p133,
   p134,
   p135,
+  p136,
 ];
