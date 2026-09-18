@@ -39,6 +39,17 @@ describe("modelFamilyName normalization", () => {
     expect(modelFamilyName("nemotron-3.5-lightning-free")).toBe("nemotron");
     expect(modelFamilyName("deepseek-v4.1-flash")).toBe("deepseek");
     expect(modelFamilyName("Molotov-1206/mimo-x-flash-preview")).toBe("mimo");
+    // Qoder opaque codenames map to real product families
+    expect(modelFamilyName("qfmodel")).toBe("qwen");
+    expect(modelFamilyName("qdc/qfmodel")).toBe("qwen");
+    expect(modelFamilyName("qd/qmodel_38max")).toBe("qwen");
+    expect(modelFamilyName("qmodel_latest")).toBe("qwen");
+    expect(modelFamilyName("dfmodel")).toBe("deepseek");
+    expect(modelFamilyName("kmodel")).toBe("kimi");
+    expect(modelFamilyName("gfmodel")).toBe("glm");
+    expect(modelFamilyName("mmodel")).toBe("minimax");
+    expect(modelFamilyName("ultimate")).toBe("claude");
+    expect(modelFamilyName("qwq-32b-preview")).toBe("qwen");
     // Custom-channel UUID-ish ids collapse into "other".
     expect(modelFamilyName("85d2a64e-c610-4b3b-8c12-b857b6367207:323e6d8d")).toBe("other");
   });

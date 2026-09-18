@@ -688,6 +688,18 @@ export async function getUsageStats(period = "all") {
 // it ("5.6" has a dot) — so the legend showed both `gpt` AND `gpt-6`, and the
 // same happened for `gemini-3` / `claude-3` (8 families from 12 ids). Dropping
 // the version outright restores single-bucket-per-product aggregation.
+// Opaque or proprietary codenames mapped to recognized product families.
+// E.g. Qoder internal codenames: qfmodel/qmodel → qwen, dfmodel/dmodel → deepseek.
+const CODENAME_FAMILIES = [
+  [/^q(?:f)?model(?:_.*)?$/, "qwen"],
+  [/^d(?:f)?model(?:_.*)?$/, "deepseek"],
+  [/^kmodel(?:_.*)?$/, "kimi"],
+  [/^g(?:f|m\d+)?model(?:_.*)?$/, "glm"],
+  [/^mmodel(?:_.*)?$/, "minimax"],
+  [/^(?:ultimate|performance)$/, "claude"],
+  [/^qwq(?:-.*)?$/, "qwen"],
+];
+
 export function modelFamilyName(model) {
   const raw = String(model || "unknown");
   const noPrefix = raw.includes("/") ? raw.slice(raw.lastIndexOf("/") + 1) : raw;
@@ -695,6 +707,11 @@ export function modelFamilyName(model) {
   // Custom-channel ids look like "<uuid>:<name>" — hex prefix catches them;
   // no length cap (real descriptive names run 25-30 chars).
   if (/^[0-9a-f]{8,}/.test(lower)) return "other";
+
+  for (const [pattern, family] of CODENAME_FAMILIES) {
+    if (pattern.test(lower)) return family;
+  }
+
   const segs = lower.split("-");
   // Some brands attach the version DIRECTLY to the name with no hyphen, so it
   // lands inside segs[0] and survives the split: hy4-preview → "hy4",
