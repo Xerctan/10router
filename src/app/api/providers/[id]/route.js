@@ -143,6 +143,9 @@ export async function PUT(request, { params }) {
       updateData.apiKey = apiKey;
       // Fresh credentials make the stored failure stale — clear the red
       // dashboard error instead of waiting for the next successful request.
+      // The badge goes "active" (same as the OAuth re-auth paths), not null
+      // (which would render "Unknown" on a row that was just working).
+      updateData.testStatus = "active";
       updateData.resetErrorState = true;
     }
     if (testStatus !== undefined) updateData.testStatus = testStatus;
