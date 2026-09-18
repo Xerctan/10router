@@ -74,12 +74,17 @@ function kiroMethodLabel(conn) {
 }
 
 function getConnectionSecondaryLabel(connection) {
+  // Qoder cards show the profile display name as the primary label (email
+  // hidden for privacy); never duplicate it in the secondary slot.
+  const primary = getConnectionLabel(connection);
   if (connection.name?.trim() && connection.email?.trim() && connection.name.trim() !== connection.email.trim()) {
-    return connection.email.trim();
+    const label = connection.email.trim();
+    if (label !== primary) return label;
   }
 
   if (connection.name?.trim() && connection.displayName?.trim() && connection.name.trim() !== connection.displayName.trim()) {
-    return connection.displayName.trim();
+    const label = connection.displayName.trim();
+    if (label !== primary) return label;
   }
 
   return null;

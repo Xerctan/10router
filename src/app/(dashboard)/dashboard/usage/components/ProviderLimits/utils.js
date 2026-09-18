@@ -23,6 +23,17 @@ export const QUOTA_SORT_OPTIONS = [
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 export function getConnectionLabel(connection) {
+  // Qoder Intl stores the login email as the connection name (CN stores the
+  // username). Users don't want the email surfaced on the dashboard, so for
+  // Qoder prefer the human-readable profile name when available.
+  if (connection.provider === "qoder" || connection.provider === "qoder-cn") {
+    return (
+      connection.displayName?.trim() ||
+      connection.name?.trim() ||
+      connection.email?.trim() ||
+      null
+    );
+  }
   return connection.name?.trim()
     || connection.email?.trim()
     || connection.displayName?.trim()
@@ -543,7 +554,7 @@ export function parseQuotaData(provider, data) {
                 : null;
             const displayName =
               quotaType === "user"
-                ? "Subscription"
+                ? "Plan Credits"
                 : quotaType === "addOn"
                   ? "Resource Package"
                   : quotaType === "organization"
@@ -554,13 +565,19 @@ export function parseQuotaData(provider, data) {
               used: quota.used || 0,
               total: quota.total || 0,
               unit: quota.unit,
-              resetAt,
+              // The addOn total mixes packs with different expiry dates; a
+              // single countdown on the aggregate row is misleading (and the
+              // official web UI shows none). Real dates live on the per-pack
+              // rows below.
+              resetAt: quotaType === "addOn" ? null : resetAt,
               unlimited: quota.unlimited === true,
             });
             // Qoder's addOn aggregates every gifted pack; when the usage
             // service resolved the per-campaign breakdown, surface each one
             // as its own row (soonest-expiring first), mirroring the web
-            // account page's "包含 N 个资源包" list.
+            // account page's "包含 N 个资源包" list. Packs are one-shot
+            // (recurring:false) so they render "expires in Xd" like
+            // CodeBuddy's bonus packs.
             if (quotaType === "addOn" && Array.isArray(quota.packs)) {
               quota.packs.forEach((pack, i) => {
                 normalizedQuotas.push({
@@ -573,6 +590,7 @@ export function parseQuotaData(provider, data) {
                       ? pack.expiresAt
                       : null,
                   unlimited: false,
+                  recurring: false,
                 });
               });
             }

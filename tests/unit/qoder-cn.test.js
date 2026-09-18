@@ -14,7 +14,7 @@ import REGISTRY from "../../open-sse/providers/registry/index.js";
 import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js";
 import qoderCnOAuth from "../../src/lib/oauth/providers/qoder-cn.js";
 import { getQoderUsage } from "../../open-sse/services/usage/misc.js";
-import { parseQuotaData } from "../../src/app/(dashboard)/dashboard/usage/components/ProviderLimits/utils.js";
+import { parseQuotaData, getConnectionLabel } from "../../src/app/(dashboard)/dashboard/usage/components/ProviderLimits/utils.js";
 
 describe("qoder-cn provider registry & capabilities", () => {
   const reg = REGISTRY.find((p) => p.id === "qoder-cn");
@@ -102,7 +102,7 @@ describe("qoder and qoder-cn quota normalization", () => {
 
     const cnNormalized = parseQuotaData("qoder-cn", raw);
     expect(cnNormalized).toHaveLength(2);
-    expect(cnNormalized[0].name).toBe("Subscription");
+    expect(cnNormalized[0].name).toBe("Plan Credits");
     expect(cnNormalized[0].total).toBe(0);
     expect(cnNormalized[1].name).toBe("Resource Package");
     expect(cnNormalized[1].total).toBe(600);
@@ -115,7 +115,7 @@ describe("qoder and qoder-cn quota normalization", () => {
       },
     });
     expect(intlNormalized).toHaveLength(2);
-    expect(intlNormalized[0].name).toBe("Subscription");
+    expect(intlNormalized[0].name).toBe("Plan Credits");
     expect(intlNormalized[1].name).toBe("Resource Package");
     expect(intlNormalized[1].total).toBe(100);
   });
@@ -141,16 +141,48 @@ describe("qoder and qoder-cn quota normalization", () => {
 
     const normalized = parseQuotaData("qoder-cn", raw);
     expect(normalized).toHaveLength(4);
-    expect(normalized[0].name).toBe("Subscription");
+    expect(normalized[0].name).toBe("Plan Credits");
     expect(normalized[1].name).toBe("Resource Package");
     expect(normalized[1].total).toBe(600);
+    // Aggregate row hides its countdown (mixed per-pack expiries, matches
+    // the official web UI); the dates live on the pack rows instead.
+    expect(normalized[1].resetAt).toBe(null);
     expect(normalized[2].name).toBe("Bonus Pack 1");
     expect(normalized[2].used).toBe(100);
     expect(normalized[2].total).toBe(500);
     expect(normalized[2].resetAt).toBe("2026-09-30T15:59:00.000Z");
+    expect(normalized[2].recurring).toBe(false);
     expect(normalized[3].name).toBe("Bonus Pack 2");
     expect(normalized[3].used).toBe(0);
     expect(normalized[3].total).toBe(100);
     expect(normalized[3].resetAt).toBe("2026-10-18T02:00:00.000Z");
+    expect(normalized[3].recurring).toBe(false);
+  });
+
+  it("labels Qoder connections by display name, not email", () => {
+    expect(
+      getConnectionLabel({
+        provider: "qoder",
+        name: "i@techysy.com",
+        email: "i@techysy.com",
+        displayName: "ShiYanG Yu",
+      }),
+    ).toBe("ShiYanG Yu");
+    expect(
+      getConnectionLabel({
+        provider: "qoder-cn",
+        name: "yu_shiyang",
+        email: "yu_shiyang",
+        displayName: "yu_shiyang",
+      }),
+    ).toBe("yu_shiyang");
+    // Non-Qoder providers keep preferring the connection name.
+    expect(
+      getConnectionLabel({
+        provider: "codex",
+        name: "user@example.com",
+        displayName: "Some Name",
+      }),
+    ).toBe("user@example.com");
   });
 });

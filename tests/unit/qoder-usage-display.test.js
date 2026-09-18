@@ -34,7 +34,7 @@ describe("Qoder usage & sentinel timestamp display", () => {
 
     const parsed = parseQuotaData("qoder", rawQoderUsage);
     expect(parsed).toHaveLength(1);
-    expect(parsed[0].name).toBe("Personal");
+    expect(parsed[0].name).toBe("Plan Credits");
     expect(parsed[0].total).toBe(0);
     expect(parsed[0].used).toBe(0);
     expect(parsed[0].resetAt).toBeNull();
