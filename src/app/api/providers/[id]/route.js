@@ -139,7 +139,7 @@ export async function PUT(request, { params }) {
     if (globalPriority !== undefined) updateData.globalPriority = globalPriority;
     if (defaultModel !== undefined) updateData.defaultModel = defaultModel;
     if (isActive !== undefined) updateData.isActive = isActive;
-    if (apiKey && existing.authType === "apikey") {
+    if (apiKey && (existing.authType === "apikey" || existing.authType === "api_key")) {
       updateData.apiKey = apiKey;
       // Fresh credentials make the stored failure stale — clear the red
       // dashboard error instead of waiting for the next successful request.
