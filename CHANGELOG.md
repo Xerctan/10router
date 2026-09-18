@@ -2,6 +2,37 @@
 
 > 面向用户的精简更新见 [`public/i18n/changelog/`](https://github.com/techysy/10router/tree/main/public/i18n/changelog)（`en.md` / `zh-CN.md` / `zh-TW.md`，仪表盘「Change Log」按界面语言加载对应文件）。本文件为完整开发日志，按版本从上往下排列。
 
+## v1.1.3 (2026-09-18)
+
+### ✨ 新功能
+
+- **Qoder 国内版（qoder-cn）完整恢复**（`a9b4a229`）：从删除前基线恢复 provider 注册表、OAuth 设备码流程、PAT→job-token 换取、模型目录与用量跟踪；不触碰隐藏供应商策略（trae / windsurf / devin-cli 继续不入库）。配套 `5b89d046` 修复模型家族映射——Qoder 内部代号（`qfmodel` / `qmodel*` / `qwq*` → qwen，`dmodel` / `dfmodel` → deepseek 等）在连字符/版本号剥离前先归一，用量图表不再按代号碎片分组。
+
+- **Qoder / Qoder CN 每日 Credits 自动领取**（`25e8c00b` + `805bcc56`）：
+  - 调度服务 `src/sse/services/qoderCheckin.js`：拉取 `/sash/api/v1/me/campaigns?clientType=10`，对可领取活动执行 `POST .../campaigns/{id}/claim`（带 `Cosy-ClientType` / `Cosy-Machine*` 头）；连接卡片提供手动触发按钮，API 为 `/api/oauth/qoder/checkin` 与 `/api/oauth/qoder-cn/checkin`。
+  - 设置页「实验特性」新增 **Qoder 自动领取**开关，开/关即时动态启停调度器；`[QODER_CHECKIN]` 日志对齐 CodeBuddy 签到标准（启动横幅 / 调度节奏 / 每连接结果）。
+  - **当日去重全局持久化**：SQLite `settings.qoderDailyDone`（仿 `codeBuddyDailyDone`），当日已领取后重复触发零网络请求，跨日自动清理；zh-CN / zh-TW i18n 词条补齐。
+
+- **Qoder 资源包逐包展示**（`2a659730`）：从已领取（`claimStatus=CLAIMED`）的 CREDITS campaign 重建每个资源包（金额 / 到期时间 / 消耗按**先到期先扣**从聚合 `addOnQuota.used` 分摊），`quotas.addOn.packs` 输出，仪表盘逐行显示「赠送包 N」各带自己的到期日；聚合「资源包」行保留（官方口径的权威总量）。
+
+- **Qoder 官方图标**（`e804845b` / `b0b5ec87`）：从官方启动器 PE 资源提取 256×256 PNG，替换 `qoder` / `qoder-cn` 占位图标。
+
+### 🛠️ 优化与修复
+
+- **Qoder 配额解析修正**（`4a550135`）：`getQoderUsage` 补解析 `addOnQuota`——原实现只读 `userQuota`，免费账户每日/活动领取的 Credits 全部显示 0/0；顺带修复 qoder-cn 配额标题与类型 i18n。
+
+- **资源包到期时间从 campaign 推导**（`fcc74f1d`）：官网用量页需会话 cookie（设备 token 一律 401），改用 campaigns 数据计算有效期——`FIXED_END` 直接取 `benefit.validity.fixedEnd`，`RELATIVE_DAYS` 按 `startAt + days×86400000`；仅保留未过期项并取最早作为 `addOn.resetAt`。实测与国际版官网「2026年10月18日」及国内版补偿包（9月30日）一致。
+
+- **配额文案对齐 Qoder 官网 + 连接卡不露邮箱**（`2506f194`）：订阅 →**套餐内 Credits**、个人资源包 →**资源包**（与官网用词一致）；资源包聚合行不再显示倒计时，逐包「赠送包」行改用 CodeBuddy 同款「expires in」相对剩余文案；Qoder 国际版连接卡优先显示 `displayName`（真实姓名字段）而非邮箱，且防止次级标签与主标签重复。测试同步更新（含修正 `qoder-usage-display` 里遗留的旧「Personal」断言）。
+
+- **PR #23：CodeBuddy 国际版 DeepSeek 拒绝 `reasoning_effort: "auto"`**（`69ea4169`，close #23）：`auto` 值不再透传（上游 400 code 11150），映射为不携带该参数，补单测锁行为。
+
+### 📄 文档
+
+- 账号停用申诉模板：补英文版并按「行动清单替代辩解」风格重写（`62b78546` / `31566db1`）。
+- Antigravity 文档补 18+ 年龄验证硬门槛 + 新建账号风险与恢复指引（`3f9256f5`）。
+- README 徽章校准（版本前置 + 下载计数徽章）、文档索引补齐 6 篇专题、10router-sync 插件章节更新（5 数据源 + `status` 命令）（`70ad6b32` / `d0376d59` / `07db22d5` / `322a461d`）。
+
 ## v1.1.2 (2026-09-18)
 
 ### ✨ 新功能

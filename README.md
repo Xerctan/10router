@@ -4,7 +4,7 @@
 
 # 🚀 10Router
 
-[![10Router](https://img.shields.io/badge/10Router-v1.1.2-orange.svg)](https://github.com/techysy/10router/releases)
+[![10Router](https://img.shields.io/badge/10Router-v1.1.3-orange.svg)](https://github.com/techysy/10router/releases)
 [![Downloads](https://img.shields.io/github/downloads/techysy/10router/total?label=Downloads&color=green)](https://github.com/techysy/10router/releases)
 [![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Ftechysy%2F10router-blue?logo=docker)](https://github.com/techysy/10router/pkgs/container/10router)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -48,6 +48,7 @@
 
 | 版本 | 核心要点 |
 |------|----------|
+| **v1.1.3** | Qoder 国内版完整恢复；Qoder 每日 Credits 自动领取（实验开关）；资源包逐包展示与到期；配额文案对齐官网；CodeBuddy intl DeepSeek reasoning_effort 修复（#23） |
 | **v1.1.2** | 用量仪表盘（热力图 / 节点健康度 / 生涯统计）；CodeBuddy 11128 渠道级熔断；Cline/ClinePass 凭据自动刷新修复；小米 Token Plan 出口节点匹配 |
 | **v1.1.1** | 跨账号「配额包到期优先」调度；Command Code 配额追踪；全供应商 OAuth 加密导出/导入；用量国际化与官方图标补齐 |
 | **v1.1.0** | 小米 MiMo 桌面版（Desktop 专属模型与会话）；opencode-go 供应商；Codex 图片工具化；Windows 数据目录迁移 |
