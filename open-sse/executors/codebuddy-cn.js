@@ -58,6 +58,10 @@ export class CodeBuddyExecutor extends DefaultExecutor {
       });
     }
 
+    if (transformed.reasoning_effort !== undefined && typeof transformed.reasoning_effort !== "string") {
+      delete transformed.reasoning_effort;
+    }
+
     // CodeBuddy only surfaces model reasoning when the request carries the CLI's
     // OpenAI-style params: reasoning_effort + reasoning_summary:"auto". 9router's
     // thinking pipeline sets reasoning_effort only when the client asks, and never
@@ -69,7 +73,7 @@ export class CodeBuddyExecutor extends DefaultExecutor {
     // values so agent clients (e.g. dsh sending THINK:auto) don't hard-fail:
     //   auto → high (keep reasoning, it's the gateway default anyway)
     //   off  → drop the field (equivalent to none, which DeepSeek accepts)
-    const isDeepSeek = /^deepseek/.test(model || "");
+    const isDeepSeek = typeof model === "string" && /deepseek/i.test(model);
     if (isDeepSeek && (eff === "auto" || eff === "off")) {
       if (eff === "auto") transformed.reasoning_effort = "high";
       else delete transformed.reasoning_effort;
