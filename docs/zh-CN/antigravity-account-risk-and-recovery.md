@@ -217,6 +217,45 @@ Google 支持团队给出的自助入口（官方）：
 
 > 备选入口：<https://support.google.com/accounts/gethelp>
 
+**英文申诉模板（仅 API 受限场景）**：
+
+> ⚠️ 提交前整改动作务必先做实（邮件里写了就要真做了，Google 后台查得到）：
+> 清理 <https://myaccount.google.com/connections> 全部第三方 OAuth 授权 + 在浏览器里实际走完一次
+> 验证流程（含年龄验证）→ 改密码 → 开两步验证。
+> 描述里**不要解释触发原因**，不提路由器/中转/代理等任何敏感词，用行动替代辩解。
+
+```text
+Dear Google Gemini API Support Team,
+
+I am writing about a `403 PERMISSION_DENIED` error ("Verify your
+account to continue") returned when calling the Gemini API from my
+personal Google account ({{your_account}}@gmail.com), which I use
+for coding, learning, and development experiments.
+
+Since encountering the error, I have taken the following steps to
+secure the account:
+• Reviewed and removed all third-party application access and unused
+  OAuth authorizations from my account settings
+• Completed the account verification flow in a browser, including
+  age verification
+• Changed my password and enabled two-step verification
+
+I respectfully believe this restriction may have been triggered in
+error. I am fully committed to complying with Google's Terms of
+Service and policies, and would be grateful for a manual review of
+my account's API access and the opportunity to restore it.
+
+Thank you for your time and consideration.
+
+Sincerely,
+{{Name}}
+{{your_account}}@gmail.com
+```
+
+**中文对照（仅供核对，表单不要粘贴中文）**：
+
+> 我写信是关于我的个人 Google 账号（{{your_account}}@gmail.com）调用 Gemini API 时返回的 `403 PERMISSION_DENIED`（"Verify your account to continue"）错误。该账号用于我个人的编程、学习和开发实验。遇到错误后，我已采取以下措施保障账号安全：审查并移除了所有第三方应用访问和未使用的 OAuth 授权；在浏览器中完成了账号验证流程（含年龄验证）；修改了密码并启用两步验证。我尊重地认为该限制可能是误判，恳请人工复核我的账号 API 访问权限并予以恢复。我承诺完全遵守 Google 服务条款。谢谢。
+
 ### 场景 B：账号整体被停用，网页无法登录
 
 1. 干净美 IP 浏览器打开：<https://accounts.google.com/signin/recovery>
@@ -260,26 +299,6 @@ Sincerely,
 ```
 
 > ⚠️ **API 权限受限优先走 Gemini API 支持表单**，不要走账号恢复表单——入口不对会无人处理。
-
-### 英文申诉模板（可直接复制）
-
-```text
-This account is my personal account for learning and development. Recently I
-encountered `403 PERMISSION_DENIED` error when calling Gemini API, the system
-asked me to verify my account to continue.
-
-I have removed all third-party application access permissions of this account.
-I only use official Google services and official Gemini API clients in the future.
-
-I confirm that I will comply with Google Terms of Service. Please help review
-and restore my Gemini API access permission. Thank you.
-```
-
-**中文对照（仅供核对，表单不要粘贴中文）**：
-
-> 该账号是我个人用于学习与开发的账号。近期调用 Gemini API 时遇到 `403 PERMISSION_DENIED` 错误，系统提示需要验证账号才能继续使用。
-> 我已经移除了该账号全部第三方应用访问权限。后续我只会使用 Google 官方服务以及官方 Gemini API 客户端。
-> 我承诺遵守 Google 服务条款，请帮忙核查并恢复我的 Gemini API 访问权限，谢谢。
 
 ---
 
