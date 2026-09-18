@@ -221,8 +221,43 @@ Google 支持团队给出的自助入口（官方）：
 
 1. 干净美 IP 浏览器打开：<https://accounts.google.com/signin/recovery>
 2. 输入账号，按页面提示选择「账号被停用」
-3. 填写申诉表单
+3. 填写申诉表单，粘贴英文模板（下述）
 4. 提交，等待 Google 邮件回复
+
+**英文申诉模板（账号停用场景）**：
+
+> ⚠️ 提交前三项整改动作务必先做实（邮件里写了就要真做了，Google 后台查得到）：
+> 清理 <https://myaccount.google.com/connections> 全部第三方 OAuth 授权 → 改密码 → 开两步验证。
+> 描述里**不要解释触发原因**（"多网络环境""连接不稳定"等说法等于自认异常行为），用行动替代辩解。
+
+```text
+Dear Google Account Review Team,
+
+I am writing to appeal the suspension of my Google account
+({{your_account}}@gmail.com), which I use personally as an individual
+developer for coding, learning, and Google Cloud experimentation.
+
+This account is central to my daily development work, and its suspension
+has brought my personal projects to a halt. I respectfully believe the
+suspension may have been triggered in error.
+
+Since receiving the notice, I have taken the following steps to secure
+the account:
+• Reviewed and removed all third-party application access and unused
+  OAuth authorizations from my account settings
+• Changed my password and enabled two-step verification
+• Confirmed my account details, including age verification, are complete
+
+I am committed to fully complying with Google's Terms of Service and
+policies. I would be grateful for a manual review of my account, and
+for the opportunity to restore access.
+
+Thank you for your time and consideration.
+
+Sincerely,
+{{Name}}
+{{your_account}}@gmail.com
+```
 
 > ⚠️ **API 权限受限优先走 Gemini API 支持表单**，不要走账号恢复表单——入口不对会无人处理。
 
