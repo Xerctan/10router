@@ -43,7 +43,10 @@ describe("buildCloudCodeProbeError (connection test path)", () => {
 describe("extractAccountsVerificationUrl", () => {
   it("extracts the URL from the friendly chat error message", () => {
     const msg = "Google requires account verification (VALIDATION_REQUIRED). "
-      + 'Open this URL in a browser signed in to the affected account, complete "Verify your account", then retry: '
+      + "Most often this means the account's 18+ age verification is missing — "
+      + "complete it at https://myaccount.google.com/age-verification (check the birthdate at "
+      + "https://myaccount.google.com/birthday first). "
+      + 'Otherwise open this URL in a browser signed in to the affected account, complete "Verify your account", then retry: '
       + "https://accounts.google.com/signin/continue?sarp=1&scc=1&continue=https://developers.google.com/x&plt=T";
     expect(extractAccountsVerificationUrl(msg))
       .toBe("https://accounts.google.com/signin/continue?sarp=1&scc=1&continue=https://developers.google.com/x&plt=T");

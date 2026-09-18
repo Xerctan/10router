@@ -22,8 +22,8 @@
 
 | 症状（关键报错） | 性质 | 真根因 | 出路 |
 |---|---|---|---|
-| `403 … "Verify your account to continue."` + `reason: VALIDATION_REQUIRED` | **账号风控验证** | Google 标记了该会话/账号，要求浏览器完成一次 "Verify your account" | 响应体里自带 `validation_url`，无痕浏览器打开、登录被标记账号完成验证即可。见 §三 |
-| `TOKEN REFRESHED success:true` 之后紧跟 `403` | 同上 | refresh token 是好的，**门在账号资格层**，刷新令牌救不了 | 别重登，直接走 validation_url |
+| `403 … "Verify your account to continue."` + `reason: VALIDATION_REQUIRED` | **账号风控验证**（**先查年龄验证**） | ① **年龄验证未完成（18+ 硬门槛，最常见）**；② Google 标记了该会话/账号，要求浏览器完成一次 "Verify your account" | 先做年龄验证（§三），再走响应体自带的 `validation_url`，无痕浏览器打开、登录被标记账号完成验证。见 §三 |
+| `TOKEN REFRESHED success:true` 之后紧跟 `403` | 同上 | refresh token 是好的，**门在账号资格层**，刷新令牌救不了 | 别重登，先查年龄验证，再走 validation_url |
 | `Eligibility check failed: … not currently available in your location`（agy CLI）或同义文案 | **出口地区不一致 / 未验证会话**（两种含义，先查前者） | ① 分流规则没覆盖全 Google 域，部分请求漏到别的出口，Google 看到混合/受限地区；② 纯粹是未验证会话的另一种表现 | 统一 googleapis 全域出口（§四）+ 完成验证（§三）。**先查 ①再怀疑地区锁** |
 | `proxyconnect tcp: dial tcp <ip>:7890: connect: connection refused`（Go 风格） | **本机代理环境**，不是 10router | 报错方是 Go 程序（如 agy CLI），它读到的 `http_proxy/https_proxy` 指向了死地址；Go **进程启动时读一次** env | 修代理地址 + **重启该进程**。Go 报错格式是识别"错在客户端工具而非 router"的信号 |
 | `404 Requested entity was not found` | **模型 id 寻址** | 3.6/3.7/3.8 用 tiered entity（`<id>(<level>)`），裸 id 上游不认 | 用 registry 的 `upstreamModelId` 映射，勿直连裸 id。见 §六 |
@@ -31,6 +31,18 @@
 | 配额数字不动 / 滞后 | **配额端点顺序** | 两个环境（daily / cloudcode）各自计数，先查错端点看到的是旧账 | 摘要按 daily → daily.sandbox → cloudcode 顺序查（已按此实现）。见 §七 |
 
 ## 三、坑 1：VALIDATION_REQUIRED —— 账号风控验证（最高频）
+
+**首要原因：年龄验证未完成（18+ 硬门槛）。** Google Antigravity 官方 FAQ 明写：
+
+> **Why is my age unverified?** At the moment, Antigravity is unavailable to under-18 users. If you do meet the minimum age requirement, you may verify your age to continue using Antigravity.
+> —— <https://antigravity.google/docs/faq>
+
+所以遇到 `VALIDATION_REQUIRED` **先查年龄验证**，再查其它风控原因。Google 支持团队给出的自助入口：
+
+| 入口 | 用途 |
+|---|---|
+| <https://myaccount.google.com/age-verification> | 完成年龄验证（要求验证时走这里） |
+| <https://myaccount.google.com/birthday> | 核对/补全生日（先确认生日已填且正确） |
 
 **完整现象**：请求打到 `daily-cloudcode-pa…/v1internal:generateContent`，返回：
 
@@ -44,22 +56,41 @@
 
 **修复步骤**（响应自带自助修复路径，不用找 Google）：
 
-1. **无痕浏览器**打开响应里的 `validation_url`，登录**被标记的那个账号**（别用浏览器里已登录的其它 Google 账号，会串）。
-2. 完成 "Verify your account"（通常是密码 + 二次验证）。`continue=` 会落到 `…/gemini-code-assist/auth/auth_success_gemini` 成功页。
-3. `plt=` continuation 参数**有时效**，过期就重新发一次请求拿新链接再开。
-4. 等 10router 的 `modelLock 120s` 自动过期再试（或重启该 provider）。
+1. 先确认**年龄验证**已通过（上表两个入口）。这是最常见原因。
+2. **无痕浏览器**打开响应里的 `validation_url`，登录**被标记的那个账号**（别用浏览器里已登录的其它 Google 账号，会串）。
+3. 完成 "Verify your account"（通常是密码 + 二次验证）。`continue=` 会落到 `…/gemini-code-assist/auth/auth_success_gemini` 成功页。
+4. `plt=` continuation 参数**有时效**，过期就重新发一次请求拿新链接再开。
+5. 等 10router 的 `modelLock 120s` 自动过期再试（或重启该 provider）。
 
 **要点**：
 - 这是 **Google 账号侧门禁**，不是 10router 缺开关；重登 token、换 refresh_token 都没用（token 本身有效）。
+- **年龄验证是 18+ 硬门槛**：未验证时可能出现"Gemini 权益正常但 Antigravity 仍不可用"的分裂现象——权益层过了，Antigravity 自己的资格校验没过。
 - 一个账号可以有多个触发面：我们实测同一账号在 agy CLI 报 "Eligibility check failed"、在 10router 报 VALIDATION_REQUIRED——**同一个未验证会话的两种表现**，验证一次全解。
 - 验证状态**跟账号走、不跟出口走**：验证完成后换出口节点（美国 ↔ 新加坡实测）依然有效。
 - 产品化（v1.1.1-test.2 起）：聊天路径错误直接是含可点击 URL 的友好提示（`utils/error.js` `buildAccountValidationMessage`）；连接测试与模型测试失败时，仪表盘在错误旁渲染「验证账号」跳转链接（`testUtils.js` `buildCloudCodeProbeError` + `src/shared/utils/validationUrl.js`）。
 
-## 四、坑 2：出口地区一致性 —— "not available in your location"
+### 验证做完了还是 403？按此顺序排
+
+1. **清理第三方 OAuth 授权**：<https://myaccount.google.com/connections> —— 删掉 Antigravity、Cloud AI Companion 及所有不明的第三方授权，然后重新走一次 OAuth 登录。
+2. **停止高频重试**：反复重登/重授权/换 IP 会加重风控标记。冷置 6 小时以上再试，别一边报错一边猛打接口。
+3. **换出口 IP**（尤其是机房 IP）：见 §四，出口地区一致性是另一道独立的门。
+4. **检查订阅状态**：`one.google.com/settings` 确认 AI Premium 权益正常显示（家庭组共享场景下，车头的共享开关可能被关闭——见《账号风险与恢复》）。
+5. 以上都排除仍不行 → 风控分级与恢复时效见 [antigravity-account-risk-and-recovery.md](./antigravity-account-risk-and-recovery.md)。
+
+## 四、坑 2：地区校验 —— 出口 IP 一致性 + 付款资料地区（两道独立的门）
 
 **这一课最重要：先查出口 IP 一致性，再怀疑账号/地区锁。**
 
-**踩坑过程**：代理分流规则只手写了 9 个 antigravity 相关域名（`cloudcode-pa` / `daily-cloudcode-pa` / `oauth2.googleapis.com` / `antigravity.google` / `accounts.google.com` / `clients4.google.com` 等 → `💬 Ai平台` 组）。登录流程里其余 Google 域（实测抓到 `firebaseremoteconfig.googleapis.com`、`lh3.googleusercontent.com`）漏到"漏网之鱼"规则 → 走了**香港**节点，而主流程走美国——Google 看到混合/受限出口，报 "not currently available in your location"。
+地区问题有**两道独立的门**，报错文案会重叠，别混为一谈：
+
+| 门 | 校验什么 | 典型触发场景 | 出路 |
+|---|---|---|---|
+| **A. 出口 IP** | Google 看**请求来源**（你走哪个节点） | 分流规则漏域名 → 部分请求走别的地区 → 看到混合出口 | §四下文（全域分流 + 单一出口） |
+| **B. 付款资料地区** | Google 看 **Play 付款资料的国家/地区**（非 IP、非账号注册地） | 家庭组邀请校验、AI Premium 权益归属；只改 IP 不改付款资料照样报地区不可用 | 见 [antigravity-account-risk-and-recovery.md](./antigravity-account-risk-and-recovery.md) §付款资料地区 |
+
+> ⚠️ 两者**缺一不可**：即使 Gemini 网页版 AI Premium 正常可用，Antigravity 仍会独立校验付款资料地区 + 访问 IP。数据中心/机房 IP 即使付款资料是美区，也可能被拦。
+
+**踩坑过程（门 A）**：代理分流规则只手写了 9 个 antigravity 相关域名（`cloudcode-pa` / `daily-cloudcode-pa` / `oauth2.googleapis.com` / `antigravity.google` / `accounts.google.com` / `clients4.google.com` 等 → `💬 Ai平台` 组）。登录流程里其余 Google 域（实测抓到 `firebaseremoteconfig.googleapis.com`、`lh3.googleusercontent.com`）漏到"漏网之鱼"规则 → 走了**香港**节点，而主流程走美国——Google 看到混合/受限出口，报 "not currently available in your location"。
 
 **修法**（mihomo，写在文件型规则集里**抗订阅更新**）：
 
@@ -121,12 +152,25 @@ DOMAIN-SUFFIX,googleusercontent.com
    - mihomo: curl -s http://127.0.0.1:9090/connections | 看 google 域的 chains 是否同组同区
    - custom-rules.txt 是否已兜底 googleapis.com 全域
    - curl -x http://127.0.0.1:7890 http://ip-api.com/json （出口国别）
-2. 报错体找 validation_url → 无痕浏览器完成验证（§三）
-3. TOKEN REFRESH 成功仍 403 → 正常，别重登，回到第 2 步
-4. 官方 Antigravity 客户端 + 同账号同网络对照：官方也挂 = 账号问题；官方好 = 出口/身份问题
-5. 多账号对照：换号好 = 单账号被标记；全挂 = 出口/分流问题
-6. 模型 404 → 查 upstreamModelId（§六），勿当目录错误下架
+   - 是否机房 IP（住宅 IP 才稳）
+2. 年龄验证（18+ 硬门槛，先于其它风控原因）
+   - myaccount.google.com/birthday 生日已填
+   - myaccount.google.com/age-verification 完成验证
+3. 报错体找 validation_url → 无痕浏览器完成验证（§三）
+4. TOKEN REFRESH 成功仍 403 → 正常，别重登，回到第 3 步
+5. 验证后仍 403 → 清理第三方授权（myaccount.google.com/connections）+ 冷置 6h（§三）
+6. 付款资料地区 = 目标地区（家庭组场景，见 account-risk 文档）
+7. 官方 Antigravity 客户端 + 同账号同网络对照：官方也挂 = 账号问题；官方好 = 出口/身份问题
+8. 多账号对照：换号好 = 单账号被标记；全挂 = 出口/分流问题
+9. 模型 404 → 查 upstreamModelId（§六），勿当目录错误下架
 ```
+
+## 十点五、相关文档
+
+| 文档 | 内容 |
+|---|---|
+| [antigravity-integration-guide.md](./antigravity-integration-guide.md)（本文） | 技术接入与排查：错误码 → 根因 → 出路，代码文件索引 |
+| [antigravity-account-risk-and-recovery.md](./antigravity-account-risk-and-recovery.md) | 用户向：低价家庭拼车风险、付款资料地区修改、风控分级与恢复时效 |
 
 ## 十一、相关文件索引
 

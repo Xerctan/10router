@@ -20,6 +20,7 @@ Architecture and engineering notes for the 10Router gateway + dashboard. All doc
 - [API Key Signing &amp; Secret Rotation](/docs/zh-CN/api-key-signing-rotation.md) — key format `sk-{machineId}-{keyId}-{crc8}`, the secret resolution chain, why local validation is a DB lookup (CRC not enforced yet — transition design), and the future strict-CRC plan (zh-only).
 - [Model JSON Catalog Mechanism](/docs/en/json-model-catalog-mechanism.md) — `modelsJsonUrl` per-connection JSON model catalogs: storage, fetch/refresh, and how `/v1/models` merges them (v1.0.1 → v1.0.4).
 - [Antigravity Integration Guide](/docs/zh-CN/antigravity-integration-guide.md) (zh-only) — connecting/debugging the `antigravity` channel: how to tell an egress-IP problem from account risk control from a code bug, before re-logging tokens.
+- [Antigravity Account Risk & Recovery](/docs/zh-CN/antigravity-account-risk-and-recovery.md) (zh-only) — user-facing: shared-family-plan pitfalls, Play payment-profile region matching, the 18+ age-verification gate, and risk-control tiers / appeal paths.
 - [Usage Import Rows Contract](/docs/zh-CN/usage-import-rows.md) (zh-only) — the `meta.imported` display contract for imported usage rows: usageHistory vs requestDetails, tag-and-backfill, read-side synthesis, and the double-display boundary.
 - [Mirasim Usage Ledger](/docs/zh-CN/mirasim-usage-ledger.md) (zh-only) — the mirasim desktop local usage ledger as a sync data source: full insights field table, anti-double-count rules, and known boundaries.
 - [ZCode × CodeBuddy CN Compatibility &amp; Plugin Design](/docs/zh-CN/zcode-cbcn-compatibility-and-plugin-design.md) (zh-only) — governance of the CodeBuddy CN 11128 channel-scope risk control, session-size control, and the `10router-sync` plugin collaboration design.
@@ -75,6 +76,7 @@ Architecture and engineering notes for the 10Router gateway + dashboard. All doc
 - [API Key 签名与密钥签名轮换](/docs/zh-CN/api-key-signing-rotation.md) — 密钥格式 `sk-{machineId}-{keyId}-{crc8}`、签名密文解析链、为何本地校验是 DB 查找（CRC 暂不强制——过渡态设计）、Rotate all 幂等防护与未来强校验规划。
 - [模型 JSON 目录机制（modelsJsonUrl）](/docs/en/json-model-catalog-mechanism.md)（英文）— 每连接 JSON 模型目录的存储、拉取刷新，以及 `/v1/models` 如何合并（v1.0.1 → v1.0.4）。
 - [Antigravity（反重力）接入指南与踩坑实录](/docs/zh-CN/antigravity-integration-guide.md) — 接入/排查 `antigravity` 渠道：先分清是出口 IP 问题、账号风控还是代码问题，避免一看到 403 就重登 token。
+- [Antigravity 账号风险与恢复](/docs/zh-CN/antigravity-account-risk-and-recovery.md) — 用户向：低价家庭拼车风险、Play 付款资料地区修改、**18+ 年龄验证硬门槛**、风控分级与申诉路径。
 - [用量导入行展示契约（meta.imported）](/docs/zh-CN/usage-import-rows.md) — usageHistory 与 requestDetails 的分工、打标/去重回填/读侧合成三件套、归并分页正确性证明与撞签打标的双显示边界。
 - [mirasim 桌面端本地用量账本](/docs/zh-CN/mirasim-usage-ledger.md) — 作为同步数据源：insights 账本字段全表、"走了 10Router" 的识别信号、防双计规则与已知边界。
 - [ZCode × CodeBuddy CN 兼容治理与插件协同设计](/docs/zh-CN/zcode-cbcn-compatibility-and-plugin-design.md) — CodeBuddy 11128 渠道级风控、会话体积控制与 `10router-sync` 插件扩展的协同方案。

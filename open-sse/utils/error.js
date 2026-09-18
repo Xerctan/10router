@@ -74,7 +74,10 @@ export function buildAccountValidationMessage(bodyText) {
   } catch { /* keep the raw capture — still a usable URL */ }
   return (
     "Google requires account verification (VALIDATION_REQUIRED). "
-    + `Open this URL in a browser signed in to the affected account, complete "Verify your account", then retry: ${url}`
+    + "Most often this means the account's 18+ age verification is missing — "
+    + "complete it at https://myaccount.google.com/age-verification (check the birthdate at "
+    + "https://myaccount.google.com/birthday first). "
+    + `Otherwise open this URL in a browser signed in to the affected account, complete "Verify your account", then retry: ${url}`
   );
 }
 
