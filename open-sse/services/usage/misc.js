@@ -280,6 +280,7 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
     // (totalUsagePercentage, isQuotaExceeded, expiresAt) are surfaced as
     // siblings so the dashboard parser doesn't try to render them as rows.
     const userQuota = body.userQuota || {};
+    const addOnQuota = body.addOnQuota || {};
     const orgQuota = body.orgResourcePackage || {};
     // Qoder publishes a single absolute reset timestamp (`expiresAt` in ms);
     // surface it on every quota record as ISO so the table can render
@@ -298,6 +299,14 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
         remaining: Number(userQuota.remaining) || 0,
         unit: userQuota.unit || "credits",
         resetAt,
+        unlimited: false,
+      },
+      addOn: {
+        total: Number(addOnQuota.total) || 0,
+        used: Number(addOnQuota.used) || 0,
+        remaining: Number(addOnQuota.remaining) || 0,
+        unit: addOnQuota.unit || "credits",
+        resetAt: null,
         unlimited: false,
       },
       organization: {

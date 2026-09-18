@@ -1761,5 +1761,10 @@
   "No active Qoder connections found": "未找到有效的 Qoder 连接",
   "accounts": "个账号",
   "Qoder auto daily credit claim": "Qoder 每日自动领积分",
-  "Automatically claim daily campaign credits for Qoder and Qoder CN accounts": "自动领取 Qoder 和 Qoder CN 账号的每日活动积分（全天重试，当日确认完成即停）"
+  "Automatically claim daily campaign credits for Qoder and Qoder CN accounts": "自动领取 Qoder 和 Qoder CN 账号的每日活动积分（全天重试，当日确认完成即停）",
+  "Resource Package": "资源包",
+  "resource package": "资源包",
+  "addOn": "资源包",
+  "user": "个人",
+  "organization": "组织"
 }

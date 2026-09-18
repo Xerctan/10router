@@ -126,6 +126,16 @@ function formatTimeRemaining(value) {
   return days > 0 ? `${days}d ${hours}h` : `${hours}h`;
 }
 
+const KNOWN_PROVIDER_NAMES = {
+  "qoder-cn": "Qoder CN",
+  "qoder": "Qoder",
+  "codebuddy-cn": "CodeBuddy CN",
+  "codebuddy-intl": "CodeBuddy Intl",
+  "minimax-cn": "MiniMax CN",
+  "glm-cn": "GLM CN",
+  "kimi-cn": "Kimi CN",
+};
+
 export default function ProviderLimits() {
   const { copied, copy } = useCopyToClipboard();
   const [connections, setConnections] = useState([]);
@@ -1177,8 +1187,10 @@ export default function ProviderLimits() {
                       />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="text-sm font-semibold text-text-primary capitalize truncate">
-                        {conn.provider}
+                      <h3 className="text-sm font-semibold text-text-primary truncate">
+                        {KNOWN_PROVIDER_NAMES[conn.provider] || (
+                          <span className="capitalize">{conn.provider}</span>
+                        )}
                       </h3>
                       {getConnectionLabel(conn) ? (
                         <p className="text-xs text-text-muted truncate">

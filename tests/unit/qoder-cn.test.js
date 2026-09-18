@@ -14,6 +14,7 @@ import REGISTRY from "../../open-sse/providers/registry/index.js";
 import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js";
 import qoderCnOAuth from "../../src/lib/oauth/providers/qoder-cn.js";
 import { getQoderUsage } from "../../open-sse/services/usage/misc.js";
+import { parseQuotaData } from "../../src/app/(dashboard)/dashboard/usage/components/ProviderLimits/utils.js";
 
 describe("qoder-cn provider registry & capabilities", () => {
   const reg = REGISTRY.find((p) => p.id === "qoder-cn");
@@ -86,5 +87,36 @@ describe("qoder-cn OAuth configuration", () => {
     expect(mapped.displayName).toBe("TestUser");
     expect(mapped.providerSpecificData.userId).toBe("uid-123");
     expect(mapped.providerSpecificData.machineId).toBe("mid-456");
+  });
+});
+
+describe("qoder and qoder-cn quota normalization", () => {
+  it("normalizes user and addOn quota (resource package) and skips empty org", () => {
+    const raw = {
+      quotas: {
+        user: { total: 0, used: 0, remaining: 0, unit: "credits" },
+        addOn: { total: 600, used: 0, remaining: 600, unit: "credits" },
+        organization: { total: 0, used: 0, remaining: 0, unit: "credits" },
+      },
+    };
+
+    const cnNormalized = parseQuotaData("qoder-cn", raw);
+    expect(cnNormalized).toHaveLength(2);
+    expect(cnNormalized[0].name).toBe("Personal");
+    expect(cnNormalized[0].total).toBe(0);
+    expect(cnNormalized[1].name).toBe("Resource Package");
+    expect(cnNormalized[1].total).toBe(600);
+
+    const intlNormalized = parseQuotaData("qoder", {
+      quotas: {
+        user: { total: 0, used: 0, remaining: 0, unit: "credits" },
+        addOn: { total: 100, used: 0, remaining: 100, unit: "credits" },
+        organization: { total: 0, used: 0, remaining: 0, unit: "credits" },
+      },
+    });
+    expect(intlNormalized).toHaveLength(2);
+    expect(intlNormalized[0].name).toBe("Personal");
+    expect(intlNormalized[1].name).toBe("Resource Package");
+    expect(intlNormalized[1].total).toBe(100);
   });
 });
