@@ -86,6 +86,7 @@ export default function ProviderDetailPage() {
   // cbcn check-in manual trigger: running flag (per-account results go to the
   // summary toast + [CB_CN_CHECKIN] server log, not an inline list).
   const [cbCheckinRunning, setCbCheckinRunning] = useState(false);
+  const [qoderCheckinRunning, setQoderCheckinRunning] = useState(false);
   // cbcn export/import re-auth: { open, action: 'export'|'import', value }
   const [cbPw, setCbPw] = useState({ open: false, action: null, value: "" });
   const [cbPwVerifying, setCbPwVerifying] = useState(false);
@@ -253,6 +254,60 @@ export default function ProviderDetailPage() {
         {cbCheckinRunning ? translate("Checking in...") : translate("Check in now")}
       </Button>
     </div>
+  );
+
+  // Qoder daily credits claim manual trigger.
+  const handleQoderCheckin = async () => {
+    setQoderCheckinRunning(true);
+    try {
+      const endpoint = providerId === "qoder-cn" ? "/api/oauth/qoder-cn/checkin" : "/api/oauth/qoder/checkin";
+      const res = await fetch(endpoint, {
+        method: "POST",
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `Request failed: ${res.status}`);
+      const list = Array.isArray(data?.results) ? data.results : [];
+      if (list.length === 0) {
+        notify.warning(translate("No active Qoder connections found"));
+        return;
+      }
+      const checkedInList = list.filter((r) => r.status === "checked-in");
+      const alreadyList = list.filter((r) => r.status === "already");
+      const failedList = list.filter((r) => r.status === "failed");
+
+      const totalCredits = checkedInList.reduce((acc, cur) => acc + (cur.claimedAmount || 0), 0);
+
+      if (checkedInList.length > 0) {
+        notify.success(
+          `${translate("Claim successful")}: +${totalCredits} Credits (${checkedInList.length} ${translate("accounts")})`
+        );
+      } else if (failedList.length === 0) {
+        notify.info(translate("Daily credits already claimed for today"));
+      } else {
+        notify.error(
+          `${translate("Claim failed")}: ${failedList.map(f => f.error).join(", ")}`
+        );
+      }
+    } catch (e) {
+      notify.error(translate("Claim failed") + ": " + e.message);
+    } finally {
+      setQoderCheckinRunning(false);
+    }
+  };
+
+  const renderQoderCheckinBlock = () => (
+    <Button
+      size="sm"
+      icon="redeem"
+      variant="secondary"
+      onClick={handleQoderCheckin}
+      disabled={qoderCheckinRunning}
+      className="w-full sm:w-auto"
+      title={translate("Claim daily activity Credits")}
+    >
+      {qoderCheckinRunning ? translate("Claiming...") : translate("Claim Credits")}
+    </Button>
   );
 
   const handleAgRiskConfirm = () => {
@@ -1917,6 +1972,7 @@ export default function ProviderDetailPage() {
                         Cookie
                       </Button>
                     )}
+                    {(providerId === "qoder" || providerId === "qoder-cn") && renderQoderCheckinBlock()}
                     {providerId === "codex" && (
                       <Button size="sm" icon="playlist_add" variant="secondary" onClick={() => setShowBulkImportCodex(true)}>
                         {translate("Bulk Add")}
@@ -2033,6 +2089,7 @@ export default function ProviderDetailPage() {
                         </>
                       )}
                       {codeBuddyCheckinOn && renderCbCheckinBlock()}
+                      {(providerId === "qoder" || providerId === "qoder-cn") && renderQoderCheckinBlock()}
                     </>
                   ) : (
                     <Button

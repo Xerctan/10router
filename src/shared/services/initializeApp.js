@@ -133,6 +133,14 @@ async function runHeavyStartup() {
       .then(({ startCodebuddyCheckin }) => startCodebuddyCheckin())
       .catch((e) => console.log("[CodeBuddyCheckin] scheduler start failed:", e.message));
   }
+
+  // Qoder auto daily credit claim (both Domestic CN and Intl).
+  // Active by default; user can toggle off via settings.qoderCheckin = false.
+  if (settings.qoderCheckin !== false) {
+    import("@/sse/services/qoderCheckin.js")
+      .then(({ startQoderCheckin }) => startQoderCheckin())
+      .catch((e) => console.log("[QoderCheckin] scheduler start failed:", e.message));
+  }
 }
 
 function hasQuotaAutoPingEnabled(settings) {
