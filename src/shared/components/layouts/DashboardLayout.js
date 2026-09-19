@@ -34,18 +34,20 @@ function getToastStyle(type) {
 export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Desktop sidebar can be collapsed to free up viewport (persisted).
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem("sidebarCollapsed") === "1";
-  });
+  // The persisted value is applied AFTER mount, not in the initializer:
+  // SSR can't read localStorage, so a client-only initial `true` hydrates
+  // against server HTML that says expanded — React keeps the server DOM
+  // while state says collapsed, and the first click then toggles the
+  // (invisible) state instead of the visible sidebar: the "collapse needs
+  // two clicks" report. Same start on both sides + one sync = one click.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  useEffect(() => {
+    setSidebarCollapsed(window.localStorage.getItem("sidebarCollapsed") === "1");
+  }, []);
   const toggleSidebarCollapsed = () => {
-    setSidebarCollapsed((prev) => {
-      const next = !prev;
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem("sidebarCollapsed", next ? "1" : "0");
-      }
-      return next;
-    });
+    const next = !sidebarCollapsed;
+    window.localStorage.setItem("sidebarCollapsed", next ? "1" : "0");
+    setSidebarCollapsed(next);
   };
   const pathname = usePathname();
   const notifications = useNotificationStore((state) => state.notifications);
