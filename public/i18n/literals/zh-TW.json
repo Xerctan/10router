@@ -1,5 +1,10 @@
 {
   "Models refreshed": "模型已重新整理",
+  "Off-peak discount": "離峰折扣",
+  "Off-peak discount active": "離峰折扣進行中",
+  "until off-peak discount": "後進入離峰折扣",
+  "until standard rate": "後恢復原價",
+  "active now": "進行中",
   "Hide password": "隱藏密碼",
   "Show password": "顯示密碼",
   "No connections to export": "没有可匯出的連線",

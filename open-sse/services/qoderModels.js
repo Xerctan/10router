@@ -275,6 +275,15 @@ async function fetchQoderCatalogRaw(credentials, signal, proxyOptions = null) {
       isReasoning: !!entry.is_reasoning,
       maxOutputTokens: Number(entry.max_output_tokens) || 0,
       description: entry.description || "",
+      // Credit pricing, server-published and promo-aware: price_factor is the
+      // CURRENT multiplier (Qwen3.8-Flash sits at 0 during its free window,
+      // original_price_factor holds the 0.1 it reverts to), and `promotion`
+      // carries the off-peak window (22:00–08:00 Asia/Singapore) with zh/en
+      // badge copy. The dashboard renders both via the shared ModelRow
+      // multiplier badge + OffPeakBanner; zero client-side price math — the
+      // server rewrites price_factor itself when a window opens or closes.
+      rateMultiplier: typeof entry.price_factor === "number" ? entry.price_factor : null,
+      promotion: entry.promotion && typeof entry.promotion === "object" ? entry.promotion : null,
     });
   }
 

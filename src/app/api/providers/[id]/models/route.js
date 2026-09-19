@@ -125,6 +125,49 @@ const buildOAuthResolver = ({ refreshFn, fetchFn, parseFn, errorLabel }) => asyn
   return { models: [], warning };
 };
 
+// Qoder (intl + CN share one resolver; fetchQoderCatalogRaw branches on
+// credentials.provider for the gateway URL). Passes the provider through so
+// a qoder-cn connection no longer dials the intl host, and forwards the
+// server-published pricing (rateMultiplier / promotion) the dashboard badges
+// render. Registered under both provider keys in PROVIDER_MODELS_CONFIG.
+const resolveQoderCatalog = async (connection) => {
+  const credentials = {
+    provider: connection.provider,
+    accessToken: connection.accessToken,
+    apiKey: connection.apiKey,
+    refreshToken: connection.refreshToken,
+    email: connection.email,
+    displayName: connection.displayName,
+    providerSpecificData: connection.providerSpecificData || {},
+  };
+  let warning;
+  try {
+    const result = await resolveQoderModels(credentials, { forceRefresh: true });
+    if (result?.models?.length) {
+      return {
+        models: result.models.map((m) => ({
+          // Canonical "<provider>/<key>" id so the dashboard surfaces the
+          // same identifier the chat router expects.
+          id: `${connection.provider}/${m.id}`,
+          name: m.name,
+          contextLength: m.contextLength,
+          isVL: m.isVL,
+          isReasoning: m.isReasoning,
+          maxOutputTokens: m.maxOutputTokens,
+          description: m.description,
+          rateMultiplier: m.rateMultiplier,
+          promotion: m.promotion,
+        })),
+      };
+    }
+    warning = "Qoder returned no models; falling back to static catalog.";
+  } catch (error) {
+    warning = `Failed to fetch Qoder models: ${error.message}`;
+    console.log("Failed to fetch Qoder models dynamically, falling back to static:", error.message);
+  }
+  return { models: [], warning };
+};
+
 // Provider models endpoints configuration
 const PROVIDER_MODELS_CONFIG = {
   cline: {
@@ -349,40 +392,10 @@ const PROVIDER_MODELS_CONFIG = {
     }
   },
   qoder: {
-    customResolver: async (connection) => {
-      const credentials = {
-        accessToken: connection.accessToken,
-        apiKey: connection.apiKey,
-        refreshToken: connection.refreshToken,
-        email: connection.email,
-        displayName: connection.displayName,
-        providerSpecificData: connection.providerSpecificData || {},
-      };
-      let warning;
-      try {
-        const result = await resolveQoderModels(credentials, { forceRefresh: true });
-        if (result?.models?.length) {
-          return {
-            models: result.models.map((m) => ({
-              // Use the canonical "qoder/<key>" id so the dashboard
-              // surfaces the same identifier the chat router expects.
-              id: `qoder/${m.id}`,
-              name: m.name,
-              contextLength: m.contextLength,
-              isVL: m.isVL,
-              isReasoning: m.isReasoning,
-              maxOutputTokens: m.maxOutputTokens,
-              description: m.description,
-            })),
-          };
-        }
-        warning = "Qoder returned no models; falling back to static catalog.";
-      } catch (error) {
-        warning = `Failed to fetch Qoder models: ${error.message}`;
-        console.log("Failed to fetch Qoder models dynamically, falling back to static:", error.message);
-      }
-      return { models: [], warning };
-    },
+    customResolver: resolveQoderCatalog,
+  },
+  "qoder-cn": {
+    customResolver: resolveQoderCatalog,
   },
   "gemini-cli": {
     customResolver: buildOAuthResolver({

@@ -8,6 +8,8 @@ import { getProviderIconSrc, markProviderIconMissing } from "@/shared/utils/prov
 import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, XiaomiMimoAuthModal, IFlowCookieModal, GitLabAuthModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal, InviteCodeChip } from "@/shared/components";
 import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, FREE_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, getProviderAlias, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, AI_PROVIDERS } from "@/shared/constants/providers";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
+import { mergeQoderLivePricing } from "@/shared/utils/qoderLivePricing";
+import OffPeakBanner from "./OffPeakBanner";
 import { getThinkingLevels } from "open-sse/providers/thinkingLevels.js";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { useModelCaps } from "@/shared/hooks/useModelCaps";
@@ -352,9 +354,19 @@ export default function ProviderDetailPage() {
   // Experimental auto daily check-in — mutually exclusive display vs import/export.
   const codeBuddyCheckinOn = isCodeBuddy && codeBuddyCheckinEnabled;
   const staticModels = getModelsByProviderId(providerId);
+  // Qoder publishes credit multipliers + off-peak promos only on its live
+  // catalog (price_factor flips to 0 during a free window, the promotion
+  // object carries the 22:00–08:00 Asia/Singapore discount). Overlay them
+  // onto the static rows so the badges reflect the account's real pricing.
+  const isQoderFamily = providerId === "qoder" || providerId === "qoder-cn";
   const models = providerId === "cursor" && liveModels.length > 0
     ? liveModels
-    : staticModels;
+    : isQoderFamily
+      ? mergeQoderLivePricing(staticModels, liveModels)
+      : staticModels;
+  // One shared off-peak window for the whole list (Qoder attaches the same
+  // promotion object to every discounted model).
+  const offPeakPromotion = isQoderFamily ? (models.find((m) => m.promotion)?.promotion || null) : null;
   const providerAlias = getProviderAlias(providerId);
   
   const isOpenAICompatible = isOpenAICompatibleProvider(providerId);
@@ -1489,6 +1501,9 @@ export default function ProviderDetailPage() {
 
     return (
       <div className="flex flex-wrap gap-3">
+        {/* Off-peak countdown strip (Qoder) — one ticking banner for the
+            list; rows carry the static leaf badge. */}
+        {offPeakPromotion && <div className="w-full"><OffPeakBanner promotion={offPeakPromotion} /></div>}
         {/* Custom models toolbar — bulk enable/disable (P2). Only with customs. */}
         {(enabledCustomModelRows.length + disabledCustomModelRows.length) > 0 && (
           <div className="w-full flex items-center gap-2 text-xs text-text-muted -mb-1">

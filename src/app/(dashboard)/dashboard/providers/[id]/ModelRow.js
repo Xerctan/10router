@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { Badge, CapacityBadges, Tooltip } from "@/shared/components";
 import { isPromoFree } from "@/shared/utils/promoFree";
 import { isNightFreeHour } from "@/shared/utils/nightFree";
-import { translate } from "@/i18n/runtime";
+import { offPeakStatus, promotionText } from "@/shared/utils/offPeak";
+import { translate, getCurrentLocale } from "@/i18n/runtime";
 
 // Local hour, re-evaluated every minute so a row crosses the night boundary
 // live without a remount.
@@ -14,6 +15,23 @@ function useLocalHour() {
     return () => clearInterval(t);
   }, []);
   return hour;
+}
+
+// Off-peak windows flip at HH:MM boundaries, so the leaf badge needs a
+// finer tick than the hourly one above — 30s is well inside a minute and
+// cheap (one shared interval per row, cleared on unmount).
+function useOffPeakClock(promotion) {
+  const [now, setNow] = useState(() => Date.now());
+  // Primitive dep: the promotion OBJECT identity churns whenever the page
+  // re-renders (models array is rebuilt), which would reset the interval
+  // before it ever fires. The window definition is what actually matters.
+  const windowKey = promotion ? `${promotion.window_start}|${promotion.window_end}|${promotion.timezone}` : null;
+  useEffect(() => {
+    if (!windowKey) return undefined;
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, [windowKey]);
+  return offPeakStatus(promotion, now);
 }
 
 export default function ModelRow({ model, fullModel, alias, copied, onCopy, testStatus, isCustom, isFree, onDeleteAlias, onTest, isTesting, onDisable, onEnable, caps, thinkingSuffix }) {
@@ -35,6 +53,10 @@ export default function ModelRow({ model, fullModel, alias, copied, onCopy, test
   const promoFree = rateMultiplier !== null && rateMultiplier > 0 && isPromoFree(model);
   const displayMultiplier = promoFree ? 0 : rateMultiplier;
   const showFreeBadge = nightFreeNow || displayMultiplier === 0;
+  // Off-peak leaf (Qoder): the server itself swaps price_factor when the
+  // window opens, so the number above is already the discounted one — this
+  // badge only announces WHY it dropped, and flips green inside the window.
+  const offPeak = useOffPeakClock(model.promotion);
   const borderColor = testStatus === "ok"
     ? "border-green-500/40"
     : testStatus === "error"
@@ -79,6 +101,23 @@ export default function ModelRow({ model, fullModel, alias, copied, onCopy, test
                   className={`shrink-0 cursor-help leading-none${showFreeBadge ? "" : " font-mono"}`}
                 >
                   {showFreeBadge ? "free" : `${displayMultiplier.toFixed(2)}x`}
+                </Badge>
+              </Tooltip>
+            )}
+            {offPeak && (
+              <Tooltip
+                text={[
+                  promotionText(model.promotion?.badge, getCurrentLocale()) || translate("Off-peak discount"),
+                  promotionText(model.promotion?.description, getCurrentLocale()),
+                  `${offPeak.windowLabel} ${offPeak.timezone}${offPeak.active ? ` — ${translate("active now")}` : ""}`,
+                ].filter(Boolean).join(" · ")}
+              >
+                <Badge
+                  size="sm"
+                  variant={offPeak.active ? "success" : "default"}
+                  className="shrink-0 cursor-help leading-none"
+                >
+                  <span className="material-symbols-outlined text-[10px] align-[-1px]">eco</span>
                 </Badge>
               </Tooltip>
             )}
@@ -150,6 +189,8 @@ ModelRow.propTypes = {
   model: PropTypes.shape({
     id: PropTypes.string.isRequired,
     rateMultiplier: PropTypes.number,
+    // Server-published off-peak window (Qoder catalog `promotion`).
+    promotion: PropTypes.object,
     nightFree: PropTypes.shape({ from: PropTypes.number, to: PropTypes.number }),
   }).isRequired,
   fullModel: PropTypes.string.isRequired,
