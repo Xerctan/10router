@@ -25,9 +25,10 @@ export const INTERNAL_COMPACTION_HEADER = "x-9r-internal-compaction";
 const DEFAULT_RATIO = 0.9;
 const DEFAULT_KEEP_MESSAGES = 8;
 const SUMMARY_OUTPUT_CAP = 1500;
-// Below this estimate no plausible model window can be at ≥50% usage, so the
-// request path never pays for the DB reads in resolveModelWindow().
-const ESTIMATE_FLOOR_TOKENS = 24000;
+// Tiny requests must never touch the caps/customs maps. The maps themselves
+// are TTL-cached, so this floor only gates per-request overhead; keeping it
+// low means small PINNED windows (edge models at 8k) can still trigger.
+const ESTIMATE_FLOOR_TOKENS = 4000;
 const SUMMARY_TIMEOUT_MS = 120_000;
 // Base64 media blows up a char heuristic wildly out of proportion to the real
 // vision token cost; count each media block flat instead.
