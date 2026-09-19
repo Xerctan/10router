@@ -1533,7 +1533,7 @@ export default function ProviderDetailPage() {
       <div className="flex flex-wrap gap-3">
         {/* Off-peak countdown strip (Qoder) — one ticking banner for the
             list; rows carry the static leaf badge. */}
-        {offPeakPromotion && <div className="w-full"><OffPeakBanner promotion={offPeakPromotion} /></div>}
+        {offPeakPromotion && <OffPeakBanner promotion={offPeakPromotion} />}
         {/* Custom models toolbar — bulk enable/disable (P2). Only with customs. */}
         {(enabledCustomModelRows.length + disabledCustomModelRows.length) > 0 && (
           <div className="w-full flex items-center gap-2 text-xs text-text-muted -mb-1">

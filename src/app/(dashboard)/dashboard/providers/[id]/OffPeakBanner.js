@@ -28,15 +28,13 @@ export default function OffPeakBanner({ promotion }) {
     : `${time} ${translate("until off-peak discount")}`;
   return (
     <div
-      className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] bg-green-500/10 px-3 py-2 text-xs text-green-600 dark:text-green-400"
+      className="flex w-fit max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] bg-green-500/10 px-3 py-2 text-xs text-green-600 dark:text-green-400"
       title={desc || undefined}
     >
       <span className="material-symbols-outlined text-[16px]">eco</span>
       <span className="font-medium">{text}</span>
       {badge && <span className="opacity-80">· {badge}</span>}
-      <span className="ml-auto font-mono opacity-60">
-        {status.windowLabel} {status.timezone}
-      </span>
+      <span className="font-mono opacity-60">{status.windowLabel} {status.timezone}</span>
     </div>
   );
 }
