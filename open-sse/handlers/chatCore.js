@@ -28,7 +28,7 @@ import { compressWithPxpipe } from "../rtk/pxpipe.js";
 import { getCapabilitiesForModel } from "../providers/capabilities.js";
 import { stripUnsupportedModalities } from "../translator/concerns/modality.js";
 import { prefetchRemoteImages } from "../translator/concerns/prefetch.js";
-import { defaultClaudeToolType, shouldDefaultClaudeToolType } from "../translator/concerns/toolCall.js";
+import { defaultClaudeToolType, shouldDefaultClaudeToolType, sanitizeToolSchemas, shouldSanitizeToolSchemas } from "../translator/concerns/toolCall.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { isFreeModel, formatFreeRateLimitMessage } from "../utils/freeModel.js";
 
@@ -262,6 +262,16 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // 400s with "unknown variant `custom`" and clients saw a persistent 503 (#3905).
   if (shouldDefaultClaudeToolType(provider, finalFormat, translatedBody.tools, PROVIDERS)) {
     translatedBody.tools = defaultClaudeToolType(translatedBody.tools);
+  }
+
+  // Strict-gateway tool-schema downgrade (issue #27): cbcn answers 400/11129
+  // for any tool whose ROOT `parameters` is not a concrete type:"object"
+  // (root anyOf/oneOf/allOf/$ref/type-array/missing-type). Only providers that
+  // declare the `sanitizeToolSchema` quirk get it — nested schemas are left
+  // untouched, so valid tools pass through unchanged. Fixes OpenClaw and ZCode
+  // auto-generated toolsets that route through cbcn.
+  if (shouldSanitizeToolSchemas(provider, translatedBody.tools, PROVIDERS)) {
+    translatedBody.tools = sanitizeToolSchemas(translatedBody.tools);
   }
 
   // Per-request opt-out: client can bypass all token savers via header
