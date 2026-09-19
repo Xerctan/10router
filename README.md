@@ -48,7 +48,7 @@
 
 | 版本 | 核心要点 |
 |------|----------|
-| **v1.1.3** | Qoder 国内版完整恢复；Qoder 每日 Credits 自动领取（实验开关）；资源包逐包展示与到期；配额文案对齐官网；CodeBuddy intl DeepSeek reasoning_effort 修复（#23） |
+| **v1.1.3** | Qoder 国内版完整恢复与每日 Credits 自动领取；按模型钉住上下文窗口/最大输出；超长上下文服务端自动压缩；Provider 卡片拖拽排序且模型列表同步；严格端点工具 schema 降级（#27）；额度重置徽章持久显示 |
 | **v1.1.2** | 用量仪表盘（热力图 / 节点健康度 / 生涯统计）；CodeBuddy 11128 渠道级熔断；Cline/ClinePass 凭据自动刷新修复；小米 Token Plan 出口节点匹配 |
 | **v1.1.1** | 跨账号「配额包到期优先」调度；Command Code 配额追踪；全供应商 OAuth 加密导出/导入；用量国际化与官方图标补齐 |
 | **v1.1.0** | 小米 MiMo 桌面版（Desktop 专属模型与会话）；opencode-go 供应商；Codex 图片工具化；Windows 数据目录迁移 |
