@@ -137,6 +137,23 @@ export default function ProfilePage() {
     }
   };
 
+  const toggleCodeBuddyOAuthImport = async () => {
+    const next = !(settings.codeBuddyOAuthImport === true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codeBuddyOAuthImport: next }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSettings((prev) => ({ ...prev, ...data }));
+      }
+    } catch (error) {
+      console.log("Error toggling codebuddy OAuth import:", error);
+    }
+  };
+
   const toggleCodeBuddyCheckin = async () => {
     const next = !(settings.codeBuddyCheckin === true);
     try {
@@ -1765,6 +1782,20 @@ export default function ProfilePage() {
               <Toggle
                 checked={settings.showCommunityProviders !== false}
                 onChange={toggleShowCommunityProviders}
+              />
+            </div>
+
+            {/* OAuth account import/export (provider detail pages, all OAuth providers) */}
+            <div className="flex items-start sm:items-center justify-between gap-4 pt-4 border-t border-border/50">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm sm:text-base">{translate("OAuth import / export")}</p>
+                <p className="text-xs sm:text-sm text-text-muted">
+                  {translate("Show Import / Export buttons on OAuth provider pages (encrypted transfer, experimental)")}
+                </p>
+              </div>
+              <Toggle
+                checked={settings.codeBuddyOAuthImport === true}
+                onChange={toggleCodeBuddyOAuthImport}
               />
             </div>
           </div>

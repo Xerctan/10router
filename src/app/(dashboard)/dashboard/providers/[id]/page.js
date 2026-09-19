@@ -554,10 +554,7 @@ export default function ProviderDetailPage() {
       setProviderStrategy(override.fallbackStrategy || null);
       setProviderStickyLimit(override.stickyRoundRobinLimit != null ? String(override.stickyRoundRobinLimit) : "1");
       setEarliestExpiryFirst(override.earliestExpiryFirst === true);
-      const perProviderTransfer = typeof override.oauthTransfer === "boolean"
-        ? override.oauthTransfer
-        : settingsData.codeBuddyOAuthImport === true;
-      setOauthTransferEnabled(perProviderTransfer);
+      setOauthTransferEnabled(settingsData.codeBuddyOAuthImport === true);
       // Load per-provider thinking config
       const thinkingCfg = (settingsData.providerThinking || {})[providerId] || {};
       setThinkingMode(thinkingCfg.mode || "auto");
@@ -622,7 +619,6 @@ export default function ProviderDetailPage() {
     strategy,
     stickyLimit,
     earliestExpiry = earliestExpiryFirst,
-    oauthTransfer = oauthTransferEnabled,
   ) => {
     try {
       const settingsRes = await fetch("/api/settings", { cache: "no-store" });
@@ -644,12 +640,6 @@ export default function ProviderDetailPage() {
         override.earliestExpiryFirst = true;
       } else {
         delete override.earliestExpiryFirst;
-      }
-
-      if (typeof oauthTransfer === "boolean") {
-        override.oauthTransfer = oauthTransfer;
-      } else {
-        delete override.oauthTransfer;
       }
 
       const updated = { ...current };
@@ -674,22 +664,17 @@ export default function ProviderDetailPage() {
     const sticky = enabled ? (providerStickyLimit || "1") : providerStickyLimit;
     if (enabled && !providerStickyLimit) setProviderStickyLimit("1");
     setProviderStrategy(strategy);
-    saveProviderStrategy(strategy, sticky, earliestExpiryFirst, oauthTransferEnabled);
+    saveProviderStrategy(strategy, sticky, earliestExpiryFirst);
   };
 
   const handleStickyLimitChange = (value) => {
     setProviderStickyLimit(value);
-    saveProviderStrategy("round-robin", value, earliestExpiryFirst, oauthTransferEnabled);
+    saveProviderStrategy("round-robin", value, earliestExpiryFirst);
   };
 
   const handleEarliestExpiryToggle = (enabled) => {
     setEarliestExpiryFirst(enabled);
-    saveProviderStrategy(providerStrategy, providerStickyLimit, enabled, oauthTransferEnabled);
-  };
-
-  const handleOauthTransferToggle = (enabled) => {
-    setOauthTransferEnabled(enabled);
-    saveProviderStrategy(providerStrategy, providerStickyLimit, earliestExpiryFirst, enabled);
+    saveProviderStrategy(providerStrategy, providerStickyLimit, enabled);
   };
 
   const saveThinkingConfig = async (mode) => {
@@ -749,17 +734,13 @@ export default function ProviderDetailPage() {
     fetch("/api/settings", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
-        const override = (data.providerStrategies || {})[providerId] || {};
-        const enabled = typeof override.oauthTransfer === "boolean"
-          ? override.oauthTransfer
-          : data.codeBuddyOAuthImport === true;
-        setOauthTransferEnabled(enabled);
+        setOauthTransferEnabled(data.codeBuddyOAuthImport === true);
         if (typeof data.codeBuddyCheckin === "boolean") {
           setCodeBuddyCheckinEnabled(data.codeBuddyCheckin);
         }
       })
       .catch((e) => console.log("Error reading settings:", e));
-  }, [providerId]);
+  }, []);
 
   // Cursor's model availability is account-specific and changes frequently.
   // Load the active account's live catalog for the dashboard; the static
@@ -2004,22 +1985,6 @@ export default function ProviderDetailPage() {
                   onChange={handleEarliestExpiryToggle}
                 />
               </div>
-
-              {/* OAuth import / export toggle (per-provider) */}
-              {isOAuth && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className="text-xs text-text-muted font-medium"
-                    title={translate("Show Import / Export buttons on OAuth provider pages (encrypted transfer, experimental)")}
-                  >
-                    {translate("OAuth import / export")}
-                  </span>
-                  <Toggle
-                    checked={oauthTransferEnabled}
-                    onChange={handleOauthTransferToggle}
-                  />
-                </div>
-              )}
 
               {/* Round Robin toggle */}
               <div className="flex flex-wrap items-center gap-2">
