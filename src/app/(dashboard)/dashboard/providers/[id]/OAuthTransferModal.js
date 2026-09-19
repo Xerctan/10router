@@ -186,6 +186,7 @@ export default function OAuthTransferModal({ isOpen, mode, provider, providerNam
             <div className="flex gap-2">
               <Input
                 type="password"
+                reveal
                 label={translate("Transfer passphrase")}
                 value={passphrase}
                 onChange={(e) => setPassphrase(e.target.value)}
@@ -193,6 +194,7 @@ export default function OAuthTransferModal({ isOpen, mode, provider, providerNam
               />
               <Input
                 type="password"
+                reveal
                 label={translate("Confirm passphrase")}
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
@@ -225,6 +227,7 @@ export default function OAuthTransferModal({ isOpen, mode, provider, providerNam
             <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" onChange={onFilePicked} />
             <Input
               type="password"
+              reveal
               label={translate("Transfer passphrase")}
               value={passphrase}
               onChange={(e) => setPassphrase(e.target.value)}

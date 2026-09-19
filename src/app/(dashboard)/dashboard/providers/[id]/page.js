@@ -2387,6 +2387,7 @@ export default function ProviderDetailPage() {
         </p>
         <Input
           type="password"
+          reveal
           autoFocus
           value={cbPw.value}
           onChange={(e) => setCbPw((p) => ({ ...p, value: e.target.value }))}
