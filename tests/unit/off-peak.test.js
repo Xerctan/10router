@@ -148,3 +148,21 @@ describe("catalog → badge wiring guards", () => {
     expect(src).toContain("<OffPeakBanner promotion={offPeakPromotion}");
   });
 });
+
+// Regression guard for the 2026-09-19 report ("倍率和免费徽章怎么没有做"):
+// the badge data exists server-side, but the client only ever fetched
+// liveModels for cursor, so the qoder pages merged against an empty array
+// and rendered no badges/banner at all. The fetch gate must keep the whole
+// qoder family in scope.
+describe("live-pricing fetch wiring (client gate)", () => {
+  const pageSrc = readFileSync(new URL("../../src/app/(dashboard)/dashboard/providers/[id]/page.js", import.meta.url), "utf8");
+
+  it("fetches the live catalog for cursor AND the qoder family", () => {
+    expect(pageSrc).toMatch(/providerId !== "cursor" && !isQoderFamily/);
+  });
+
+  it("registers q37fmodel (Qwen3.7-Flash) so the lone custom row is retired", () => {
+    const registry = readFileSync(new URL("../../open-sse/providers/registry/qoder-cn.js", import.meta.url), "utf8");
+    expect(registry).toMatch(/id: "q37fmodel", name: "Qwen3.7-Flash"/);
+  });
+});

@@ -41,6 +41,10 @@ export default {
     { id: "qmodel_preview", name: "Qwen3.8-Max-Preview" },
     { id: "qmodel_latest", name: "Qwen3.7-Max" },
     { id: "qmodel", name: "Qwen3.7-Plus" },
+    // Added 2026-09-19: present in the live CN catalog (rate 0.1, no promo);
+    // it was leaking into the page as a lone "custom" row via the fetch
+    // button until registered here.
+    { id: "q37fmodel", name: "Qwen3.7-Flash" },
     { id: "qfmodel", name: "Qwen3.8-Flash" },
     { id: "kmodel_latest", name: "Kimi-K3" },
     { id: "kmodel", name: "Kimi-K2.7-Code" },

@@ -742,8 +742,12 @@ export default function ProviderDetailPage() {
   // Cursor's model availability is account-specific and changes frequently.
   // Load the active account's live catalog for the dashboard; the static
   // registry remains the fallback while the request is pending or unavailable.
+  // The Qoder family piggybacks on the same fetch: the live rows carry the
+  // promo-aware rateMultiplier / promotion objects the multiplier badges,
+  // green free badge and off-peak banner render from (server already
+  // rewrites price_factor into rateMultiplier — the client does no pricing).
   useEffect(() => {
-    if (providerId !== "cursor") {
+    if (providerId !== "cursor" && !isQoderFamily) {
       setLiveModels([]);
       return;
     }
@@ -932,6 +936,13 @@ export default function ProviderDetailPage() {
         // Qoder model ID format may be "qoder/auto", "qoder-cn/auto" or
         // "auto" — strip whichever provider prefix the route attached.
         const cleanModelId = modelId.replace(/^qoder(-cn)?\//, "");
+        // Models already listed as official registry entries are NOT re-added
+        // as customs — the fetch button exists to pull in catalog newcomers
+        // (e.g. q37fmodel before it was registered), not to duplicate the
+        // whole catalog into the custom table (29 shadow rows observed 2026-09-19).
+        if (models.some((official) => official.id === cleanModelId)) {
+          continue;
+        }
         const alreadyExists = customModels.some(
           (entry) => entry.providerAlias === providerStorageAlias && entry.id === cleanModelId && (entry.kind || entry.type || "llm") === "llm"
         ) || Object.values(modelAliases).includes(`${providerStorageAlias}/${cleanModelId}`);
