@@ -86,10 +86,7 @@ export const ALLOWLIST = {
   // so no static capability row can be accurate. Same treatment as before the audit.
   "qoder/auto": "aggregator",
   "qoder/efficient": "aggregator",
-  "qoder/lite": "aggregator",
   "qoder-cn/auto": "aggregator",
-  "qoder-cn/efficient": "aggregator",
-  "qoder-cn/lite": "aggregator",
   "cursor/default": "aggregator",
   "bazaarlink/auto:free": "aggregator",
   "kilo-gateway/kilo-auto/free": "aggregator",

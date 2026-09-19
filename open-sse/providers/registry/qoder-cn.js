@@ -32,13 +32,12 @@ export default {
     },
   },
   models: [
-    { id: "ultimate", name: "Ultimate" },
+    // 2026-09-19 cleanup: ultimate/performance/efficient/lite/qmodel_preview
+    // were marketing-era rows — the CN live catalog (raw, incl. enable:false)
+    // publishes none of them (only Auto + the model keys below). Chat still
+    // accepts those keys server-side; they simply no longer get dashboard rows.
     { id: "auto", name: "Auto" },
-    { id: "performance", name: "Performance" },
-    { id: "efficient", name: "Efficient" },
-    { id: "lite", name: "Lite" },
     { id: "qmodel_38max", name: "Qwen3.8-Max" },
-    { id: "qmodel_preview", name: "Qwen3.8-Max-Preview" },
     { id: "qmodel_latest", name: "Qwen3.7-Max" },
     { id: "qmodel", name: "Qwen3.7-Plus" },
     // Added 2026-09-19: present in the live CN catalog (rate 0.1, no promo);
