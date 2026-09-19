@@ -15,6 +15,19 @@
 
 - **Qoder 资源包逐包展示**（`2a659730`）：从已领取（`claimStatus=CLAIMED`）的 CREDITS campaign 重建每个资源包（金额 / 到期时间 / 消耗按**先到期先扣**从聚合 `addOnQuota.used` 分摊），`quotas.addOn.packs` 输出，仪表盘逐行显示「赠送包 N」各带自己的到期日；聚合「资源包」行保留（官方口径的权威总量）。
 
+- **OpenCode Free 体验渠道反滥用修复与默认开启**（`54ec08e7`）：
+  - 针对 OpenCode 线上新增的反滥用检测，实装 4 层伪装拦截防护：User-Agent 规范版本化（`opencode/1.18.31`）、`ses_` 30 位规范会话生成与跨请求确定性映射、请求级 `bash`/`read` 隐真工具（decoy tools）注入（`tool_choice: "none"`）、强制流式连接（`stream: true`）。实测 `big-pickle`、`nemotron-3-ultra-free`、`nemotron-3.5-lightning-free`、`mimo-v2.5-free`、`ling-3.0-flash-fin-free` 100% 畅通秒吐字。
+  - 体验渠道默认从拓扑隐藏改为**默认展示**（`topologyHiddenByDefault: false`），开箱即用。
+
+- **反重力（Antigravity）生图模型补齐**（`54ec08e7`）：
+  - 补录 Google 内部端点原生支持的 **`gemini-3-pro-image`**（Gemini 3 Pro 高清图像生成）、**`gemini-2.5-flash-image`** 与 **`imagen-3.0-generate-002`**（Imagen 3）。
+  - 同步扩充 `open-sse/services/usage/google.js` 的配额拉取白名单，使得 Pro 级图像生成可在仪表盘正确显示配额与状态。
+
+- **上游 v0.5.81 稳定性核心缺陷修复移植**（`81bdc69e` + `0b414322` + `81c040ed`）：
+  - **P0-1（4xx 请求级错误不冷却健康账号）**：`checkFallbackError` 针对 400（上下文超长、畸形 body 等请求自身错误）短路跳过账号冷却，避免单账号场景下连续误报「账号不可用」并连带封锁其他无关会话。
+  - **P0-2（连接测试成功自动清除陈旧模型锁与健康状态）**：连接点击测试成功时，主动清理 `modelLock_*`、`backoffLevel`、`rateLimitedUntil` 等残留锁，防止换 Key 或修复账号后仍被旧状态拦截。
+  - **P1（HTTP 200 建立后流中断 in-band 错误帧上报）**：长静默流（如思考模型、Kiro 等）异常断开或 stall 超时时，按客户端格式注入错误帧后再发送 `[DONE]`，防止客户端将截断误判为正常短回复。
+
 - **Provider 卡片拖拽排序与状态自适应**（`63b0547d` + `e85ec99b`）：
   - **已连接卡片拖拽排序（持久化）**：Provider 列表卡片支持原生 HTML5 拖拽重排，自动持久化至全局设置 `providerCardOrder`。
   - **移除「禁用排在最后」开关**：禁用的 provider 一律自动置底（且位于「无连接」分组之前：已连接 rank 0 → 免鉴权隐藏 rank 1 → 全部禁用 rank 2 → 未配置无连接 rank 3），删去冗余配置开关。
