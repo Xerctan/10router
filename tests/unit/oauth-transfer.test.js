@@ -262,5 +262,12 @@ describe("export wiring — provider page must hand the verified password to the
       "utf8",
     );
     expect(modal).toMatch(/"x-9r-password":\s*dashboardPassword\s*\|\|/);
+    // Success is terminal: both flows must auto-dismiss (with a readable
+    // delay) instead of parking the user in a spent dialog.
+    expect(modal).toContain("scheduleAutoClose(1200)");
+    expect(modal).toMatch(/\(data\?\.imported \|\| 0\) \+ \(data\?\.updated \|\| 0\) > 0\) scheduleAutoClose\(1800\)/);
+    // …but a fully-failed import stays open, and a manual close must cancel
+    // any pending auto-close (no double onClose races).
+    expect(modal).toMatch(/handleClose[\s\S]{0,120}clearTimeout\(closeTimer\.current\)/);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { Button, Input, Modal } from "@/shared/components";
 import { translate } from "@/i18n/runtime";
@@ -25,6 +25,21 @@ export default function OAuthTransferModal({ isOpen, mode, provider, providerNam
   const [fileName, setFileName] = useState("");
   const [blob, setBlob] = useState(null);
   const fileRef = useRef(null);
+  const closeTimer = useRef(null);
+
+  // Success is terminal (file downloaded / accounts merged into the list
+  // behind us), so the dialog should get out of the way — but only AFTER the
+  // summary line has been readable for a moment. Fully-failed imports stay
+  // open: the summary there is diagnostic, not a receipt.
+  const scheduleAutoClose = (delayMs) => {
+    clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => {
+      closeTimer.current = null;
+      reset();
+      onClose();
+    }, delayMs);
+  };
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
 
   const reset = () => {
     setPassphrase("");
@@ -39,6 +54,8 @@ export default function OAuthTransferModal({ isOpen, mode, provider, providerNam
 
   const handleClose = () => {
     if (busy) return;
+    clearTimeout(closeTimer.current);
+    closeTimer.current = null;
     reset();
     onClose();
   };
@@ -47,6 +64,8 @@ export default function OAuthTransferModal({ isOpen, mode, provider, providerNam
 
   const handleExport = async () => {
     setError("");
+    setResult(null);
+    clearTimeout(closeTimer.current);
     if (passphrase.length < 4) {
       setError(translate("Passphrase must be at least 4 characters"));
       return;
@@ -78,6 +97,7 @@ export default function OAuthTransferModal({ isOpen, mode, provider, providerNam
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       setResult({ exported: data.count });
+      scheduleAutoClose(1200);
     } catch (e) {
       setError(e.message || translate("Export failed"));
     } finally {
@@ -113,6 +133,7 @@ export default function OAuthTransferModal({ isOpen, mode, provider, providerNam
   const handleImport = async () => {
     setError("");
     setResult(null);
+    clearTimeout(closeTimer.current);
     if (!blob) {
       setError(translate("Pick a transfer file first"));
       return;
@@ -137,6 +158,7 @@ export default function OAuthTransferModal({ isOpen, mode, provider, providerNam
       }
       setResult(data);
       if (typeof onSuccess === "function") onSuccess();
+      if ((data?.imported || 0) + (data?.updated || 0) > 0) scheduleAutoClose(1800);
     } catch (e) {
       setError(e.message || translate("Import failed"));
     } finally {
