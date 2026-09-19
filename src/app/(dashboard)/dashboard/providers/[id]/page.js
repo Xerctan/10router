@@ -359,6 +359,10 @@ export default function ProviderDetailPage() {
   // object carries the 22:00–08:00 Asia/Singapore discount). Overlay them
   // onto the static rows so the badges reflect the account's real pricing.
   const isQoderFamily = providerId === "qoder" || providerId === "qoder-cn";
+  // "Fetch official catalog" import button scope: qoder family (live catalog)
+  // and xiaomi-mimo (public /v1/models). mimo-x client previews are filtered
+  // server-side in resolveMimoModels, so the import can never shadow them.
+  const supportsCatalogImport = providerId === "qoder" || providerId === "qoder-cn" || providerId === "xiaomi-mimo";
   const models = providerId === "cursor" && liveModels.length > 0
     ? liveModels
     : isQoderFamily
@@ -891,7 +895,9 @@ export default function ProviderDetailPage() {
     if (importingQoderModels) return;
     const activeConnection = connections.find((conn) => conn.isActive !== false);
     if (!activeConnection) {
-      notify.warning(translate("Please add an active Qoder connection first"))
+      notify.warning(providerId === "xiaomi-mimo"
+        ? translate("Please add an active MiMo connection first")
+        : translate("Please add an active Qoder connection first"))
       return;
     }
 
@@ -1599,8 +1605,8 @@ export default function ProviderDetailPage() {
           </button>
         )}
 
-        {/* Import Qoder models button — only show for qoder provider */}
-        {isQoderFamily && connections.some((conn) => conn.isActive !== false) && (
+        {/* Import fetched catalog button — qoder family + xiaomi-mimo */}
+        {supportsCatalogImport && connections.some((conn) => conn.isActive !== false) && (
           <button
             onClick={handleImportQoderModels}
             disabled={importingQoderModels}
@@ -1609,7 +1615,9 @@ export default function ProviderDetailPage() {
             <span className="material-symbols-outlined text-sm" style={importingQoderModels ? { animation: "spin 1s linear infinite" } : undefined}>
               {importingQoderModels ? "progress_activity" : "download"}
             </span>
-            {importingQoderModels ? translate("Fetching...") : translate("Fetch Qoder Models")}
+            {importingQoderModels
+              ? translate("Fetching...")
+              : translate(providerId === "xiaomi-mimo" ? "Fetch MiMo Models" : "Fetch Qoder Models")}
           </button>
         )}
 

@@ -8,6 +8,7 @@ import { getModelsByProviderId } from "open-sse/config/providerModels.js";
 import { resolveKiroModels } from "open-sse/services/kiroModels.js";
 import { resolveKimchiModels } from "open-sse/services/kimchiModels.js";
 import { resolveQoderModels } from "open-sse/services/qoderModels.js";
+import { resolveMimoModels } from "open-sse/services/mimoModels.js";
 import { resolveGrokCliModels } from "open-sse/services/grokCliModels.js";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { resolveCursorModels } from "open-sse/services/cursorModels.js";
@@ -396,6 +397,13 @@ const PROVIDER_MODELS_CONFIG = {
   },
   "qoder-cn": {
     customResolver: resolveQoderCatalog,
+  },
+  // MiMo: official public catalog (api.xiaomimimo.com/v1/models). Powers the
+  // "Fetch MiMo Models" import button. The resolver itself filters the two
+  // client-internal mimo-x preview models — they exist only in the local
+  // registry and route through the signed in-client path.
+  "xiaomi-mimo": {
+    customResolver: async (connection) => await resolveMimoModels(connection),
   },
   "gemini-cli": {
     customResolver: buildOAuthResolver({

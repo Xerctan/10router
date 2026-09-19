@@ -1,0 +1,63 @@
+// MiMo official model catalog — api.xiaomimimo.com/v1/models (OpenAI shape).
+// Backs the dashboard "Fetch MiMo Models" import button, mirroring the qoder
+// live-catalog flow. Deliberately thin: no auth refresh dance, the connection
+// stores a long-lived accessToken from the mimo OAuth step.
+
+const MIMO_FALLBACK_ORIGIN = "https://api.xiaomimimo.com";
+
+// The two client-internal X-series previews (mimo-x-pro-preview,
+// mimo-x-flash-preview) are registry entries routed through the signed
+// in-client path (openai|skip|proxy|xiaomi-client|...); they are NOT part of
+// the public /v1/models sale list. Filter them by id prefix anyway so an
+// allow-listed upstream response can never shadow the fixed entries through
+// the import flow.
+export const MIMO_CLIENT_PREVIEW_PREFIX = "mimo-x";
+
+function mimoModelsUrl(connection = {}) {
+  let origin = MIMO_FALLBACK_ORIGIN;
+  try {
+    const stored = connection.providerSpecificData?.baseUrl || connection.baseUrl;
+    if (stored) origin = new URL(stored).origin;
+  } catch {
+    // malformed stored baseUrl — fall back to the official host
+  }
+  return `${origin}/v1/models`;
+}
+
+export async function resolveMimoModels(connection = {}, { fetchImpl = fetch, timeoutMs = 15000 } = {}) {
+  const token = connection.accessToken || connection.apiKey;
+  if (!token) {
+    return { models: [], warning: "No MiMo access token on this connection." };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetchImpl(mimoModelsUrl(connection), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      return { models: [], warning: `MiMo /v1/models returned ${res.status}.` };
+    }
+    const data = await res.json();
+    const raw = Array.isArray(data) ? data : data?.data || data?.models || [];
+    const models = raw
+      .map((m) => (typeof m === "string" ? m : m?.id || m?.name || m?.model))
+      .filter(Boolean)
+      .filter((id) => !String(id).startsWith(MIMO_CLIENT_PREVIEW_PREFIX))
+      .map((id) => ({ id, name: id }));
+    if (!models.length) {
+      return { models: [], warning: "MiMo returned no models." };
+    }
+    return { models };
+  } catch (error) {
+    return { models: [], warning: `Failed to fetch MiMo models: ${error?.message || error}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
