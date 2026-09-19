@@ -110,7 +110,9 @@ export default function ProvidersPage() {
   const [testingMode, setTestingMode] = useState(null);
   const [testResults, setTestResults] = useState(null);
   const [topologyVisibility, setTopologyVisibility] = useState({});
-  const [disabledLastSort, setDisabledLastSort] = useState(false);
+  const [cardOrder, setCardOrder] = useState([]);
+  const [draggingCardId, setDraggingCardId] = useState(null);
+  const [dragOverCardId, setDragOverCardId] = useState(null);
   const notify = useNotificationStore();
   const searchQuery = useHeaderSearchStore((s) => s.query);
   const registerSearch = useHeaderSearchStore((s) => s.register);
@@ -137,20 +139,16 @@ export default function ProvidersPage() {
         : !info.topologyHiddenByDefault;
   };
 
-  // Connection state drives the primary sort key for every section, gated by
-  // the providerDisabledLastSort toggle (profile setting).
+  // Connection state drives the primary sort key for every section.
   //
-  // When the toggle is ON:
   //   0 connected (connected>0) or a noAuth provider shown on the topology
   //     canvas (enabled) → floats to the top
-  //   1 a noAuth provider hidden from the topology canvas (disabled) → sits
-  //     just below connected providers, above fully-disabled ones
-  //   2 configured but all connections disabled
-  //   3 never configured (no connections at all)  →  sinks last
+  //   1 a noAuth provider hidden from the topology canvas (disabled)
+  //   2 configured but all connections disabled → auto-sinks below connected
+  //   3 never configured (no connections at all) → auto-sinks last
   //
-  // When OFF, only connected-first applies (connected providers surface, the
-  // rest interleave by priority/name) — the disabled/never-configured
-  // distinction is dropped.
+  // Disabled providers always sink below connected ones, but stay BEFORE
+  // never-configured providers (the old toggle is removed; this is now fixed).
   const providerRank = (stats, info, key) => {
     if (stats.connected > 0) return 0;
     // noAuth free providers (opencode, mimo-free) have no connections; their
@@ -158,20 +156,27 @@ export default function ProvidersPage() {
     if (info?.noAuth) {
       return topologyVisibleFor(info, key) ? 0 : 1;
     }
-    if (!disabledLastSort) return 1;
     if (stats.total === 0) return 3; // never configured → sinks last
     return 2; // configured but all connections disabled
+  };
+
+  const getCardOrderIndex = (key) => {
+    const idx = cardOrder.indexOf(key);
+    return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
   };
 
   const sortByPriority = (entries, authType) =>
     [...entries].sort(([ka, a], [kb, b]) => {
       // Connection state is the primary axis: active/connected providers always
-      // surface before unconnected ones, then priority, then name.
+      // surface before unconnected ones, then manual drag order, then priority, then name.
       const sa = getProviderStats(ka, authType);
       const sb = getProviderStats(kb, authType);
       const ra = providerRank(sa, a, ka);
       const rb = providerRank(sb, b, kb);
       if (ra !== rb) return ra - rb;
+      const oa = getCardOrderIndex(ka);
+      const ob = getCardOrderIndex(kb);
+      if (oa !== ob) return oa - ob;
       const pa = a.priority ?? 999;
       const pb = b.priority ?? 999;
       if (pa !== pb) return pa - pb;
@@ -185,6 +190,9 @@ export default function ProvidersPage() {
       const ra = providerRank(sa, a, a.id);
       const rb = providerRank(sb, b, b.id);
       if (ra !== rb) return ra - rb;
+      const oa = getCardOrderIndex(a.id);
+      const ob = getCardOrderIndex(b.id);
+      if (oa !== ob) return oa - ob;
       const pa = a.priority ?? 999;
       const pb = b.priority ?? 999;
       if (pa !== pb) return pa - pb;
@@ -207,8 +215,10 @@ export default function ProvidersPage() {
         if (settingsRes.ok) {
           const settingsData = await settingsRes.json();
           setTopologyVisibility(settingsData.topologyVisibility || {});
-          setDisabledLastSort(settingsData.providerDisabledLastSort === true);
           setShowCommunityProviders(settingsData.showCommunityProviders !== false);
+          if (Array.isArray(settingsData.providerCardOrder)) {
+            setCardOrder(settingsData.providerCardOrder);
+          }
         }
       } catch (error) {
         console.log("Error fetching data:", error);
@@ -410,6 +420,9 @@ export default function ProvidersPage() {
     const ca = a.info.community ? 1 : 0;
     const cb = b.info.community ? 1 : 0;
     if (ca !== cb) return ca - cb;
+    const oa = getCardOrderIndex(a.key);
+    const ob = getCardOrderIndex(b.key);
+    if (oa !== ob) return oa - ob;
     const pa = a.info.priority ?? 999;
     const pb = b.info.priority ?? 999;
     if (pa !== pb) return pa - pb;
@@ -431,11 +444,71 @@ export default function ProvidersPage() {
       const ra = providerRank(sa, a, ka);
       const rb = providerRank(sb, b, kb);
       if (ra !== rb) return ra - rb;
+      const oa = getCardOrderIndex(ka);
+      const ob = getCardOrderIndex(kb);
+      if (oa !== ob) return oa - ob;
       const pa = a.priority ?? 999;
       const pb = b.priority ?? 999;
       if (pa !== pb) return pa - pb;
       return (a.name || "").localeCompare(b.name || "");
     });
+
+  const customProviders = [...compatibleProviders, ...anthropicCompatibleProviders].sort((a, b) => {
+    const oa = getCardOrderIndex(a.id);
+    const ob = getCardOrderIndex(b.id);
+    if (oa !== ob) return oa - ob;
+    return (a.name || "").localeCompare(b.name || "");
+  });
+
+  const allDisplayKeys = useCallback(() => {
+    const keys = [];
+    for (const p of [...compatibleProviders, ...anthropicCompatibleProviders]) {
+      if (!keys.includes(p.id)) keys.push(p.id);
+    }
+    for (const [k] of oauthEntries) {
+      if (!keys.includes(k)) keys.push(k);
+    }
+    for (const item of freeAllEntries) {
+      if (!keys.includes(item.key)) keys.push(item.key);
+    }
+    for (const [k] of apikeyEntries) {
+      if (!keys.includes(k)) keys.push(k);
+    }
+    return keys;
+  }, [compatibleProviders, anthropicCompatibleProviders, oauthEntries, freeAllEntries, apikeyEntries]);
+
+  const handleCardDrop = useCallback(
+    (targetId) => {
+      const sourceId = draggingCardId;
+      setDraggingCardId(null);
+      setDragOverCardId(null);
+      if (!sourceId || !targetId || sourceId === targetId) return;
+
+      setCardOrder((prev) => {
+        const allKnown = allDisplayKeys();
+        const base = [...prev];
+        for (const k of allKnown) {
+          if (!base.includes(k)) base.push(k);
+        }
+
+        const fromIdx = base.indexOf(sourceId);
+        const toIdx = base.indexOf(targetId);
+        if (fromIdx === -1 || toIdx === -1) return prev;
+
+        base.splice(fromIdx, 1);
+        base.splice(toIdx, 0, sourceId);
+
+        fetch("/api/settings", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ providerCardOrder: base }),
+        }).catch((err) => console.log("Failed to save provider card order:", err));
+
+        return base;
+      });
+    },
+    [draggingCardId, allDisplayKeys],
+  );
   const isApikeySearching = !!searchQuery.trim();
   const visibleApikeyEntries =
     isApikeySearching || showAllApikey
