@@ -34,7 +34,106 @@ function useOffPeakClock(promotion) {
   return offPeakStatus(promotion, now);
 }
 
-export default function ModelRow({ model, fullModel, alias, copied, onCopy, testStatus, isCustom, isFree, onDeleteAlias, onTest, isTesting, onDisable, onEnable, caps, thinkingSuffix }) {
+// The two numbers only reach the OpenAI-style model list once they're positive
+// integers; anything else is treated as "not set".
+const parseCapsNumber = (v) => {
+  const n = Number(String(v).trim());
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+};
+
+// Pin context window / max output for one model (catalog windows are missing
+// or stale for many models, and clients that read context_length need the
+// real number). Saved through /api/models/caps; consumed by /v1/models,
+// /api/models badges, and server-side auto-compaction.
+function CapsEditor({ caps, pinned, onSave }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [cw, setCw] = useState("");
+  const [mo, setMo] = useState("");
+  // Re-read the effective values each time the panel opens so caps that
+  // changed elsewhere (custom-model edit, another tab) show up.
+  useEffect(() => {
+    if (!open) return;
+    setCw(caps?.contextWindow ? String(caps.contextWindow) : "");
+    setMo(caps?.maxOutput ? String(caps.maxOutput) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const submit = async (clear) => {
+    setBusy(true);
+    try {
+      await onSave(clear
+        ? { contextWindow: null, maxOutput: null }
+        : { contextWindow: parseCapsNumber(cw), maxOutput: parseCapsNumber(mo) });
+      setOpen(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="relative shrink-0">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`rounded p-0.5 transition-colors hover:bg-sidebar ${pinned ? "text-primary" : "text-text-muted hover:text-primary"}`}
+        title={translate("Context window")}
+      >
+        <span className="material-symbols-outlined text-sm">tune</span>
+      </button>
+      {open && (
+        <>
+          {/* click-away layer */}
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-6 z-30 flex w-60 flex-col gap-2 rounded-lg border border-border bg-background p-3 text-xs shadow-lg">
+            <label className="flex flex-col gap-1 text-text-muted">
+              {translate("Context window")}
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={cw}
+                onChange={(e) => setCw(e.target.value)}
+                placeholder="e.g. 200000"
+                className="rounded border border-border bg-sidebar px-2 py-1 text-text focus:outline-none focus:border-primary"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-text-muted">
+              {translate("Max output")}
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={mo}
+                onChange={(e) => setMo(e.target.value)}
+                placeholder="e.g. 8192"
+                className="rounded border border-border bg-sidebar px-2 py-1 text-text focus:outline-none focus:border-primary"
+              />
+            </label>
+            <p className="text-[10px] leading-snug text-text-muted/70">
+              {translate("Overrides the built-in catalog values")}
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                className="rounded px-2 py-1 text-text-muted hover:text-red-500 disabled:opacity-40"
+                onClick={() => submit(true)}
+                disabled={busy || !pinned}
+              >
+                {translate("Clear")}
+              </button>
+              <button
+                className="rounded bg-primary px-2.5 py-1 text-white disabled:opacity-50"
+                onClick={() => submit(false)}
+                disabled={busy}
+              >
+                {translate("Save")}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export default function ModelRow({ model, fullModel, alias, copied, onCopy, testStatus, isCustom, isFree, onDeleteAlias, onTest, isTesting, onDisable, onEnable, caps, thinkingSuffix, onSaveCaps, capsPinned }) {
   const hour = useLocalHour();
   const displayModel = thinkingSuffix ? `${fullModel}(${thinkingSuffix})` : fullModel;
   // Credit cost multiplier (registry `rateMultiplier`, published per model by
@@ -123,6 +222,9 @@ export default function ModelRow({ model, fullModel, alias, copied, onCopy, test
             )}
           </span>
         </div>
+        {onSaveCaps && (
+          <CapsEditor caps={caps} pinned={capsPinned} onSave={onSaveCaps} />
+        )}
         {onTest && (
           <div className="relative shrink-0 group/btn">
             <button
@@ -207,4 +309,7 @@ ModelRow.propTypes = {
   onEnable: PropTypes.func,
   caps: PropTypes.object,
   thinkingSuffix: PropTypes.string,
+  // Present on the provider page: enables the per-model context-window pin UI.
+  onSaveCaps: PropTypes.func,
+  capsPinned: PropTypes.bool,
 };

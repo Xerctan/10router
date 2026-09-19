@@ -601,5 +601,9 @@
   "Subscription": "套餐內 Credits",
   "subscription": "訂閱",
   "user": "套餐內 Credits",
-  "organization": "組織"
+  "organization": "組織",
+  "Context window": "上下文視窗",
+  "Max output": "最大輸出",
+  "Overrides the built-in catalog values": "覆蓋內建目錄中的預設值",
+  "Failed to save model settings": "儲存模型設定失敗"
 }

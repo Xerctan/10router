@@ -64,7 +64,7 @@ export default function ProviderDetailPage() {
   const params = useParams();
   const router = useRouter();
   const providerId = params.id;
-  const { getCaps } = useModelCaps();
+  const { getCaps, overrides, refresh } = useModelCaps();
   const notify = useNotificationStore();
   const [connections, setConnections] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -839,6 +839,30 @@ export default function ProviderDetailPage() {
     }
   };
 
+  // Per-model context-window / max-output pins (kept out of the catalog, in
+  // the modelCaps scope). The hook already folds overrides into getCaps, so
+  // badges update as soon as refresh() re-reads /api/models/caps.
+  const isCapsPinned = (modelId) =>
+    !!(overrides?.[providerStorageAlias]?.[modelId] || overrides?.[providerId]?.[modelId]);
+  const handleSaveModelCaps = async (modelId, caps) => {
+    try {
+      const res = await fetch("/api/models/caps", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: providerStorageAlias || providerId, modelId, ...(caps || {}) }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        notify.error(d?.error || "Failed to save model settings");
+        return;
+      }
+      refresh();
+    } catch (error) {
+      console.log("Error saving model caps:", error);
+      notify.error("Failed to save model settings");
+    }
+  };
+
   const handleDeleteCustomModel = async (modelId, type = "llm", providerAliasOverride = providerStorageAlias) => {
     try {
       const params = new URLSearchParams({ providerAlias: providerAliasOverride, id: modelId, type });
@@ -1577,6 +1601,8 @@ export default function ProviderDetailPage() {
             isCustom
             isFree={false}
             caps={getCaps(`${providerId}/${model.id}`)}
+            onSaveCaps={(caps) => handleSaveModelCaps(model.id, caps)}
+            capsPinned={isCapsPinned(model.id)}
             thinkingSuffix={resolveThinkingSuffix(model.id)}
           />
         ))}
@@ -1603,6 +1629,8 @@ export default function ProviderDetailPage() {
               isFree={model.isFree}
               onDisable={() => handleDisableModel(model.id)}
               caps={getCaps(`${providerId}/${model.id}`)}
+              onSaveCaps={(caps) => handleSaveModelCaps(model.id, caps)}
+              capsPinned={isCapsPinned(model.id)}
               thinkingSuffix={resolveThinkingSuffix(model.id)}
             />
           );
@@ -1714,6 +1742,9 @@ export default function ProviderDetailPage() {
                   onEnable={() => handleToggleCustomModel(model.id, true)}
                   isCustom={false}
                   isFree={false}
+                  caps={getCaps(`${providerId}/${model.id}`)}
+                  onSaveCaps={(caps) => handleSaveModelCaps(model.id, caps)}
+                  capsPinned={isCapsPinned(model.id)}
                 />
               ))}
               {disabledDisplayModels.map((model) => (
@@ -1729,6 +1760,8 @@ export default function ProviderDetailPage() {
                   onEnable={() => handleEnableModel(model.id)}
                   isFree={model.isFree}
                   caps={getCaps(`${providerId}/${model.id}`)}
+                  onSaveCaps={(caps) => handleSaveModelCaps(model.id, caps)}
+                  capsPinned={isCapsPinned(model.id)}
                   thinkingSuffix={resolveThinkingSuffix(model.id)}
                 />
               ))}
@@ -2372,8 +2405,8 @@ export default function ProviderDetailPage() {
           isOpen={showAddCustomModel}
           providerAlias={providerStorageAlias}
           providerDisplayAlias={providerDisplayAlias}
-          onSave={async (modelId) => {
-            await handleAddCustomModel(modelId, "llm", providerStorageAlias);
+          onSave={async (modelId, caps) => {
+            await handleAddCustomModel(modelId, "llm", providerStorageAlias, caps || {});
             setShowAddCustomModel(false);
           }}
           onClose={() => setShowAddCustomModel(false)}

@@ -56,6 +56,11 @@ export {
   getDisabledModels, getDisabledByProvider, disableModels, enableModels,
 } from "./repos/disabledModelsRepo.js";
 
+// Per-model capability overrides (context window / max output)
+export {
+  getModelCapsForProvider, getAllModelCaps, setModelCaps, clearModelCaps,
+} from "./repos/modelCapsRepo.js";
+
 // Usage
 export {
   statsEmitter, trackPendingRequest, getActiveRequests,

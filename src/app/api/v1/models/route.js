@@ -8,6 +8,7 @@ import {
 } from "@/shared/constants/providers";
 import { buildProviderOrderComparator } from "@/shared/utils/modelListOrder";
 import { getProviderConnections, getProviderNodes, getCombos, getCustomModels, getModelAliases, getSettings } from "@/lib/localDb";
+import { getAllModelCaps } from "@/lib/modelCapsDb";
 import { getDisabledModels } from "@/lib/disabledModelsDb";
 import { resolveKiroModels } from "open-sse/services/kiroModels.js";
 import { resolveKimchiModels } from "open-sse/services/kimchiModels.js";
@@ -268,6 +269,13 @@ function comboMatchesKinds(combo, kindFilter) {
   return kindFilter.includes(kind);
 }
 
+// Positive-integer coercion for user-entered/stored token counts (may arrive
+// as strings from custom model rows); null when absent or invalid.
+const posNum = (v) => {
+  const n = typeof v === "string" ? Number(v) : v;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+};
+
 /**
  * Build OpenAI-format models list filtered by service kinds.
  * @param {string[]} kindFilter - List of service kinds to include (e.g. ["llm"], ["webSearch","webFetch"]).
@@ -387,6 +395,16 @@ export async function buildModelsList(kindFilter, options = {}) {
   } catch (e) {
     console.log("Could not fetch provider card order:", e?.message);
   }
+  // User-pinned per-model context window / max output (dashboard overrides).
+  // Published under every provider name spelling, like getDisabledModels().
+  // Fail-open: clients may not override anything, but must still get a list.
+  let capsOverrides = {};
+  try {
+    const ov = await getAllModelCaps();
+    if (ov && typeof ov === "object") capsOverrides = ov;
+  } catch (e) {
+    console.log("Could not fetch model caps overrides:", e?.message);
+  }
   const compareProviders = buildProviderOrderComparator({
     cardOrder: providerCardOrder,
     aliasToId: ALIAS_TO_ID,
@@ -483,11 +501,19 @@ export async function buildModelsList(kindFilter, options = {}) {
       const modelId = String(customModel.id).trim();
       if (!modelId) continue;
 
-      emit({
+      const entry = {
         id: `${providerAlias}/${modelId}`,
         object: "model",
         owned_by: providerAlias,
-      }, rankOf(providerAlias));
+      };
+      // Fix: honor the stored contextWindow/maxOutput of user-added custom
+      // models (previously dropped here), with the dashboard override on top.
+      const pinned = capsOverrides[providerAlias]?.[modelId];
+      const cw = pinned?.contextWindow ?? posNum(customModel.contextWindow);
+      const mo = pinned?.maxOutput ?? posNum(customModel.maxOutput);
+      if (cw) entry.context_length = cw;
+      if (mo) entry.max_completion_tokens = mo;
+      emit(entry, rankOf(providerAlias));
     }
   } else {
     for (const [providerId, conn] of activeConnectionByProvider.entries()) {
@@ -571,6 +597,7 @@ export async function buildModelsList(kindFilter, options = {}) {
         .filter((modelId) => typeof modelId === "string" && modelId.trim() !== "");
 
       const customModelKindById = new Map();
+      const customModelCapsById = new Map();
       const customModelIds = customModels
         .filter((m) => {
           if (!m?.id) return false;
@@ -586,7 +613,10 @@ export async function buildModelsList(kindFilter, options = {}) {
         })
         .map((m) => {
           const modelId = String(m.id).trim();
-          if (modelId) customModelKindById.set(modelId, getModelKind(m) || LLM_KIND);
+          if (modelId) {
+            customModelKindById.set(modelId, getModelKind(m) || LLM_KIND);
+            customModelCapsById.set(modelId, m);
+          }
           return modelId;
         })
         .filter((modelId) => modelId !== "");
@@ -615,6 +645,9 @@ export async function buildModelsList(kindFilter, options = {}) {
         .filter((modelId) => typeof modelId === "string" && modelId.trim() !== "");
 
       const mergedModelIds = Array.from(new Set([...modelIds, ...customModelIds, ...aliasModelIds]));
+      // Dashboard-pinned caps for this provider, under any name spelling.
+      const providerCaps =
+        capsOverrides[providerId] || capsOverrides[staticAlias] || capsOverrides[outputAlias] || null;
 
       for (const modelId of mergedModelIds) {
         // Resolve kind: prefer custom/live metadata, then static, then ID heuristics.
@@ -659,6 +692,24 @@ export async function buildModelsList(kindFilter, options = {}) {
             const fallback = getCapabilitiesForModel(providerId, modelId);
             if (!Number.isFinite(contextWindow)) contextWindow = fallback.contextWindow;
             if (!Number.isFinite(maxOutput)) maxOutput = fallback.maxOutput;
+          }
+          // A user-added custom model's stored window belongs to THIS model, so
+          // it beats the generic catalog default; an explicit dashboard
+          // override (modelCaps) beats everything.
+          const customRow = customModelCapsById.get(modelId);
+          if (customRow) {
+            const c = posNum(customRow.contextWindow);
+            const o = posNum(customRow.maxOutput);
+            if (c) contextWindow = c;
+            if (o) maxOutput = o;
+          }
+          const pinned = providerCaps?.[modelId];
+          if (pinned?.contextWindow) contextWindow = pinned.contextWindow;
+          if (pinned?.maxOutput) maxOutput = pinned.maxOutput;
+          // Keep the nested block in sync with the snake_case values above.
+          if (caps) {
+            if (Number.isFinite(contextWindow)) caps.contextWindow = contextWindow;
+            if (Number.isFinite(maxOutput)) caps.maxOutput = maxOutput;
           }
           if (Number.isFinite(contextWindow)) model.context_length = contextWindow;
           if (Number.isFinite(maxOutput)) model.max_completion_tokens = maxOutput;
@@ -719,11 +770,17 @@ export async function buildModelsList(kindFilter, options = {}) {
       const modelId = String(customModel.id).trim();
       if (!modelId) continue;
       if (isDisabled(alias, modelId)) continue;
-      emit({
+      const entry = {
         id: `${alias}/${modelId}`,
         object: "model",
         owned_by: alias,
-      }, rankOf(alias));
+      };
+      const pinned = capsOverrides[alias]?.[modelId];
+      const cw = pinned?.contextWindow ?? posNum(customModel.contextWindow);
+      const mo = pinned?.maxOutput ?? posNum(customModel.maxOutput);
+      if (cw) entry.context_length = cw;
+      if (mo) entry.max_completion_tokens = mo;
+      emit(entry, rankOf(alias));
     }
   }
 

@@ -1781,5 +1781,9 @@
   "Subscription": "套餐内 Credits",
   "subscription": "订阅",
   "user": "套餐内 Credits",
-  "organization": "组织"
+  "organization": "组织",
+  "Context window": "上下文窗口",
+  "Max output": "最大输出",
+  "Overrides the built-in catalog values": "覆盖内置目录中的默认值",
+  "Failed to save model settings": "保存模型设置失败"
 }
