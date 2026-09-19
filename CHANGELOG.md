@@ -15,6 +15,18 @@
 
 - **Qoder 资源包逐包展示**（`2a659730`）：从已领取（`claimStatus=CLAIMED`）的 CREDITS campaign 重建每个资源包（金额 / 到期时间 / 消耗按**先到期先扣**从聚合 `addOnQuota.used` 分摊），`quotas.addOn.packs` 输出，仪表盘逐行显示「赠送包 N」各带自己的到期日；聚合「资源包」行保留（官方口径的权威总量）。
 
+- **Provider 卡片拖拽排序与状态自适应**（`63b0547d` + `e85ec99b`）：
+  - **已连接卡片拖拽排序（持久化）**：Provider 列表卡片支持原生 HTML5 拖拽重排，自动持久化至全局设置 `providerCardOrder`。
+  - **移除「禁用排在最后」开关**：禁用的 provider 一律自动置底（且位于「无连接」分组之前：已连接 rank 0 → 免鉴权隐藏 rank 1 → 全部禁用 rank 2 → 未配置无连接 rank 3），删去冗余配置开关。
+  - **OAuth 凭证导入/导出开关移至单 Provider**：移出 Profile 全局设置，改在每个 OAuth Provider 详情页的配置栏中独立开启（向下兼容旧全局设置）。
+  - **Qoder / Qoder CN 手动领取 Credits 解耦**：各 Provider 详情页的手动「领取 Credits」仅对自身 provider 连接生效，不再跨 provider 触发；后台全天自动签到轮询维持一个全局开关。
+  - **QODER_CHECKIN 日志精简与人读友好**：移除长 JSON 数据 dump 与裸 UUID，连接以「Qoder CN: 用户名」标识；启动与周期刷屏合并为可读摘要，单轮完成仅输出简明汇总行。
+
+- **Qoder 实时倍率叠加与千问错峰半价/限免倒计时**（`bf820454` + `9d8c222a` + `40b78356`）：
+  - 动态叠加官方实时 `price_factor` 与 promotion（夜间限免/半价），Qwen3.8-Max / Qwen3.7-Flash 实时展示折扣倍率与优惠倒计时。
+  - 清理历史营销期虚构行（`lite` / `ultimate` / `performance` / `efficient` 等），保持与官方目录严格一致。
+  - 修复 Tailwind 非层级样式覆盖导致的叶子图标尺寸异常，对齐 10px / 16px 精确渲染。
+
 - **Qoder 官方图标**（`e804845b` / `b0b5ec87`）：从官方启动器 PE 资源提取 256×256 PNG，替换 `qoder` / `qoder-cn` 占位图标。
 
 ### 🛠️ 优化与修复
