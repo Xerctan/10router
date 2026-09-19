@@ -171,6 +171,43 @@ export default function ProfilePage() {
     }
   };
 
+  // Auto-compaction ships ON (the alternative is a hard "prompt is too long"
+  // failure); the toggle stores an explicit false to opt out.
+  const toggleAutoCompact = async () => {
+    const next = settings.autoCompactEnabled === false;
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ autoCompactEnabled: next }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSettings((prev) => ({ ...prev, ...data }));
+      }
+    } catch (error) {
+      console.log("Error toggling auto-compact:", error);
+    }
+  };
+
+  const changeAutoCompactRatio = async (value) => {
+    const ratio = Number(value);
+    if (!Number.isFinite(ratio)) return;
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ autoCompactRatio: ratio }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSettings((prev) => ({ ...prev, ...data }));
+      }
+    } catch (error) {
+      console.log("Error saving auto-compact threshold:", error);
+    }
+  };
+
   const toggleCodeBuddyIntlSession = async () => {
     const next = !(settings.codeBuddyIntlSession === true);
     try {
@@ -1852,6 +1889,34 @@ export default function ProfilePage() {
               <Toggle
                 checked={settings.codeBuddyCheckin === true}
                 onChange={toggleCodeBuddyCheckin}
+              />
+            </div>
+
+            {/* Server-side auto-compaction of oversized contexts */}
+            <div className="flex items-start sm:items-center justify-between gap-4 pt-4 border-t border-border/50">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm sm:text-base">{translate("Auto-compact oversized context")}</p>
+                <p className="text-xs sm:text-sm text-text-muted">
+                  {translate("Summarize older turns before dispatch when a request nears the model's context limit")}
+                </p>
+                {settings.autoCompactEnabled !== false && (
+                  <label className="mt-2 flex items-center gap-2 text-xs text-text-muted">
+                    {translate("Trigger threshold")}
+                    <select
+                      value={String(settings.autoCompactRatio ?? 0.9)}
+                      onChange={(e) => changeAutoCompactRatio(e.target.value)}
+                      className="rounded border border-border bg-background px-2 py-1 text-xs text-text"
+                    >
+                      <option value="0.8">80%</option>
+                      <option value="0.9">90%</option>
+                      <option value="0.95">95%</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+              <Toggle
+                checked={settings.autoCompactEnabled !== false}
+                onChange={toggleAutoCompact}
               />
             </div>
           </div>

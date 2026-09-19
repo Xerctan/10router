@@ -1785,5 +1785,8 @@
   "Context window": "上下文窗口",
   "Max output": "最大输出",
   "Overrides the built-in catalog values": "覆盖内置目录中的默认值",
-  "Failed to save model settings": "保存模型设置失败"
+  "Failed to save model settings": "保存模型设置失败",
+  "Auto-compact oversized context": "超长上下文自动压缩",
+  "Summarize older turns before dispatch when a request nears the model's context limit": "请求接近模型上下文上限时，先摘要较早的轮次再转发",
+  "Trigger threshold": "触发阈值"
 }

@@ -18,6 +18,7 @@ import { getTransform as getPxpipeTransform } from "@/lib/pxpipe/loader.js";
 import { appendPxpipeEvent } from "@/lib/pxpipe/events.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { handleComboChat, handleFusionChat, detectRequiredCapabilities } from "open-sse/services/combo.js";
+import { maybeCompactChatBody } from "../services/autoCompact.js";
 import { augmentModelsWithCapacityAdapter, withCapacityAdapterStripping, getActiveAdapterStrategy } from "open-sse/services/capacityAdapter.js";
 import { handleBypassRequest } from "open-sse/utils/bypassHandler.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
@@ -86,6 +87,24 @@ export async function handleChat(request, clientRawRequest = null) {
   const userAgent = request?.headers?.get("user-agent") || "";
   const bypassResponse = handleBypassRequest(body, modelStr, userAgent, !!settings.ccFilterNaming);
   if (bypassResponse) return bypassResponse.response || bypassResponse;
+
+  // ── Auto-compaction for oversized contexts. Runs before combo/adapter
+  // dispatch so every downstream path (single model, combo, fusion, capacity
+  // adapter) sees ONE summarized body instead of individually hitting
+  // "prompt is too long". Fail-open by design: any error keeps the original
+  // request byte-identical. The internal summary call carries a guard header
+  // so it can never recurse into this layer.
+  try {
+    await maybeCompactChatBody({
+      request,
+      body,
+      modelStr,
+      endpoint: clientRawRequest?.endpoint,
+      settings,
+    });
+  } catch (e) {
+    log.warn("COMPACT", `skipped: ${e?.message || e}`);
+  }
 
   const requiredCapabilities = detectRequiredCapabilities(body);
 

@@ -6,6 +6,10 @@
 
 ### ✨ 新功能
 
+- **按模型上下文窗口 / 最大输出覆写（Context window pins）**（`92c35885`）：模型行新增调参图标，可对任意（含自动发现的）模型钉住 `contextWindow` / `maxOutput`；存 SQLite（`modelCaps` 作用域，与停用模型同为节点级，OAuth/导入导出自动跟随），优先级 = 钉住值 > 自定义模型自带值 > 目录默认，`/v1/models`、`/api/models` 徽标与用量口径同步生效；留空即回退默认。
+
+- **超长上下文服务端自动压缩（Auto-compact）**：客户端不自压缩（ZCode / OpenClaw / 自建 agent 直投全量历史）时，请求在派发前估算超过有效窗口的 90%（阈值 80/90/95% 可选，默认开）即由**同一模型**在带内部护栏头 `x-9r-internal-compaction` 的自调用里把较早轮次摘要化，摘要折入保留段首条消息（不产生连续 user 消息，Anthropic 严格形态安全）；`system`、最近 8 条与工具定义原样保留，切点保证不拆散 tool_use/tool_result 配对。任何失败（摘要调用错误/超时/格式不支持/responses 端点）原样放行，绝不因压缩器毁请求；CJK 感知的字符估算 + 24k token 热路径地板，小请求零开销。总开关在「实验特性」卡片。
+
 - **Qoder 国内版（qoder-cn）完整恢复**（`a9b4a229`）：从删除前基线恢复 provider 注册表、OAuth 设备码流程、PAT→job-token 换取、模型目录与用量跟踪；不触碰隐藏供应商策略（trae / windsurf / devin-cli 继续不入库）。配套 `5b89d046` 修复模型家族映射——Qoder 内部代号（`qfmodel` / `qmodel*` / `qwq*` → qwen，`dmodel` / `dfmodel` → deepseek 等）在连字符/版本号剥离前先归一，用量图表不再按代号碎片分组。
 
 - **Qoder / Qoder CN 每日 Credits 自动领取**（`25e8c00b` + `805bcc56`）：
@@ -43,6 +47,10 @@
 - **Qoder 官方图标**（`e804845b` / `b0b5ec87`）：从官方启动器 PE 资源提取 256×256 PNG，替换 `qoder` / `qoder-cn` 占位图标。
 
 ### 🛠️ 优化与修复
+
+- **`/v1/models` 模型列表顺序跟随仪表盘卡片排序**（`e937f6e5`）：抽取共享比较器 `buildProviderOrderComparator`（手动 `providerCardOrder` → 注册表 `priority` → id 字典序），与仪表盘同一口径；未连接 provider 的孤儿自定义模型与已连接 provider 按卡片序穿插（非固定尾部），combo 永远居首；组内按原有发射序稳定排序，空 cardOrder 回退注册表默认，读失败绝不致空列表。
+
+- **严格兼容端工具 schema 顶层降级（#27）**（`dcc864b8`）：codebuddy-cn 对工具 `parameters` 根节点非纯 object（根 anyOf/oneOf/allOf、根 `$ref`、type 数组、缺 type）直接 `11129` 拒整个请求——新增 quirk 门控的转换器：仅对声明该约束的 provider 生效，根组合器展平/内联为纯 object 根（$ref 就地展开、required 按 allOf 并集/anyOf・oneOf 交集合并），嵌套层构造逐字不动；仅改写发往上游的副本，客户端原 payload / 其他 provider 字节不变；11 例回归 + 真实复现验证，线上已关闭 #27。
 
 - **Qoder 配额解析修正**（`4a550135`）：`getQoderUsage` 补解析 `addOnQuota`——原实现只读 `userQuota`，免费账户每日/活动领取的 Credits 全部显示 0/0；顺带修复 qoder-cn 配额标题与类型 i18n。
 

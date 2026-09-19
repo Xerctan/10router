@@ -26,6 +26,13 @@ const DEFAULT_SETTINGS = {
   },
   requireLogin: true,
   requireApiKey: true,
+  // Server-side auto-compaction of oversized conversations (clients that do
+  // not compact locally would otherwise hard-fail on "prompt is too long").
+  // ON by default: the alternative is a request error. Ratio = share of the
+  // effective context window at which older turns get summarized away.
+  autoCompactEnabled: true,
+  autoCompactRatio: 0.9,
+  autoCompactKeepMessages: 8,
   apiKeyRotation: false, // experimental: HMAC secret rotation (invalidates all issued keys)
   tunnelDashboardAccess: true,
   authMode: "password",
