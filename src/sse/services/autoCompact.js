@@ -280,11 +280,19 @@ export function detectChatFormat(endpoint, body) {
 function extractSummaryText(data) {
   const choice = data?.choices?.[0];
   const content = choice?.message?.content ?? choice?.text;
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content.map((b) => (typeof b === "string" ? b : b?.text || "")).join("");
+  let text = "";
+  if (typeof content === "string") text = content;
+  else if (Array.isArray(content)) {
+    text = content.map((b) => (typeof b === "string" ? b : b?.text || "")).join("");
   }
-  return "";
+  // Reasoning models (e.g. cbcn hy4-preview) can burn the whole output budget on
+  // reasoning_content and return content="" — a degraded-but-real fallback beats
+  // silently dispatching the oversized original. enable_thinking:false below
+  // normally prevents this; this is the safety net.
+  if (!text.trim() && typeof choice?.message?.reasoning_content === "string") {
+    text = choice.message.reasoning_content;
+  }
+  return text;
 }
 
 /**
@@ -368,6 +376,10 @@ export async function maybeCompactChatBody({ request, body, modelStr, endpoint, 
         stream: false,
         max_tokens: summaryMax,
         temperature: 0.3,
+        // Force a direct (non-reasoning) answer: reasoning models otherwise
+        // spend max_tokens on thinking and return content="". The unified
+        // thinking translator consumes/strips this per provider capability.
+        enable_thinking: false,
       }),
     });
     if (!res.ok) {
@@ -381,7 +393,10 @@ export async function maybeCompactChatBody({ request, body, modelStr, endpoint, 
   } finally {
     clearTimeout(timer);
   }
-  if (!summary || !summary.trim()) return false;
+  if (!summary || !summary.trim()) {
+    log.warn("COMPACT", `empty summary for ${modelStr} — sending original request`);
+    return false;
+  }
 
   body.messages = [
     attachSummaryToFirstTail(plan.tail[0], fmt, summary.trim()),

@@ -291,6 +291,7 @@ describe("maybeCompactChatBody", () => {
     const sent = JSON.parse(init.body);
     expect(sent.model).toBe("testprov/test-model");
     expect(sent.stream).toBe(false);
+    expect(sent.enable_thinking).toBe(false); // keep reasoning models from burning max_tokens on thinking
     // rewritten: fewer messages, first message starts with the summary note,
     // last kept messages untouched
     const orig = bigOpenaiBody();
@@ -298,6 +299,34 @@ describe("maybeCompactChatBody", () => {
     expect(body.messages[0].content).toContain("THE SUMMARY");
     expect(body.messages[body.messages.length - 1].content).toBe("final question");
     expect(mocks.logInfo).toHaveBeenCalled();
+  });
+
+  it("uses reasoning_content as fallback when content is empty", async () => {
+    mocks.getAllModelCaps.mockResolvedValue({ "testprov": { "test-model": { contextWindow: 30000 } } });
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: "", reasoning_content: "REASONED SUMMARY" } }],
+    }), { status: 200 }));
+    const body = bigOpenaiBody();
+    const done = await maybeCompactChatBody({
+      request: makeRequest(), body, modelStr: "testprov/test-model", endpoint: "/v1/chat/completions", settings: {},
+    });
+    expect(done).toBe(true);
+    expect(body.messages[0].content).toContain("REASONED SUMMARY");
+  });
+
+  it("empty summary on both fields → warns and keeps original body", async () => {
+    mocks.getAllModelCaps.mockResolvedValue({ "testprov": { "test-model": { contextWindow: 30000 } } });
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: "", reasoning_content: "" } }],
+    }), { status: 200 }));
+    const body = bigOpenaiBody();
+    const snapshot = JSON.stringify(body);
+    const done = await maybeCompactChatBody({
+      request: makeRequest(), body, modelStr: "testprov/test-model", endpoint: "/v1/chat/completions", settings: {},
+    });
+    expect(done).toBe(false);
+    expect(JSON.stringify(body)).toBe(snapshot);
+    expect(mocks.logWarn).toHaveBeenCalledWith("COMPACT", expect.stringContaining("empty summary"));
   });
 
   it("falls open when the summary call fails (body untouched)", async () => {
