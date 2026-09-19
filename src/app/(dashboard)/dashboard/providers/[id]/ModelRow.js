@@ -117,7 +117,7 @@ export default function ModelRow({ model, fullModel, alias, copied, onCopy, test
                   variant={offPeak.active ? "success" : "default"}
                   className="shrink-0 cursor-help leading-none"
                 >
-                  <span className="material-symbols-outlined text-[10px] align-[-1px]">eco</span>
+                  <span className="material-symbols-outlined align-[-1px]" style={{ fontSize: 10 }}>eco</span>
                 </Badge>
               </Tooltip>
             )}
