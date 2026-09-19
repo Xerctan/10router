@@ -1,11 +1,13 @@
 import { PROVIDER_MODELS, PROVIDER_ID_TO_ALIAS, getModelKind } from "@/shared/constants/models";
 import {
   AI_PROVIDERS,
+  ALIAS_TO_ID,
   getProviderAlias,
   isAnthropicCompatibleProvider,
   isOpenAICompatibleProvider,
 } from "@/shared/constants/providers";
-import { getProviderConnections, getProviderNodes, getCombos, getCustomModels, getModelAliases } from "@/lib/localDb";
+import { buildProviderOrderComparator } from "@/shared/utils/modelListOrder";
+import { getProviderConnections, getProviderNodes, getCombos, getCustomModels, getModelAliases, getSettings } from "@/lib/localDb";
 import { getDisabledModels } from "@/lib/disabledModelsDb";
 import { resolveKiroModels } from "open-sse/services/kiroModels.js";
 import { resolveKimchiModels } from "open-sse/services/kimchiModels.js";
@@ -369,7 +371,63 @@ export async function buildModelsList(kindFilter, options = {}) {
     }
   }
 
-  const models = [];
+  // The user's latest provider order: settings.providerCardOrder is written by
+  // the dashboard's drag-and-drop card reordering (array of provider ids). The
+  // model list must expose providers in that same order — otherwise clients
+  // keep seeing raw DB insertion order while the UI says something else.
+  // One final rank sort (see emit/ordered at the bottom) is the single source
+  // of ordering, so connected providers and noAuth orphan custom models
+  // interleave exactly like the dashboard (where visible noAuth share the top
+  // rank with connected). Tie-breaks mirror the dashboard comparator via the
+  // shared helper: manual order → registry priority → name.
+  let providerCardOrder = [];
+  try {
+    const settings = await getSettings();
+    if (Array.isArray(settings?.providerCardOrder)) providerCardOrder = settings.providerCardOrder;
+  } catch (e) {
+    console.log("Could not fetch provider card order:", e?.message);
+  }
+  const compareProviders = buildProviderOrderComparator({
+    cardOrder: providerCardOrder,
+    aliasToId: ALIAS_TO_ID,
+    priorityOf: (id) => AI_PROVIDERS[id]?.priority,
+  });
+  // Resolve every provider that can appear in this response to one ordinal up
+  // front, ranked together by the comparator — so connected providers and
+  // noAuth orphan custom models interleave under exactly the dashboard's rule
+  // (visible noAuth shares the top card rank with connected).
+  const canonicalProvider = (idOrAlias) => ALIAS_TO_ID[idOrAlias] || idOrAlias;
+  const groupRank = new Map();
+  {
+    const present = new Set(activeConnectionByProvider.keys());
+    for (const cm of customModels) {
+      if (cm?.id && cm?.providerAlias) present.add(String(cm.providerAlias));
+    }
+    if (connections.length === 0 && !dbAvailable) {
+      for (const alias of Object.keys(PROVIDER_MODELS)) present.add(alias);
+    }
+    [...present].sort(compareProviders).forEach((key, i) => {
+      const cid = canonicalProvider(key);
+      if (!groupRank.has(cid)) groupRank.set(cid, i);
+    });
+  }
+  const COMBO_RANK = -1; // combos lead the list, ahead of every provider group
+  const rankOf = (idOrAlias) => {
+    const r = groupRank.get(canonicalProvider(idOrAlias || ""));
+    return r === undefined ? Number.MAX_SAFE_INTEGER : r;
+  };
+
+  // Tagged accumulator: final list = stable sort by (rank, seq), so a
+  // provider's own models keep insertion order while the provider groups
+  // themselves land in the user's card order. This replaces pushing into one
+  // array in loop order, which could not interleave orphan providers.
+  const tagged = [];
+  let seq = 0;
+  const emit = (model, rank) => { tagged.push({ model, rank, seq: seq++ }); };
+  const orderedModels = () => {
+    tagged.sort((a, b) => (a.rank - b.rank) || (a.seq - b.seq));
+    return tagged.map((t) => t.model);
+  };
 
   // Combos first (filtered by kind). Web combos expose `kind` so AI knows search vs fetch.
   for (const combo of combos) {
@@ -382,7 +440,7 @@ export async function buildModelsList(kindFilter, options = {}) {
     if (combo.kind === "webSearch" || combo.kind === "webFetch") {
       entry.kind = combo.kind;
     }
-    models.push(entry);
+    emit(entry, COMBO_RANK);
   }
 
   if (connections.length === 0) {
@@ -403,11 +461,11 @@ export async function buildModelsList(kindFilter, options = {}) {
         for (const model of providerModels) {
           if (!kindFilter.includes(modelKind(model))) continue;
           if (isDisabled(alias, model.id)) continue;
-          models.push({
+          emit({
             id: `${alias}/${model.id}`,
             object: "model",
             owned_by: alias,
-          });
+          }, rankOf(providerId));
         }
       }
     }
@@ -425,11 +483,11 @@ export async function buildModelsList(kindFilter, options = {}) {
       const modelId = String(customModel.id).trim();
       if (!modelId) continue;
 
-      models.push({
+      emit({
         id: `${providerAlias}/${modelId}`,
         object: "model",
         owned_by: providerAlias,
-      });
+      }, rankOf(providerAlias));
     }
   } else {
     for (const [providerId, conn] of activeConnectionByProvider.entries()) {
@@ -605,26 +663,26 @@ export async function buildModelsList(kindFilter, options = {}) {
           if (Number.isFinite(contextWindow)) model.context_length = contextWindow;
           if (Number.isFinite(maxOutput)) model.max_completion_tokens = maxOutput;
         }
-        models.push(model);
+        emit(model, rankOf(providerId));
       }
 
       // Web search/fetch — provider IS the model, expose as {alias}/search and/or {alias}/fetch with explicit kind
       const providerInfo = AI_PROVIDERS[providerId];
       if (kindFilter.includes("webSearch") && providerInfo?.searchConfig) {
-        models.push({
+        emit({
           id: `${outputAlias}/search`,
           object: "model",
           kind: "webSearch",
           owned_by: outputAlias,
-        });
+        }, rankOf(providerId));
       }
       if (kindFilter.includes("webFetch") && providerInfo?.fetchConfig) {
-        models.push({
+        emit({
           id: `${outputAlias}/fetch`,
           object: "model",
           kind: "webFetch",
           owned_by: outputAlias,
-        });
+        }, rankOf(providerId));
       }
     }
   }
@@ -661,17 +719,17 @@ export async function buildModelsList(kindFilter, options = {}) {
       const modelId = String(customModel.id).trim();
       if (!modelId) continue;
       if (isDisabled(alias, modelId)) continue;
-      models.push({
+      emit({
         id: `${alias}/${modelId}`,
         object: "model",
         owned_by: alias,
-      });
+      }, rankOf(alias));
     }
   }
 
   const dedupedModels = [];
   const seenModelIds = new Set();
-  for (const model of models) {
+  for (const model of orderedModels()) {
     if (!model?.id || seenModelIds.has(model.id)) continue;
     seenModelIds.add(model.id);
     dedupedModels.push(model);

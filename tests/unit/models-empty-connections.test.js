@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getCustomModels: vi.fn(),
   getModelAliases: vi.fn(),
   getDisabledModels: vi.fn(),
+  getSettings: vi.fn(),
 }));
 
 vi.mock("@/lib/localDb", () => ({
@@ -15,6 +16,7 @@ vi.mock("@/lib/localDb", () => ({
   getCombos: mocks.getCombos,
   getCustomModels: mocks.getCustomModels,
   getModelAliases: mocks.getModelAliases,
+  getSettings: mocks.getSettings,
 }));
 
 vi.mock("@/lib/disabledModelsDb", () => ({
@@ -26,6 +28,17 @@ vi.mock("@/lib/disabledModelsDb", () => ({
 const { buildModelsList } = await import("../../src/app/api/v1/models/route.js");
 
 const LLM_KIND = "llm";
+
+// First-seen provider prefix sequence of the emitted model ids — the shape
+// the card-order test asserts on.
+function providerPrefixSeq(models) {
+  const seq = [];
+  for (const m of models) {
+    const p = m.id.includes("/") ? m.id.split("/")[0] : m.id;
+    if (!seq.includes(p)) seq.push(p);
+  }
+  return seq;
+}
 
 describe("buildModelsList — empty-connection behavior", () => {
   beforeEach(() => {
@@ -237,5 +250,86 @@ describe("buildModelsList — empty-connection behavior", () => {
     const ids = models.map((m) => m.id);
 
     expect(ids).not.toContain("oc/mimo-v2.5-free");
+  });
+});
+
+describe("buildModelsList — provider order follows settings.providerCardOrder", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getProviderNodes.mockResolvedValue([]);
+    mocks.getCombos.mockResolvedValue([]);
+    mocks.getCustomModels.mockResolvedValue([]);
+    mocks.getModelAliases.mockResolvedValue({});
+    mocks.getDisabledModels.mockResolvedValue({});
+    mocks.getSettings.mockResolvedValue({});
+    global.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+  });
+
+  const twoConns = () => [
+    { id: "c1", provider: "codebuddy-cn", authType: "oauth", isActive: true, providerSpecificData: { enabledModels: ["hy3"] } },
+    { id: "c2", provider: "codebuddy-intl", authType: "oauth", isActive: true, providerSpecificData: { enabledModels: ["glm-5.3"] } },
+  ];
+
+  it("honours the manual card order over DB insertion order", async () => {
+    mocks.getProviderConnections.mockResolvedValue(twoConns());
+    mocks.getSettings.mockResolvedValue({ providerCardOrder: ["codebuddy-intl", "codebuddy-cn"] });
+    // User dragged cbai above cbcn → /v1/models must match.
+    expect(providerPrefixSeq(await buildModelsList([LLM_KIND]))).toEqual(["cbai", "cbcn"]);
+  });
+
+  it("keeps the un-dragged providers in priority/name order after the ordered ones", async () => {
+    mocks.getProviderConnections.mockResolvedValue(twoConns());
+    mocks.getSettings.mockResolvedValue({ providerCardOrder: ["codebuddy-cn"] });
+    expect(providerPrefixSeq(await buildModelsList([LLM_KIND]))).toEqual(["cbcn", "cbai"]);
+  });
+
+  it("interleaves noAuth orphan custom models with connected providers by card order", async () => {
+    mocks.getProviderConnections.mockResolvedValue([
+      { id: "c1", provider: "codebuddy-cn", authType: "oauth", isActive: true, providerSpecificData: { enabledModels: ["hy3"] } },
+    ]);
+    mocks.getCustomModels.mockResolvedValue([
+      { providerAlias: "oc", id: "big-pickle", type: "llm", enabled: true },
+    ]);
+    mocks.getSettings.mockResolvedValue({ providerCardOrder: ["opencode", "codebuddy-cn"] });
+    // Mirrors the dashboard, where a visible noAuth provider (opencode) shares
+    // the top rank with connected providers: dragging it above codebuddy-cn
+    // must reorder /v1/models too, not just the cards.
+    expect(providerPrefixSeq(await buildModelsList([LLM_KIND]))).toEqual(["oc", "cbcn"]);
+  });
+
+  it("interleaves noAuth orphan custom models with connected providers by card order (reverse)", async () => {
+    mocks.getProviderConnections.mockResolvedValue([
+      { id: "c1", provider: "codebuddy-cn", authType: "oauth", isActive: true, providerSpecificData: { enabledModels: ["hy3"] } },
+    ]);
+    mocks.getCustomModels.mockResolvedValue([
+      { providerAlias: "oc", id: "big-pickle", type: "llm", enabled: true },
+    ]);
+    mocks.getSettings.mockResolvedValue({ providerCardOrder: ["codebuddy-cn", "opencode"] });
+    // Drag the other way and the list flips — the orphan is no longer pinned
+    // to the tail just because it lacks a connection.
+    expect(providerPrefixSeq(await buildModelsList([LLM_KIND]))).toEqual(["cbcn", "oc"]);
+  });
+
+  it("falls back to registry priority when no card order was saved", async () => {
+    mocks.getProviderConnections.mockResolvedValue([
+      { id: "c1", provider: "codebuddy-cn", authType: "oauth", isActive: true, providerSpecificData: { enabledModels: ["hy3"] } },
+    ]);
+    mocks.getCustomModels.mockResolvedValue([
+      { providerAlias: "oc", id: "big-pickle", type: "llm", enabled: true },
+    ]);
+    // Pristine instance (no manual order yet): same fallback the dashboard
+    // comparator uses — registry priority, where opencode (40) outranks
+    // codebuddy-cn (90), so the orphan legitimately leads.
+    mocks.getSettings.mockResolvedValue({});
+    expect(providerPrefixSeq(await buildModelsList([LLM_KIND]))).toEqual(["oc", "cbcn"]);
+  });
+
+  it("empty cardOrder leaves the list unchanged in priority order (regression)", async () => {
+    mocks.getProviderConnections.mockResolvedValue(twoConns());
+    mocks.getSettings.mockResolvedValue({});
+    const seq = providerPrefixSeq(await buildModelsList([LLM_KIND]));
+    // cbai & cbcn both present; no card order → comparator tie-breaks by priority
+    // (cbcn=90 before cbai=intl default 200). Exact ids asserted in the next run.
+    expect(new Set(seq)).toEqual(new Set(["cbcn", "cbai"]));
   });
 });
