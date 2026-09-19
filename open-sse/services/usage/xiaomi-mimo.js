@@ -99,5 +99,8 @@ function toWeeklyQuota(percent, resetAt, resetDate) {
     remainingPercentage: remaining,
     resetAt: resetIso,
     unlimited: false,
+    // Weekly allowance: resetAt is the next refresh, not a final expiry —
+    // the badge must survive a drained week (that's when users look for it).
+    recurring: true,
   };
 }
