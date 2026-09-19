@@ -72,13 +72,18 @@
 
 - **小米 Token Plan 出口节点智能匹配（ip.sb 多源探测）**：官方三集群 `cn`/`sgp`/`ams` 不再需要手动猜——添加/编辑 `xiaomi-tokenplan` 连接时自动探测本机网络出口地区并预选对应节点（中国大陆/港澳台→`cn`，欧洲→`ams`，其余海外→`sgp`），节点下拉框旁提示「已根据当前网络出口自动匹配节点」，用户随时可手动改回。服务端探测接口 `GET /api/network/egress-region`（`src/lib/network/egressRegion.js`）：ip.sb geoip + 3 秒超时 + 15 分钟内存缓存 + 整链 fail-open（探测失败静默返回 null，绝不阻塞连接添加/编辑流程）。顺带修复存量缺陷：连接「测试」按钮原把 `xiaomi-tokenplan` 硬编码打向 `sgp` 集群，配置 `cn`/`ams` 的连接永远测不通——现按 `providerSpecificData.region` 动态解析测试端点，与聊天转发行为一致；小米桌面会话模型出口在海外时的探测失败提示附带回国代理指引。新增 `tests/unit/egress-region.test.js`（国家→集群映射/缓存/超时 fail-open）与 `tests/unit/xiaomi-tokenplan-test-region.test.js`（region→测试 URL 路由）锁行为。
 
+- **10router-sync 插件 v1.5.0：ZCode 大版本套餐渠道 id 适配 + 10r 同步链路加固**。
+  - **套餐渠道 id 适配**：ZCode 大版本把套餐/赠送配额渠道（智谱 Start Plan）的 provider id 从 `builtin:bigmodel-start-plan` 改为 `account:bigmodel-start-plan`，插件的官方判据从「仅 `builtin:`」扩为「`builtin:` 或 `account:`」，剥前缀规则同步扩展（新旧行在目标侧同名合并为 `zcode-bigmodel-start-plan`）。旧判据把新形态当自定义渠道跳过，导致 09-18 起套餐流量漏同步——本机实测补导 343 行到 NAS。教训入库：ZCode 大版本会改官方渠道 id 形态，漏判表现是「某渠道突然没新数据」，先看跳过计数列表里的新前缀。
+  - **gatewaySync 标记**：`--source 10r` 源库**原生**行导出时打 `meta.gatewaySync=true`，目标侧健康度评分豁免「导入行排除」（见上方「数据口径」条）；B 实例自己从客户端账本导入过的行经链式同步不打标、继续排除。
+  - **同实例防护扩展到离线回导**：10r 导出每行盖 `meta.sourceDbPath`（与 `--tag` 无关的机器可查来源），`--import` 分支识别「离线文件来自本机默认实例库 + loopback endpoint」同样以退出码 2 拒绝。
+
 - **10router-sync 插件 v1.4.0：新增 `/10router-sync:status` 实例状态监控命令**：不打开仪表盘、一条命令查看目标 10Router 实例的运行状态与今日用量摘要（版本、连接规模、今日请求数/Token/费用等），复用插件既有认证链（仪表盘会话 / CLI token `x-9r-cli-token`），与导出/导入命令同配置即用。插件发版三处版本号同步：`.zcode-plugin/plugin.json` + 根 `marketplace.json`（Discover 实际索引）+ `zcode-plugin/marketplace.json`。
 
 - **10router-sync 插件 v1.3.0：新增 10Router/9Router 实例用量同步（`--source 10r`）**。
   - 读另一个 10Router（或遗留 9Router）实例的 `data.sqlite`（`usageHistory` 表），原样透传导入目标实例——provider/cost/status/tokens/meta 全保留，同名 provider 在目标侧自然合并；适用于把 NAS 实例、兄弟中继、9Router 老安装的用量汇总进一处仪表盘。别名 `10router` / `9r` / `9router`。
   - 源库发现：`--db <path>` 显式指定（NAS 拷贝/挂载盘），否则自动发现 `%APPDATA%\10router|9router\db\data.sqlite` / `~/.10router|~/.9router/db/data.sqlite`（env `TENROUTER_DB` 优先，多库共存时提示）；`--tag` 自定义 `meta.syncedFrom` 标签；源实例 `connectionId` 挪进 `meta.sourceConnectionId` 并置空，避免污染目标按账户聚合。
   - **同实例防护**：源库路径命中本机默认实例库且 `--endpoint` 为 loopback 时以退出码 2 拒绝——把实例导回自己时所有行撞签名，而服务端 `importUsageRows` 撞签会给旧行补写 `meta.imported=true`，把实时行标成「导入行」；确实是另一实例时 `--force` 越过。反向链式双计（源实例上游是目标实例）签名两边不同、服务端拦不住，文档明示不可用。
-  - 列集与服务端 `readUsageFromSqlite()`（9router 备份导入路径）一致，旧库缺列自动降级最小列集；读活库为快照复制（含 `-wal`/`-shm`），不必停源实例。合成库 + 本机真实库（2234 行）实测：导出转换/守卫 exit 2 / `--force` dry-run / 参数校验全通过。同日审查加固两处：无 scheme endpoint（`127.0.0.1:20127`）也能触发同实例防护（否则守卫失效开）；NULL 时间戳行导出侧跳过（服务端回填 `new Date()` 会破幂等）。根 `marketplace.json`（Discover 市场索引）同步 1.3.0 与新描述。09-16 补 `meta.gatewaySync` 标记：源库原生行凭此在目标侧参与健康度评分（数据口径例外，见上方「数据口径」条），链式客户端账本行不打标继续排除。
+  - 列集与服务端 `readUsageFromSqlite()`（9router 备份导入路径）一致，旧库缺列自动降级最小列集；读活库为快照复制（含 `-wal`/`-shm`），不必停源实例。合成库 + 本机真实库（2234 行）实测：导出转换/守卫 exit 2 / `--force` dry-run / 参数校验全通过。同日审查加固两处：无 scheme endpoint（`127.0.0.1:20127`）也能触发同实例防护（否则守卫失效开）；NULL 时间戳行导出侧跳过（服务端回填 `new Date()` 会破幂等）。根 `marketplace.json`（Discover 市场索引）同步 1.3.0 与新描述。
 
 - **10router-sync 插件 v1.2.0：新增小米 MiMo 桌面版（mimocode）用量导出 + ZCode 源改为「仅官方渠道」**。
   - **小米 MiMo 桌面版**（`--source mimo`，别名 `--source mimocode`）：MiMo 把每轮 assistant 消息的完整 token 计量记在 `~/.local/share/mimocode/mimocode.db` 的 `message` 表（JSON `data` 列：`input`/`output`/`reasoning`/`cache.read`/`cache.write`，附 `modelID`/`providerID`/`agent`/`mode`/`time`），比 OpenCode 的 session 级汇总粒度更细（逐轮消息级）。实现要点：WAL 活库先快照再读（复用 `snapshotDb()`）、按 `message.id` 去重、0-token 空转/中断轮次跳过、provider 落 `mimo-<providerID>`、cost 记 0、`meta` 带 messageId/sessionId/agent/mode；Windows 回退路径 `%APPDATA%\Xiaomi MiMo\mimocode.db`。本机实测导入 101 行（`mimo-mimo` 42 / `mimo-xiaomi` 59），重跑幂等。
