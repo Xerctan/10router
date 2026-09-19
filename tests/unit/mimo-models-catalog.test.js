@@ -100,3 +100,45 @@ describe("xiaomi-mimo registry integrity", () => {
     expect(registry).not.toMatch(/"mimo-v2-flash"/);
   });
 });
+
+describe("MiMo catalog kind tagging (2026-09-19 user report)", () => {
+  it("tags upstream ids by function: chat=llm, -tts*=tts, -asr=stt", async () => {
+    const fetchImpl = vi.fn(async () =>
+      okResponse([
+        "mimo-v2.5",
+        "mimo-v2.5-pro",
+        "mimo-v2.5-asr",
+        "mimo-v2.5-tts",
+        "mimo-v2.5-tts-voiceclone",
+        "mimo-v2.5-tts-voicedesign",
+      ])
+    );
+    const result = await resolveMimoModels({ accessToken: "sk-t" }, { fetchImpl });
+    const kinds = Object.fromEntries(result.models.map((m) => [m.id, m.kind]));
+    expect(kinds).toEqual({
+      "mimo-v2.5": "llm",
+      "mimo-v2.5-pro": "llm",
+      "mimo-v2.5-asr": "stt",
+      "mimo-v2.5-tts": "tts",
+      "mimo-v2.5-tts-voiceclone": "tts",
+      "mimo-v2.5-tts-voicedesign": "tts",
+    });
+  });
+
+  it("the import loop must only accept llm-kind rows (media goes to media-providers)", () => {
+    const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+    const pageSrc = readFileSync(path.join(repoRoot, "src/app/(dashboard)/dashboard/providers/[id]/page.js"), "utf8");
+    expect(pageSrc).toMatch(/if \(\(model\.kind \|\| "llm"\) !== "llm"\)/);
+    expect(pageSrc).toMatch(/mediaSkipped/);
+  });
+
+  it("registry no longer carries the retired mimo-v2.5-pro-ultraspeed", () => {
+    const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+    const registry = readFileSync(path.join(repoRoot, "open-sse/providers/registry/xiaomi-mimo.js"), "utf8");
+    // The deletion note may mention the name in prose; assert no live entry.
+    expect(registry).not.toMatch(/\{\s*id:\s*"mimo-v2\.5-pro-ultraspeed"/);
+    // the chat line + tts media entry remain
+    expect(registry).toMatch(/"mimo-v2.5-pro"/);
+    expect(registry).toMatch(/"mimo-v2.5-tts".*kind:\s*"tts"/);
+  });
+});

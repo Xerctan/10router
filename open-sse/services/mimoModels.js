@@ -13,6 +13,17 @@ const MIMO_FALLBACK_ORIGIN = "https://api.xiaomimimo.com";
 // the import flow.
 export const MIMO_CLIENT_PREVIEW_PREFIX = "mimo-x";
 
+// Upstream /v1/models entries are bare {id, object, owned_by} — no kind
+// metadata — so classify by id: the -tts family (incl. voiceclone/voicedesign
+// variants) belongs to the TTS surface, -asr is speech-to-text. "llm" ids are
+// the only ones the provider-page chat model list should ever show.
+export function mimoModelKind(id) {
+  const s = String(id).toLowerCase();
+  if (s.includes("-tts") || s.includes("tts-")) return "tts";
+  if (s.includes("-asr") || s.endsWith("asr")) return "stt";
+  return "llm";
+}
+
 function mimoModelsUrl(connection = {}) {
   let origin = MIMO_FALLBACK_ORIGIN;
   try {
@@ -50,7 +61,7 @@ export async function resolveMimoModels(connection = {}, { fetchImpl = fetch, ti
       .map((m) => (typeof m === "string" ? m : m?.id || m?.name || m?.model))
       .filter(Boolean)
       .filter((id) => !String(id).startsWith(MIMO_CLIENT_PREVIEW_PREFIX))
-      .map((id) => ({ id, name: id }));
+      .map((id) => ({ id, name: id, kind: mimoModelKind(id) }));
     if (!models.length) {
       return { models: [], warning: "MiMo returned no models." };
     }

@@ -916,9 +916,18 @@ export default function ProviderDetailPage() {
       }
 
       let importedCount = 0;
+      let mediaSkipped = 0;
       for (const model of models) {
         const modelId = model.id || model.name;
         if (!modelId) continue;
+        // Media-kind models (tts/stt/image/…) belong to the media-providers
+        // surface, never to this chat model list. MiMo's upstream catalog
+        // mixes them and the resolver tags them; qoder models arrive without
+        // a kind field and default to "llm", so qoder import is unchanged.
+        if ((model.kind || "llm") !== "llm") {
+          mediaSkipped += 1;
+          continue;
+        }
         
         // Qoder model ID format may be "qoder/auto", "qoder-cn/auto" or
         // "auto" — strip whichever provider prefix the route attached.
@@ -939,6 +948,9 @@ export default function ProviderDetailPage() {
         notify.warning(translate("All models already exist, no new models added"))
       } else {
         notify.success(translate("Successfully added") + ` ${importedCount} ` + translate("models"))
+      }
+      if (mediaSkipped > 0) {
+        notify.info(translate("Media models skipped (use Media Providers)") + ` (${mediaSkipped})`)
       }
     } catch (error) {
       console.log("Error importing Qoder models:", error);

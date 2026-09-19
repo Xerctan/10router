@@ -64,10 +64,12 @@ export default {
     { id: "mimo-x-pro-preview", name: "MiMo-X-Pro-Preview", upstreamModelId: "xiaomi/mimo-x-pro-preview", supportedFormats: ["openai"], requiresSession: true },
     { id: "mimo-x-flash-preview", name: "MiMo-X-Flash-Preview", upstreamModelId: "xiaomi/mimo-x-flash-preview", supportedFormats: ["openai"], requiresSession: true },
     // Cloud API models (api.xiaomimimo.com/v1) — live /v1/models verified
-    // 2026-09-19: the V2 generation (mimo-v2-omni, mimo-v2-flash) has been
-    // retired upstream and is removed here; only the V2.5 line remains.
+    // 2026-09-19: the V2 generation (mimo-v2-omni, mimo-v2-flash) and the
+    // no-longer-sold mimo-v2.5-pro-ultraspeed are removed; the plain
+    // text/chat line stays here, the -tts family belongs to the TTS media
+    // provider surface (serviceKinds includes "tts"; the media page lists
+    // exactly the kind:"tts" entries below).
     { id: "mimo-v2.5-pro", name: "MiMo V2.5 Pro" },
-    { id: "mimo-v2.5-pro-ultraspeed", name: "MiMo V2.5 Pro Ultraspeed" },
     { id: "mimo-v2.5", name: "MiMo V2.5" },
     { id: "mimo-v2.5-tts", name: "MiMo V2.5 TTS", kind: "tts" },
   ],
