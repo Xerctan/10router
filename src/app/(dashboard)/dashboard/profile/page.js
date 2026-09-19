@@ -119,23 +119,6 @@ export default function ProfilePage() {
     setCompactUnits(next);
   };
 
-  const toggleProviderDisabledLastSort = async () => {
-    const next = !(settings.providerDisabledLastSort === true);
-    try {
-      const res = await fetch("/api/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ providerDisabledLastSort: next }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSettings((prev) => ({ ...prev, ...data }));
-      }
-    } catch (error) {
-      console.log("Error toggling provider disabled-last sort:", error);
-    }
-  };
-
   const toggleShowCommunityProviders = async () => {
     // Default is SHOWN; toggling hides/shows. Flip the stored flag.
     const next = settings.showCommunityProviders === false;
@@ -151,23 +134,6 @@ export default function ProfilePage() {
       }
     } catch (error) {
       console.log("Error toggling show-community-providers:", error);
-    }
-  };
-
-  const toggleCodeBuddyOAuthImport = async () => {
-    const next = !(settings.codeBuddyOAuthImport === true);
-    try {
-      const res = await fetch("/api/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ codeBuddyOAuthImport: next }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSettings((prev) => ({ ...prev, ...data }));
-      }
-    } catch (error) {
-      console.log("Error toggling codebuddy OAuth import:", error);
     }
   };
 
@@ -1788,22 +1754,8 @@ export default function ProfilePage() {
             <h3 className="text-base sm:text-lg font-semibold">{translate("Providers")}</h3>
           </div>
           <div className="flex flex-col gap-4">
-            {/* Disabled providers sort last (behind no-connection providers) */}
-            <div className="flex items-start sm:items-center justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm sm:text-base">{translate("Disabled providers sort last")}</p>
-                <p className="text-xs sm:text-sm text-text-muted">
-                  Push providers with all connections disabled behind those with no connections
-                </p>
-              </div>
-              <Toggle
-                checked={settings.providerDisabledLastSort === true}
-                onChange={toggleProviderDisabledLastSort}
-              />
-            </div>
-
             {/* Show community welfare / trial providers (体验) */}
-            <div className="flex items-start sm:items-center justify-between gap-4 pt-4 border-t border-border/50">
+            <div className="flex items-start sm:items-center justify-between gap-4">
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm sm:text-base">{translate("Show trial providers")}</p>
                 <p className="text-xs sm:text-sm text-text-muted">
@@ -1827,23 +1779,8 @@ export default function ProfilePage() {
             <h3 className="text-base sm:text-lg font-semibold">{translate("Experimental")}</h3>
           </div>
           <div className="flex flex-col gap-4">
-            {/* OAuth account import/export (provider detail pages, all OAuth providers) */}
-            <div className="flex items-start sm:items-center justify-between gap-4 pt-4 border-t border-border/50">
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm sm:text-base">{translate("OAuth import / export")}</p>
-                <p className="text-xs sm:text-sm text-text-muted">
-                  {translate("Show Import / Export buttons on OAuth provider pages (encrypted transfer, experimental)")}
-                </p>
-              </div>
-              <Toggle
-                checked={settings.codeBuddyOAuthImport === true}
-                onChange={toggleCodeBuddyOAuthImport}
-              />
-            </div>
-
-
             {/* CodeBuddy intl daily active-session probe (campaign credits) */}
-            <div className="flex items-start sm:items-center justify-between gap-4 pt-4 border-t border-border/50">
+            <div className="flex items-start sm:items-center justify-between gap-4">
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm sm:text-base">{translate("CodeBuddy daily active session")}</p>
                 <p className="text-xs sm:text-sm text-text-muted">

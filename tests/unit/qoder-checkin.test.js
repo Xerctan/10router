@@ -1,4 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
+
+// localDb is dynamically imported inside runQoderCheckinTick; mock it so the
+// tick can be driven with a fixed connection set (and persistence is a no-op).
+const mockConns = [];
+vi.mock("../../src/lib/localDb.js", () => ({
+  getProviderConnections: async () => mockConns,
+  updateSettings: async () => ({}),
+  getSettings: async () => ({}),
+}));
+
 import {
   isEligibleQoderConnection,
   getQoderOpenApiBase,
@@ -150,6 +160,62 @@ describe("qoderCheckin unit tests", () => {
 
       const r2 = await deps.checkinConnection(conns[1]);
       expect(r2.status).toBe("checked-in");
+    });
+  });
+
+  describe("runQoderCheckinTick provider scoping", () => {
+    it("provider:'qoder' sweeps only intl accounts", async () => {
+      mockConns.length = 0;
+      mockConns.push(
+        { id: "q1", name: "Intl A", provider: "qoder", accessToken: "t1", isActive: true },
+        { id: "c1", name: "CN A", provider: "qoder-cn", accessToken: "t2", isActive: true }
+      );
+      const touched = [];
+      const results = await runQoderCheckinTick({
+        provider: "qoder",
+        doneMap: {},
+        checkinConnection: async (conn) => {
+          touched.push(conn.id);
+          return { connectionId: conn.id, provider: conn.provider, status: "checked-in", claimedAmount: 100 };
+        },
+      });
+      expect(touched).toEqual(["q1"]);
+      expect(results.every((r) => r.provider === "qoder")).toBe(true);
+    });
+
+    it("provider:'qoder-cn' sweeps only CN accounts", async () => {
+      mockConns.length = 0;
+      mockConns.push(
+        { id: "q1", name: "Intl A", provider: "qoder", accessToken: "t1", isActive: true },
+        { id: "c1", name: "CN A", provider: "qoder-cn", accessToken: "t2", isActive: true }
+      );
+      const touched = [];
+      await runQoderCheckinTick({
+        provider: "qoder-cn",
+        doneMap: {},
+        checkinConnection: async (conn) => {
+          touched.push(conn.id);
+          return { connectionId: conn.id, provider: conn.provider, status: "checked-in", claimedAmount: 50 };
+        },
+      });
+      expect(touched).toEqual(["c1"]);
+    });
+
+    it("no provider filter sweeps both (scheduler path)", async () => {
+      mockConns.length = 0;
+      mockConns.push(
+        { id: "q1", name: "Intl A", provider: "qoder", accessToken: "t1", isActive: true },
+        { id: "c1", name: "CN A", provider: "qoder-cn", accessToken: "t2", isActive: true }
+      );
+      const touched = [];
+      await runQoderCheckinTick({
+        doneMap: {},
+        checkinConnection: async (conn) => {
+          touched.push(conn.id);
+          return { connectionId: conn.id, provider: conn.provider, status: "checked-in", claimedAmount: 10 };
+        },
+      });
+      expect(touched.sort()).toEqual(["c1", "q1"]);
     });
   });
 });

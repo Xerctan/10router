@@ -83,7 +83,7 @@ export default function ProviderDetailPage() {
   const [selectedConnection, setSelectedConnection] = useState(null);
   const [modelAliases, setModelAliases] = useState({});
   const [customModels, setCustomModels] = useState([]);
-  const [codeBuddyOAuthImportEnabled, setCodeBuddyOAuthImportEnabled] = useState(false); // experimental toggle
+  const [oauthTransferEnabled, setOauthTransferEnabled] = useState(false); // per-provider toggle (falls back to legacy global)
   const [codeBuddyCheckinEnabled, setCodeBuddyCheckinEnabled] = useState(false); // experimental auto daily check-in toggle
   // cbcn check-in manual trigger: running flag (per-account results go to the
   // summary toast + [CB_CN_CHECKIN] server log, not an inline list).
@@ -350,7 +350,7 @@ export default function ProviderDetailPage() {
   // Generic OAuth transfer: every provider whose registry declares an oauth
   // auth mode (not just codebuddy). When CN check-in is on it hides the
   // buttons in favor of the check-in block — surface a reminder then.
-  const oauthTransferOn = isOAuth && providerInfo?.authModes?.includes("oauth") && codeBuddyOAuthImportEnabled;
+  const oauthTransferOn = isOAuth && providerInfo?.authModes?.includes("oauth") && oauthTransferEnabled;
   // Experimental auto daily check-in — mutually exclusive display vs import/export.
   const codeBuddyCheckinOn = isCodeBuddy && codeBuddyCheckinEnabled;
   const staticModels = getModelsByProviderId(providerId);
@@ -554,6 +554,10 @@ export default function ProviderDetailPage() {
       setProviderStrategy(override.fallbackStrategy || null);
       setProviderStickyLimit(override.stickyRoundRobinLimit != null ? String(override.stickyRoundRobinLimit) : "1");
       setEarliestExpiryFirst(override.earliestExpiryFirst === true);
+      const perProviderTransfer = typeof override.oauthTransfer === "boolean"
+        ? override.oauthTransfer
+        : settingsData.codeBuddyOAuthImport === true;
+      setOauthTransferEnabled(perProviderTransfer);
       // Load per-provider thinking config
       const thinkingCfg = (settingsData.providerThinking || {})[providerId] || {};
       setThinkingMode(thinkingCfg.mode || "auto");
@@ -614,7 +618,12 @@ export default function ProviderDetailPage() {
     }
   };
 
-  const saveProviderStrategy = async (strategy, stickyLimit, earliestExpiry = earliestExpiryFirst) => {
+  const saveProviderStrategy = async (
+    strategy,
+    stickyLimit,
+    earliestExpiry = earliestExpiryFirst,
+    oauthTransfer = oauthTransferEnabled,
+  ) => {
     try {
       const settingsRes = await fetch("/api/settings", { cache: "no-store" });
       const settingsData = settingsRes.ok ? await settingsRes.json() : {};
@@ -635,6 +644,12 @@ export default function ProviderDetailPage() {
         override.earliestExpiryFirst = true;
       } else {
         delete override.earliestExpiryFirst;
+      }
+
+      if (typeof oauthTransfer === "boolean") {
+        override.oauthTransfer = oauthTransfer;
+      } else {
+        delete override.oauthTransfer;
       }
 
       const updated = { ...current };
@@ -659,17 +674,22 @@ export default function ProviderDetailPage() {
     const sticky = enabled ? (providerStickyLimit || "1") : providerStickyLimit;
     if (enabled && !providerStickyLimit) setProviderStickyLimit("1");
     setProviderStrategy(strategy);
-    saveProviderStrategy(strategy, sticky, earliestExpiryFirst);
+    saveProviderStrategy(strategy, sticky, earliestExpiryFirst, oauthTransferEnabled);
   };
 
   const handleStickyLimitChange = (value) => {
     setProviderStickyLimit(value);
-    saveProviderStrategy("round-robin", value, earliestExpiryFirst);
+    saveProviderStrategy("round-robin", value, earliestExpiryFirst, oauthTransferEnabled);
   };
 
   const handleEarliestExpiryToggle = (enabled) => {
     setEarliestExpiryFirst(enabled);
-    saveProviderStrategy(providerStrategy, providerStickyLimit, enabled);
+    saveProviderStrategy(providerStrategy, providerStickyLimit, enabled, oauthTransferEnabled);
+  };
+
+  const handleOauthTransferToggle = (enabled) => {
+    setOauthTransferEnabled(enabled);
+    saveProviderStrategy(providerStrategy, providerStickyLimit, earliestExpiryFirst, enabled);
   };
 
   const saveThinkingConfig = async (mode) => {
@@ -729,15 +749,17 @@ export default function ProviderDetailPage() {
     fetch("/api/settings", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
-        if (typeof data.codeBuddyOAuthImport === "boolean") {
-          setCodeBuddyOAuthImportEnabled(data.codeBuddyOAuthImport);
-        }
+        const override = (data.providerStrategies || {})[providerId] || {};
+        const enabled = typeof override.oauthTransfer === "boolean"
+          ? override.oauthTransfer
+          : data.codeBuddyOAuthImport === true;
+        setOauthTransferEnabled(enabled);
         if (typeof data.codeBuddyCheckin === "boolean") {
           setCodeBuddyCheckinEnabled(data.codeBuddyCheckin);
         }
       })
       .catch((e) => console.log("Error reading settings:", e));
-  }, []);
+  }, [providerId]);
 
   // Cursor's model availability is account-specific and changes frequently.
   // Load the active account's live catalog for the dashboard; the static
@@ -1982,6 +2004,22 @@ export default function ProviderDetailPage() {
                   onChange={handleEarliestExpiryToggle}
                 />
               </div>
+
+              {/* OAuth import / export toggle (per-provider) */}
+              {isOAuth && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className="text-xs text-text-muted font-medium"
+                    title={translate("Show Import / Export buttons on OAuth provider pages (encrypted transfer, experimental)")}
+                  >
+                    {translate("OAuth import / export")}
+                  </span>
+                  <Toggle
+                    checked={oauthTransferEnabled}
+                    onChange={handleOauthTransferToggle}
+                  />
+                </div>
+              )}
 
               {/* Round Robin toggle */}
               <div className="flex flex-wrap items-center gap-2">

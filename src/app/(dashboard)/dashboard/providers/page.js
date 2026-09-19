@@ -504,10 +504,21 @@ export default function ProvidersPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-            {[...compatibleProviders, ...anthropicCompatibleProviders].map(
-              (info) => (
+            {customProviders.map((info) => (
+              <DraggableCardWrapper
+                key={info.id}
+                cardId={info.id}
+                isDragging={draggingCardId === info.id}
+                isOver={dragOverCardId === info.id}
+                onDragStart={setDraggingCardId}
+                onDragOver={setDragOverCardId}
+                onDrop={handleCardDrop}
+                onDragEnd={() => {
+                  setDraggingCardId(null);
+                  setDragOverCardId(null);
+                }}
+              >
                 <ApiKeyProviderCard
-                  key={info.id}
                   providerId={info.id}
                   provider={info}
                   stats={getProviderStats(info.id, "apikey")}
@@ -516,8 +527,8 @@ export default function ProvidersPage() {
                     handleToggleProvider(info.id, "apikey", active)
                   }
                 />
-              ),
-            )}
+              </DraggableCardWrapper>
+            ))}
           </div>
         )}
       </div>
@@ -555,14 +566,27 @@ export default function ProvidersPage() {
           {oauthEntries.map(([key, info]) => {
             const authTypes = dualAuthTypes(info, key);
             return (
-              <ProviderCard
+              <DraggableCardWrapper
                 key={key}
-                providerId={key}
-                provider={info}
-                stats={getProviderStats(key, authTypes)}
-                authType="oauth"
-                onToggle={(active) => handleToggleProvider(key, authTypes, active)}
-              />
+                cardId={key}
+                isDragging={draggingCardId === key}
+                isOver={dragOverCardId === key}
+                onDragStart={setDraggingCardId}
+                onDragOver={setDragOverCardId}
+                onDrop={handleCardDrop}
+                onDragEnd={() => {
+                  setDraggingCardId(null);
+                  setDragOverCardId(null);
+                }}
+              >
+                <ProviderCard
+                  providerId={key}
+                  provider={info}
+                  stats={getProviderStats(key, authTypes)}
+                  authType="oauth"
+                  onToggle={(active) => handleToggleProvider(key, authTypes, active)}
+                />
+              </DraggableCardWrapper>
             );
           })}
         </div>
@@ -600,42 +624,53 @@ export default function ProvidersPage() {
             const freeAuthTypes = dualAuthTypes(info, key);
             // noAuth free providers (opencode, mimo-free) get a topology
             // visibility toggle instead of an enable/disable switch.
-            if (!isFreeTier) {
-              const topologySetting = topologyVisibility?.[key];
-              const topologyVisible =
-                topologySetting === false
-                  ? false
-                  : topologySetting === true
-                    ? true
-                    : !info.topologyHiddenByDefault;
-              return (
-                <ProviderCard
-                  key={key}
-                  providerId={key}
-                  provider={info}
-                  stats={getProviderStats(key, freeAuthTypes)}
-                  authType="free"
-                  onToggle={(active) =>
-                    handleToggleProvider(key, freeAuthTypes, active)
-                  }
-                  topologyVisible={topologyVisible}
-                  onToggleTopology={
-                    info.noAuth
-                      ? (visible) => handleToggleTopology(key, visible)
-                      : undefined
-                  }
-                />
-              );
-            }
+            const topologySetting = topologyVisibility?.[key];
+            const topologyVisible =
+              topologySetting === false
+                ? false
+                : topologySetting === true
+                  ? true
+                  : !info.topologyHiddenByDefault;
             return (
-              <ApiKeyProviderCard
+              <DraggableCardWrapper
                 key={key}
-                providerId={key}
-                provider={info}
-                stats={getProviderStats(key, freeAuthTypes)}
-                authType={Array.isArray(freeAuthTypes) ? (freeAuthTypes[0] ?? "apikey") : freeAuthTypes}
-                onToggle={(active) => handleToggleProvider(key, freeAuthTypes, active)}
-              />
+                cardId={key}
+                isDragging={draggingCardId === key}
+                isOver={dragOverCardId === key}
+                onDragStart={setDraggingCardId}
+                onDragOver={setDragOverCardId}
+                onDrop={handleCardDrop}
+                onDragEnd={() => {
+                  setDraggingCardId(null);
+                  setDragOverCardId(null);
+                }}
+              >
+                {!isFreeTier ? (
+                  <ProviderCard
+                    providerId={key}
+                    provider={info}
+                    stats={getProviderStats(key, freeAuthTypes)}
+                    authType="free"
+                    onToggle={(active) =>
+                      handleToggleProvider(key, freeAuthTypes, active)
+                    }
+                    topologyVisible={topologyVisible}
+                    onToggleTopology={
+                      info.noAuth
+                        ? (visible) => handleToggleTopology(key, visible)
+                        : undefined
+                    }
+                  />
+                ) : (
+                  <ApiKeyProviderCard
+                    providerId={key}
+                    provider={info}
+                    stats={getProviderStats(key, freeAuthTypes)}
+                    authType={Array.isArray(freeAuthTypes) ? (freeAuthTypes[0] ?? "apikey") : freeAuthTypes}
+                    onToggle={(active) => handleToggleProvider(key, freeAuthTypes, active)}
+                  />
+                )}
+              </DraggableCardWrapper>
             );
           })}
         </div>
@@ -670,14 +705,27 @@ export default function ProvidersPage() {
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {visibleApikeyEntries.map(([key, info]) => (
-            <ApiKeyProviderCard
+            <DraggableCardWrapper
               key={key}
-              providerId={key}
-              provider={info}
-              stats={getProviderStats(key, "apikey")}
-              authType="apikey"
-              onToggle={(active) => handleToggleProvider(key, "apikey", active)}
-            />
+              cardId={key}
+              isDragging={draggingCardId === key}
+              isOver={dragOverCardId === key}
+              onDragStart={setDraggingCardId}
+              onDragOver={setDragOverCardId}
+              onDrop={handleCardDrop}
+              onDragEnd={() => {
+                setDraggingCardId(null);
+                setDragOverCardId(null);
+              }}
+            >
+              <ApiKeyProviderCard
+                providerId={key}
+                provider={info}
+                stats={getProviderStats(key, "apikey")}
+                authType="apikey"
+                onToggle={(active) => handleToggleProvider(key, "apikey", active)}
+              />
+            </DraggableCardWrapper>
           ))}
         </div>
         {!isApikeySearching && !showAllApikey && hiddenApikeyCount > 0 && (
@@ -759,6 +807,49 @@ export default function ProvidersPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function DraggableCardWrapper({
+  cardId,
+  isDragging,
+  isOver,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  children,
+}) {
+  return (
+    <div
+      draggable
+      onDragStart={(e) => {
+        onDragStart(cardId);
+        e.dataTransfer.effectAllowed = "move";
+        try {
+          e.dataTransfer.setData("text/plain", cardId);
+        } catch {}
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        onDragOver(cardId);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop(cardId);
+      }}
+      onDragEnd={onDragEnd}
+      className={`min-w-0 transition-all rounded-xl cursor-grab active:cursor-grabbing ${
+        isDragging
+          ? "opacity-30 scale-[0.98]"
+          : isOver
+            ? "ring-2 ring-primary/60 scale-[1.01]"
+            : ""
+      }`}
+    >
+      {children}
     </div>
   );
 }
