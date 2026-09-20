@@ -139,6 +139,8 @@ export async function handleChat(request, clientRawRequest = null) {
     }
 
     const comboStickyLimit = settings.comboStickyRoundRobinLimit;
+    const retryOnEmpty = comboStrategies[modelStr]?.retryOnEmpty ?? settings.comboRetryOnEmpty ?? false;
+    const retryOnEmptyLimit = comboStrategies[modelStr]?.retryOnEmptyLimit ?? settings.comboRetryOnEmptyLimit;
     log.info("CHAT", `Combo "${modelStr}" with ${augmentedModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
     return handleComboChat({
       body,
@@ -150,7 +152,9 @@ export async function handleChat(request, clientRawRequest = null) {
       log,
       comboName: modelStr,
       comboStrategy,
-      comboStickyLimit
+      comboStickyLimit,
+      retryOnEmpty,
+      retryOnEmptyLimit
     });
   }
 
@@ -216,6 +220,8 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       }
 
       const comboStickyLimit = chatSettings.comboStickyRoundRobinLimit;
+      const retryOnEmpty = comboStrategies[modelStr]?.retryOnEmpty ?? chatSettings.comboRetryOnEmpty ?? false;
+      const retryOnEmptyLimit = comboStrategies[modelStr]?.retryOnEmptyLimit ?? chatSettings.comboRetryOnEmptyLimit;
       log.info("CHAT", `Combo "${modelStr}" with ${augmentedModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
       return handleComboChat({
         body,
@@ -227,7 +233,9 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         log,
         comboName: modelStr,
         comboStrategy,
-        comboStickyLimit
+        comboStickyLimit,
+        retryOnEmpty,
+        retryOnEmptyLimit
       });
     }
     log.warn("CHAT", "Invalid model format", { model: modelStr });

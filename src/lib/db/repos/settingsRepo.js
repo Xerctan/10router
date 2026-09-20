@@ -18,6 +18,13 @@ const DEFAULT_SETTINGS = {
   comboStrategy: "fallback",
   comboStickyRoundRobinLimit: 1,
   comboStrategies: {},
+  // Issue #10: global default for the per-combo "retry on empty" gate — when a
+  // model answers 2xx with an empty content-filtered stream, fall through to the
+  // next combo model. Off by default; per-combo comboStrategies[name].retryOnEmpty wins.
+  comboRetryOnEmpty: false,
+  // How many models ONE request may burn on empty answers (each replay re-bills
+  // the full input context). Per-combo comboStrategies[name].retryOnEmptyLimit wins.
+  comboRetryOnEmptyLimit: 2,
   capacityAdapter: {
     vision: { enabled: true, roundRobin: false, models: [] },
     pdf: { enabled: false, roundRobin: false, models: [] },

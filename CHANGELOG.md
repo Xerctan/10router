@@ -34,6 +34,7 @@
 - **Token Plan 浏览器登录的端点路由**：平台 OAuth 回传的 `url`（桌面版正是用它区分 plan / billing：auth.json metadata.base_url）此前只入库不参与路由 —— chat / TTS / 连接测试一律打在按量集群，套餐订阅账号登录后访问错集群。现在 xiaomi-mimo 执行器 `buildUrl`、MiMo TTS 适配器、连接测试探测地址均优先使用连接存储的集群（按量账号重建结果与原 transport 字节一致，行为不变）；套餐集群沿用「403 容忍、401 才判无效」的既有语义。新增共享 `normalizeMimoApiBase` 把任意形态的存储端点规范到 `https://host/v1`。
 - **MiMo TTS 裸模型名被静默改写**：适配器的已知模型列表只有 `mimo-v2.5-tts`，`parseModelVoice` 会把不在列表里的裸模型（如 `mimo-v2-tts`）改写成默认模型 —— 四个套餐语音模型接入后此问题会真实触发，列表补全。
 - **MiMo 浏览器登录挂起密钥无上限**：与桌面版对齐 `cap:8` —— 每个挂起会话持有一把 X25519 私钥，24 小时粘贴窗口不应变成无界密钥缓存；超出时淘汰最旧。
+- **Combo 空回复自动回退（#10）**：部分上游（Z.ai/GLM 系等）把内容审查表达为 HTTP 200 空流 —— 流正常打开、以 `finish_reason:"sensitive"`/`content_filter` 终止且零输出 token，combo 的 `result.ok` 短路把空白回复直接交给客户端。新增可选「空回复时切换」（策略面板 Toggle，默认关；`comboStrategies[name].retryOnEmpty`，全局兜底 `settings.comboRetryOnEmpty`）：仅当仍有后备模型时窥探 2xx 流头部，终结时没有任何有效内容（正文/推理/工具调用）即落到下一个模型；首个有效增量立即放行（头部缓冲字节级无损重放，单一 TextDecoder 保住跨 chunk 的 CJK 字符）。仅对 SSE/JSON 生效，音频/图像二进制流不受影响；被放弃的调用已消费至终结，用量照常入账；最后一个模型永不窥探（空 200 优于合成 5xx）；单请求默认最多烧 2 个模型（`retryOnEmptyLimit`，按 combo / 全局 `comboRetryOnEmptyLimit` 可调 —— 重放会重新计费完整输入，报告人案例是 1.5M token 上下文），后备目标与主模型同厂时在日志中告警（大概率撞同一过滤器）。翻译层会归一化 filtered finish reason，故判据取「终结且零有效内容」而非 reason 本身（原始 filtered 令牌仍机会性识别）。另修复 combos 页策略修剪逻辑：在默认 fallback 策略下开启该开关时，整个 comboStrategies 条目会被连带删除、开关静默失效。附 `combo-retry-on-empty.test.js`（28 例）。
 
 ## v1.1.3 (2026-09-20)
 

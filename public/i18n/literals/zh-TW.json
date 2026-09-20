@@ -577,6 +577,8 @@
   "Last 7 days (≥50 real requests)": "最近 7 天（≥50 次真實有效請求）",
   "Individual quota reached. Resets at {time} (in {duration}).": "該帳號額度已用完，將於 {time} 重置（約 {duration} 後）；可升級訂閱提升限額。",
   "Subscription quota used up. Please wait for the quota reset.": "該帳號額度已用完，請等待重置。",
+  "Retry on empty": "空回覆時切換",
+  "When the model returns an empty answer (content filter or zero output), fall through to the next model. The abandoned attempt still consumes its input tokens.": "當模型返回空回覆（內容審查或零輸出）時，自動改用下一個模型。被放棄的呼叫仍會消耗其輸入 token。",
   "{n}d": "{n}天",
   "{n}h": "{n}小時",
   "{n}m": "{n}分",
