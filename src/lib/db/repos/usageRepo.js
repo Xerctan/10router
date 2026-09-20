@@ -700,6 +700,17 @@ const CODENAME_FAMILIES = [
   [/^qwq(?:-.*)?$/, "qwen"],
 ];
 
+// Brand consolidation: one vendor ships several product-line prefixes that
+// should NOT split into separate legend bars. After the first-segment strip,
+// a derived family in the key folds into the mapped family. StepFun exposes
+// `step-*` (LLM/vision/image) alongside `stepaudio-*` (TTS/ASR) — same brand,
+// so they aggregate to one "step" family rather than showing "step" + "stepaudio".
+// Brand consolidation: different product-line prefixes of one brand fold into
+// one family so the Model Type chart shows a single bar per vendor rather than
+// splitting StepFun's stack into "step" + "stepaudio". Keys are post-strip
+// first segments; add entries here as other brand-prefixed lines surface.
+const BRAND_FAMILIES = { stepaudio: "step" };
+
 export function modelFamilyName(model) {
   const raw = String(model || "unknown");
   const noPrefix = raw.includes("/") ? raw.slice(raw.lastIndexOf("/") + 1) : raw;
@@ -720,7 +731,8 @@ export function modelFamilyName(model) {
   // form already gets (gpt-6-astra → gpt). Guard keeps a purely numeric first
   // segment intact instead of collapsing it to "".
   const first = segs[0] || "other";
-  return first.replace(/[0-9]+(?:\.[0-9]+)*$/, "") || first;
+  const stripped = first.replace(/[0-9]+(?:\.[0-9]+)*$/, "") || first;
+  return BRAND_FAMILIES[stripped] || stripped;
 }
 
 // Keep the top families by period total, fold the rest into "other" — the

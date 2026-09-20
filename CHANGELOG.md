@@ -15,6 +15,7 @@
   - **图像生成**：`step-image-edit-2`、`step-2x-large`，隔离至【媒体提供商 -> 图像生成】与 `/v1/models/image`。
   - **实时余额与代金券查询**：对接 `GET /v1/accounts`，国内站按 CNY、国际站按 USD 展示现金与代金券余额（Step Plan 渠道无公开额度 API，不显示用量卡）。
   - **官方高清图标**：注入官方透明 PNG 图标，覆盖大模型卡片与各媒体管理界面。
+  - **模型类型图家族聚合**：`modelFamilyName` 新增品牌归一映射，把同一品牌的不同产品线前缀折叠成单一族——StepFun 的 `stepaudio-*`（TTS/ASR）与 `step-*`（LLM/视觉/图像）在「模型类型」用量图里不再拆成两根柱，统一聚合为 `step`。剥离 provider 前缀后匹配，覆盖 `stepp-cn/…`、`step-cn/…` 等带渠道别名的 id。附回归用例（`model-family-chart.test.js`）。
 
 - **ComfyUI 本地生图原生执行器实装**：
   - 接入本地 ComfyUI 实例（默认 `http://127.0.0.1:8188`），实装自动发现本地可用 Checkpoints、动态装配 SD / SDXL / Flux 标准文生图图工作流并排队轮询输出，经 `/v1/images/generations` 统一返回标准 base64 图像。
