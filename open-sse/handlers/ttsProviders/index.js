@@ -29,7 +29,7 @@ export function getTtsAdapter(provider) {
 }
 
 // Generic config-driven dispatcher (uses ttsConfig.format)
-export async function synthesizeViaConfig(provider, text, model, credentials) {
+export async function synthesizeViaConfig(provider, text, model, credentials, extra = {}) {
   const { AI_PROVIDERS } = await import("@/shared/constants/providers");
   const cfg = AI_PROVIDERS[provider]?.ttsConfig;
   if (!cfg) return null;
@@ -37,11 +37,13 @@ export async function synthesizeViaConfig(provider, text, model, credentials) {
   if (!handler) return null;
   const apiKey = credentials?.apiKey;
   if (cfg.authType !== "none" && !apiKey) throw new Error(`${provider} API key required`);
-  const { PROVIDER_MODELS } = await import("open-sse/config/providerModels.js");
-  const ttsModels = (PROVIDER_MODELS[provider] || []).filter(m => (m.kind || m.type) === "tts");
+  const { PROVIDER_MODELS, PROVIDER_ID_TO_ALIAS } = await import("open-sse/config/providerModels.js");
+  const alias = PROVIDER_ID_TO_ALIAS[provider] || provider;
+  const ttsModels = (PROVIDER_MODELS[alias] || PROVIDER_MODELS[provider] || []).filter(m => (m.kind || m.type) === "tts");
   const defaultModel = ttsModels[0]?.id || "";
-  const { modelId, voiceId } = parseModelVoice(model, defaultModel, "", ttsModels);
-  return handler({ baseUrl: cfg.baseUrl, apiKey, text, modelId, voiceId, defaultVoice: cfg.defaultVoice });
+  const defaultVoice = extra?.voice || cfg.defaultVoice || "";
+  const { modelId, voiceId } = parseModelVoice(model, defaultModel, defaultVoice, ttsModels);
+  return handler({ baseUrl: cfg.baseUrl, apiKey, text, modelId, voiceId: voiceId || defaultVoice, defaultVoice: cfg.defaultVoice });
 }
 
 // Voice fetchers (used by /api/media-providers/tts/voices route)
