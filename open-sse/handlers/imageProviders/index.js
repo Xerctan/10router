@@ -20,6 +20,10 @@ const ADAPTERS = {
   recraft: createOpenAIAdapter("recraft"),
   "vercel-ai-gateway": createOpenAIAdapter("vercel-ai-gateway"),
   xai: createOpenAIAdapter("xai"),
+  // StepFun /v1/images/generations is OpenAI-shaped (url | b64_json); the
+  // bodyFields whitelist in its registry entry sheds non-schema keys.
+  // NOTE: upstream retires all image APIs on 2026-10-10.
+  stepfun: createOpenAIAdapter("stepfun"),
   "agnes-ai": createOpenAIAdapter("agnes-ai"),
   "agnes-ai-cn": createOpenAIAdapter("agnes-ai-cn"),
   gemini,

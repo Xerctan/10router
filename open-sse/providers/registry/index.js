@@ -133,6 +133,7 @@ import p133 from "./xquik.js";
 import p134 from "./amd.js";
 import p135 from "./siliconflow-cn.js";
 import p136 from "./qoder-cn.js";
+import p137 from "./stepfun.js";
 
 export default [
   p0,
@@ -267,4 +268,5 @@ export default [
   p134,
   p135,
   p136,
+  p137,
 ];

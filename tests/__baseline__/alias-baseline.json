@@ -121,7 +121,9 @@
     "morphllm": "morph",
     "tokenbom": "tokenbom",
     "agnes-ai": "agnes-ai",
-    "agnes-ai-cn": "agnes-ai-cn"
+    "agnes-ai-cn": "agnes-ai-cn",
+    "step": "stepfun",
+    "stepfun": "stepfun"
   },
   "idToAlias": {
     "agnes-ai": "agnes-ai",
@@ -202,6 +204,7 @@
     "sensenova": "sensenova",
     "siliconflow": "siliconflow",
     "siliconflow-cn": "siliconflow-cn",
+    "stepfun": "stepfun",
     "tencent": "hunyuan",
     "together": "together",
     "tokenbom": "tokenbom",
@@ -312,6 +315,7 @@
     "siliconflow",
     "siliconflow-cn",
     "stability-ai",
+    "stepfun",
     "together",
     "tokenbom",
     "tokenrouter",
