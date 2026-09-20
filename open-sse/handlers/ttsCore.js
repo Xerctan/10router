@@ -54,10 +54,13 @@ export async function handleTtsCore({ provider, model, input, credentials, respo
   }
 
   try {
-    // Special-case adapters (google-tts, edge-tts, local-device, elevenlabs, openai, openrouter, gemini, xiaomi-mimo)
+    // Special-case adapters (google-tts, edge-tts, local-device, elevenlabs, openai, openrouter, gemini, xiaomi-mimo, xiaomi-tokenplan)
     const adapter = getTtsAdapter(provider);
     if (adapter) {
-      const result = await adapter.synthesize(input.trim(), model, credentials, responseFormat, { language, style, voice });
+      // `provider` is passed through: multi-cluster providers (Xiaomi MiMo) route
+      // their TTS per connection — billing host vs the OAuth-returned token-plan
+      // cluster vs the tokenplan region selector.
+      const result = await adapter.synthesize(input.trim(), model, credentials, responseFormat, { language, style, voice, provider });
       // Adapter may return a full {success, response} (legacy) or {base64, format}
       if (result.success !== undefined) return result;
       return createTtsResponse(result.base64, result.format, responseFormat);

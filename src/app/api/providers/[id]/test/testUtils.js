@@ -868,12 +868,20 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
         if (connection.provider === "xiaomi-tokenplan") {
           const { resolveXiaomiTokenplanBaseUrl } = await import("open-sse/config/providers.js");
           testUrl = `${resolveXiaomiTokenplanBaseUrl(connection)}/models`;
+        } else {
+          // xiaomi-mimo: a Token Plan subscriber's browser sign-in stores a
+          // token-plan baseUrl — test the cluster the key actually belongs to.
+          const { normalizeMimoApiBase } = await import("open-sse/config/providers.js");
+          const stored = normalizeMimoApiBase(connection.providerSpecificData?.baseUrl);
+          if (stored) testUrl = `${stored}/models`;
         }
         const res = await fetchWithConnectionProxy(testUrl, {
           headers: { Authorization: `Bearer ${connection.apiKey}` },
         }, effectiveProxy);
-        // xiaomi-tokenplan: /models returns 403 for valid keys lacking list permission; only 401 means invalid
-        const valid = connection.provider === "xiaomi-tokenplan" ? res.status !== 401 : res.ok;
+        // Xiaomi plan clusters: /models returns 403 for valid keys lacking list
+        // permission; only 401 means invalid. (Billing keeps strict res.ok.)
+        const isPlanCluster = connection.provider === "xiaomi-tokenplan" || testUrl.includes("token-plan");
+        const valid = isPlanCluster ? res.status !== 401 : res.ok;
         return { valid, error: valid ? null : "Invalid API key" };
       }
       case "blackbox": {

@@ -21,6 +21,9 @@ const SPECIAL_ADAPTERS = {
   openrouter,
   gemini,
   "xiaomi-mimo": xiaomiMimo,
+  // Token Plan shares the MiMo speech protocol; only the cluster URL differs,
+  // resolved inside the adapter from provider + connection credentials.
+  "xiaomi-tokenplan": xiaomiMimo,
   "selfhosted-tts": selfhostedTts,
 };
 

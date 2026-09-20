@@ -6,6 +6,7 @@
 
 ### ✨ 新功能
 
+- **变更日志只渲染到已发行版本**：仪表盘 Change Log 从仓库 `main` 拉取（旧版本用户能看到后续更新），但开发期写入的「未来版本」条目会立刻到达所有已安装客户端，告知用户自己并没有的功能。现以 `/api/version` 的 npm 已发版本与自身构建版本两者较高者为上限，截掉高于它的版本段；完全离线 / 版本未知时回退为不截断（旧行为），绝不会出现空白弹窗。附 12 例回归（`changelog-release-cap.test.js`）。
 - **StepFun（阶跃星辰）全系列原生接入与多媒体能力隔离**：
   - **四通道拆分与极简短别名（国内站 / 国际站 × 按量 / Step Plan）**：`stepfun-cn`（国内站按量，`api.stepfun.com/v1`）、`stepfun`（国际站按量，`api.stepfun.ai/v1`）、`stepfun-plan-cn` / `stepfun-plan`（对应站点 Step Plan 套餐渠道，Base URL 带 `/step_plan` 前缀，**消耗套餐 Credit，不扣现金/代金券**）。暴露极简短别名 `stepp-cn`、`step-cn`、`stepp`、`step`（并全兼容通配 `sfp-cn`、`step-plan-cn`、`sfpcn` 等候选），模型调用从 `stepfun-plan-cn/step-5-preview` 缩减为 `stepp-cn/step-5-preview`。既有 `stepfun` 连接经 DB 迁移（`002-stepfun-cn-rename`）自动归入 `stepfun-cn`，停用模型 / 参数覆写 / 卡片顺序等旧键同步迁移，绝不误接到国际站。
   - **Step Plan 智能路由模型**：接入套餐专属的 `step-router-v1`（按任务复杂度自动调度上游）；Step Plan 渠道同时提供 Anthropic 原生 Messages（Claude Code 可直接接入 `…/step_plan`，消耗套餐 Credit）。
@@ -29,6 +30,10 @@
 - **StepFun 连接测试报「Provider test not supported」**：StepFun 四个渠道（国内站 / 国际站 × 按量 / Step Plan）此前未在连接测试分支注册，仪表盘「逐个测试连接」与单连接测试对**健康密钥**也一律返回 `Provider test not supported`。现统一走通用 OpenAI 兼容校验（`GET {base}/models` + `Authorization: Bearer`）：`stepfun-cn`→`api.stepfun.com/v1/models`、`stepfun`→`api.stepfun.ai/v1/models`、`stepfun-plan-cn`→`api.stepfun.com/step_plan/v1/models`、`stepfun-plan`→`api.stepfun.ai/step_plan/v1/models`（Step Plan 仅 `/accounts` 额度路由 404，`/models` 正常）。401/403 判为无效密钥、网关 HTML/403 判为维护中，与其余通用渠道一致。附离线回归用例（`stepfun-connection-test.test.js`，mock fetch 校验路由与判定，不依赖真实网络）。
 - **小米 MiMo 周套餐额度耗尽提示渲染为原始 JSON**：周套餐用尽时上游返回 `[403]: {"error":{"message":"本周用量已满…","code":"subscription_quota_exhausted","biz_code":30011}}`，而 `translateQuotaError` 此前只认识 Google 的 429 形态，原始 JSON 直接铺进连接行并被 380px 截断。新增窄匹配分支（仅 `subscription_quota_exhausted` / 「本周用量已满」，**刻意不含裸 `quota_exhausted`** —— Google payload 里的 `QUOTA_EXHAUSTED` reason 必须继继走自己的带倒计时分支），命中后显示「该账号额度已用完，请等待重置。」。附真机 payload 回归用例。
 - **到期 / 重置倒计时跨天被折叠**：连接行到期徽标把 41 小时显示成 `1d`（实为 `1d 17h`），额度重置倒计时则写成「41小时」。`formatExpiry` 两处同步改为 `Xd Yh`（恰好整天数不追加 `0h`），`formatQuotaDuration` ≥24h 折叠为「1天17小时」；新增 `{n}d` 词条。附 `expiry-countdown-format.test.js`。
+- **小米 MiMo（Token Plan）独立供应商按桌面版实态更新**：反编译 MiMo Desktop `app.asar` 拿到官方分区域套餐目录（token-plan-cn / sgp / ams 三区模型集完全一致）：删除套餐集群根本不存在的 `mimo-v2-omni`（调用必 404，来由「目录太旧」）；四个语音模型补 `kind:"tts"`（此前会混入聊天模型列表），并为 tokenplan 接入共享 MiMo 语音适配器（区域路由）+ `serviceKinds: [llm, tts]`；官方已弃用的 `mimo-v2-pro` 改名标注 legacy；默认集群 sgp→cn（与桌面版 plan 预设一致，存量连接已存显式 region 不受影响，海外出口仍自动匹配）；控制台链接指向 platform.xiaomimimo.com；provider 优先级 300→21，卡片紧挨基础 MiMo。同步重录 `providers-baseline.json`（与 StepFun 拆分时的惯例一致）。
+- **Token Plan 浏览器登录的端点路由**：平台 OAuth 回传的 `url`（桌面版正是用它区分 plan / billing：auth.json metadata.base_url）此前只入库不参与路由 —— chat / TTS / 连接测试一律打在按量集群，套餐订阅账号登录后访问错集群。现在 xiaomi-mimo 执行器 `buildUrl`、MiMo TTS 适配器、连接测试探测地址均优先使用连接存储的集群（按量账号重建结果与原 transport 字节一致，行为不变）；套餐集群沿用「403 容忍、401 才判无效」的既有语义。新增共享 `normalizeMimoApiBase` 把任意形态的存储端点规范到 `https://host/v1`。
+- **MiMo TTS 裸模型名被静默改写**：适配器的已知模型列表只有 `mimo-v2.5-tts`，`parseModelVoice` 会把不在列表里的裸模型（如 `mimo-v2-tts`）改写成默认模型 —— 四个套餐语音模型接入后此问题会真实触发，列表补全。
+- **MiMo 浏览器登录挂起密钥无上限**：与桌面版对齐 `cap:8` —— 每个挂起会话持有一把 X25519 私钥，24 小时粘贴窗口不应变成无界密钥缓存；超出时淘汰最旧。
 
 ## v1.1.3 (2026-09-20)
 

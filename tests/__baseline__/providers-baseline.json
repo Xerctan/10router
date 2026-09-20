@@ -875,13 +875,13 @@
     ]
   },
   "xiaomi-tokenplan": {
-    "baseUrl": "https://token-plan-sgp.xiaomimimo.com/v1/chat/completions",
+    "baseUrl": "https://token-plan-cn.xiaomimimo.com/v1/chat/completions",
     "regions": {
-      "sgp": "https://token-plan-sgp.xiaomimimo.com/v1",
       "cn": "https://token-plan-cn.xiaomimimo.com/v1",
+      "sgp": "https://token-plan-sgp.xiaomimimo.com/v1",
       "ams": "https://token-plan-ams.xiaomimimo.com/v1"
     },
-    "defaultRegion": "sgp",
+    "defaultRegion": "cn",
     "format": "openai",
     "transports": [
       {
