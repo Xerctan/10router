@@ -22,8 +22,8 @@
 export default {
   id: "stepfun",
   priority: 67,
-  alias: "stepfun",
-  aliases: ["step"],
+  alias: "step",
+  aliases: ["stepfun", "sf"],
   display: {
     name: "StepFun",
     icon: "bolt",

@@ -20,7 +20,8 @@
 export default {
   id: "stepfun-plan-cn",
   priority: 64,
-  alias: "stepfun-plan-cn",
+  alias: "stepp-cn",
+  aliases: ["step-plan-cn", "sfp-cn", "sfpcn", "stepfun-plan-cn"],
   display: {
     name: "StepFun CN Step Plan",
     icon: "bolt",

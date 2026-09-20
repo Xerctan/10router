@@ -14,7 +14,8 @@
 export default {
   id: "stepfun-plan",
   priority: 66,
-  alias: "stepfun-plan",
+  alias: "stepp",
+  aliases: ["step-plan", "sfp", "stepfun-plan"],
   display: {
     name: "StepFun Step Plan",
     icon: "bolt",

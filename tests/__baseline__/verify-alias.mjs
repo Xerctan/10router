@@ -25,6 +25,7 @@ const ALIAS_TOKENS = [
   "dv","devin","devin-cli","morph","morphllm",
   "tokenbom","agnes-ai","agnes-ai-cn",
   "step","stepfun","stepfun-cn","stepfun-plan","stepfun-plan-cn",
+  "step-cn","stepp-cn","stepp","sfp-cn","sfp","sfpcn","sf-cn","sfcn","step-plan","step-plan-cn","sf",
 ];
 
 // Sort idToAlias by key — runtime accesses by key, order is irrelevant (content-based)

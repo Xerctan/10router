@@ -7,7 +7,7 @@
 ### ✨ 新增
 
 - **StepFun（階躍星辰）原生接入**：
-  - **國內站 / 國際站 / 套餐渠道拆分**：`stepfun-cn`（國內站按量，扣現金/代金券）、`stepfun`（國際站按量，`api.stepfun.ai`）、`stepfun-plan-cn` / `stepfun-plan`（Step Plan 套餐，**消耗套餐 Credit、不扣現金**，含套餐專屬智能路由模型 `step-router-v1`，Claude Code 可直連）。存量連接自動遷移到 `stepfun-cn`。
+  - **國內站 / 國際站 / 套餐渠道拆分與極簡別名**：`stepfun-cn`（國內站按量，扣現金/代金券）、`stepfun`（國際站按量，`api.stepfun.ai`）、`stepfun-plan-cn` / `stepfun-plan`（Step Plan 套餐，**消耗套餐 Credit、不扣現金**，含套餐專屬智能路由模型 `step-router-v1`，Claude Code 可直連）。端點別名全面縮寫為 `stepp-cn`、`step-cn`、`stepp`、`step`（並向下兼容 `sfp-cn`、`step-plan-cn` 等全套簡寫），存量連接自動遷移到 `stepfun-cn`。
   - **大模型品類嚴格隔離**：文本與視覺大模型（`step-5-preview`、`step-3.7-flash`、`step-3.5-flash`、`step-1o-turbo-vision` 等）歸入【模型提供商】；語音合成（StepAudio 3/2.5 TTS、Step TTS 2/mini）歸入【語音合成】；語音識別（`stepaudio-2.5-asr`）歸入【語音識別】；生圖模型歸入【圖像生成】，互不干擾。
   - **實時用量與餘額查詢**：直連官方賬戶接口，在卡片與用量面板實時展示現金餘額與代金券餘額。
   - **官方高清圖標**：界面全面適配 StepFun 官方透明圖標。

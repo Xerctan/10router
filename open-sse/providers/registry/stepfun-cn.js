@@ -23,7 +23,8 @@
 export default {
   id: "stepfun-cn",
   priority: 65,
-  alias: "stepfun-cn",
+  alias: "step-cn",
+  aliases: ["stepfun-cn", "sf-cn", "sfcn"],
   display: {
     name: "StepFun CN",
     icon: "bolt",
