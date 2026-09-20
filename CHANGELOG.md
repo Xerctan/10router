@@ -25,6 +25,7 @@
 
 ### 🐛 修复
 
+- **小米 MiMo 浏览器登录在局域网 / HTTP 访问下完全不可用**：连接弹窗生成 OAuth `state` 时直接调用 `crypto.randomUUID()`，而该 API **仅存在于安全上下文**（HTTPS 或 localhost）。从另一台设备以 `http://局域网IP:20128` 打开仪表盘（NAS / 自托管的常态访问方式）时它是 `undefined`，点击「浏览器」直接抛 `crypto.randomUUID is not a function`；又因为服务端 `/authorize` 强制要求客户端提供 `state`（缺失返回 400 `Missing state`，X25519 密钥对需绑定该字符串），整条浏览器登录链路被彻底堵死。新增浏览器安全 `uuid()` 工具：优先原生 `randomUUID`，否则用不受安全上下文限制的 `getRandomValues` 拼出 v4（正确置版本 / 变体位），全无 WebCrypto 时再降级；附 5 例回归用例（`browser-safe-uuid.test.js`）覆盖三种运行环境。同一弹窗里的桌面凭据自动导入与手动 API 密钥两条路径不受影响。
 - **StepFun 连接测试报「Provider test not supported」**：StepFun 四个渠道（国内站 / 国际站 × 按量 / Step Plan）此前未在连接测试分支注册，仪表盘「逐个测试连接」与单连接测试对**健康密钥**也一律返回 `Provider test not supported`。现统一走通用 OpenAI 兼容校验（`GET {base}/models` + `Authorization: Bearer`）：`stepfun-cn`→`api.stepfun.com/v1/models`、`stepfun`→`api.stepfun.ai/v1/models`、`stepfun-plan-cn`→`api.stepfun.com/step_plan/v1/models`、`stepfun-plan`→`api.stepfun.ai/step_plan/v1/models`（Step Plan 仅 `/accounts` 额度路由 404，`/models` 正常）。401/403 判为无效密钥、网关 HTML/403 判为维护中，与其余通用渠道一致。附离线回归用例（`stepfun-connection-test.test.js`，mock fetch 校验路由与判定，不依赖真实网络）。
 
 ## v1.1.3 (2026-09-20)

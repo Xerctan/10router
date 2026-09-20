@@ -16,6 +16,7 @@
 
 ### 🐛 修复
 
+- **小米 MiMo 浏览器登录**：从另一台设备用 `http://局域网IP:20128` 打开仪表盘时（NAS / 自托管常态），点击「浏览器」报 `crypto.randomUUID is not a function` 且整条登录链路不可用 —— 该 API 仅在安全上下文（HTTPS / localhost）存在。现改用浏览器安全的 UUID 生成（回退到不受安全上下文限制的 `getRandomValues`），局域网 HTTP 访问下浏览器登录恢复正常。
 - **StepFun 连接测试**：四个 StepFun 渠道（国内站 / 国际站 × 按量 / Step Plan）此前未注册连接测试，健康密钥也报「Provider test not supported」。现统一走标准 `GET /models` 校验，测试按钮与「逐个测试连接」均可正常通过；无效密钥报「Invalid API key」，网关拦截报「维护中」。
 
 ## v1.1.3 (2026-09-20)
