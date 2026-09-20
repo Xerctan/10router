@@ -14,6 +14,10 @@
   - **模型类型图表家族聚合**：StepFun 的 `stepaudio-*`（语音）与 `step-*`（大模型/视觉/图像）在「模型类型」用量图里合并为单一 `step` 家族，不再拆成两根柱。
 - **ComfyUI 本地生图执行器**：原生对接本地 ComfyUI，自动识别本地 Checkpoint 并驱动文生图标准流程。
 
+### 🐛 修复
+
+- **StepFun 连接测试**：四个 StepFun 渠道（国内站 / 国际站 × 按量 / Step Plan）此前未注册连接测试，健康密钥也报「Provider test not supported」。现统一走标准 `GET /models` 校验，测试按钮与「逐个测试连接」均可正常通过；无效密钥报「Invalid API key」，网关拦截报「维护中」。
+
 ## v1.1.3 (2026-09-20)
 
 ### ✨ 新增

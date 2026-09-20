@@ -14,6 +14,10 @@ User-facing highlights per release. See [CHANGELOG.md](https://github.com/techys
   - **Model Type chart family aggregation**: StepFun's `stepaudio-*` (speech) and `step-*` (LLM/vision/image) now fold into a single `step` family in the Model Type usage chart instead of splitting into two bars.
 - **ComfyUI Local Image Generation Executor**: Native support for local ComfyUI installations, auto-discovering available checkpoints and running standard txt2img workflows.
 
+### 🐛 Fixes
+
+- **StepFun connection test**: All four StepFun channels (China / International × pay-as-you-go / Step Plan) previously had no connection-test handler, so even a healthy key reported `Provider test not supported`. They now share the standard `GET /models` validator, so the Test button and "test all connections" pass correctly; an invalid key reports `Invalid API key` and a gateway block reports maintenance.
+
 ## v1.1.3 (2026-09-20)
 
 ### ✨ New

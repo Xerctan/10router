@@ -924,6 +924,14 @@ case "llm7": {
         }, effectiveProxy);
         return { valid: res.ok, error: res.ok ? null : "Invalid API key", refreshed: false };
       }
+      case "stepfun":
+      case "stepfun-cn":
+      case "stepfun-plan":
+      case "stepfun-plan-cn":
+      // StepFun's four channels (Domestic/International × Pay-as-you-go/Step Plan)
+      // all expose a plain Bearer-auth GET /models — including the Step Plan
+      // `/step_plan/v1/models` path (the `/accounts` quota route is the only one
+      // that 404s there). Routed to the generic validator below.
       case "sensenova":
       case "longcat":
       case "bai":
