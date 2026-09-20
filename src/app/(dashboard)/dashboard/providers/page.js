@@ -26,6 +26,14 @@ import { useHeaderSearchStore } from "@/store/headerSearchStore";
 import { translate } from "@/i18n/runtime";
 import ModelAvailabilityBadge from "./components/ModelAvailabilityBadge";
 import AddCompatibleModal from "./components/AddCompatibleModal";
+import DraggableCard from "@/shared/components/DraggableCard";
+import {
+  effectiveConnectionStatus,
+  computeConnectionStats,
+  connectionRank,
+  moveCardInOrder,
+  saveProviderCardOrder,
+} from "@/shared/utils/providerCardOrder";
 
 function getStatusDisplay(connected, error, errorCode) {
   const parts = [];
@@ -149,16 +157,13 @@ export default function ProvidersPage() {
   //
   // Disabled providers always sink below connected ones, but stay BEFORE
   // never-configured providers (the old toggle is removed; this is now fixed).
-  const providerRank = (stats, info, key) => {
-    if (stats.connected > 0) return 0;
-    // noAuth free providers (opencode, mimo-free) have no connections; their
-    // on/off is the topology toggle. Shown → top; hidden → just below connected.
-    if (info?.noAuth) {
-      return topologyVisibleFor(info, key) ? 0 : 1;
-    }
-    if (stats.total === 0) return 3; // never configured → sinks last
-    return 2; // configured but all connections disabled
-  };
+  const providerRank = (stats, info, key) =>
+    connectionRank(stats, {
+      noAuth: !!info?.noAuth,
+      // noAuth free providers (opencode, mimo-free) have no connections; their
+      // on/off is the topology toggle. Shown → top; hidden → just below connected.
+      noAuthEnabled: topologyVisibleFor(info, key),
+    });
 
   const getCardOrderIndex = (key) => {
     const idx = cardOrder.indexOf(key);
@@ -249,51 +254,29 @@ export default function ProvidersPage() {
 
   const getProviderStats = (providerId, authType) => {
     const authTypes = Array.isArray(authType) ? authType : [authType];
-    const providerConnections = connections.filter(
-      (c) => c.provider === providerId && authTypes.includes(c.authType),
-    );
-
-    const getEffectiveStatus = (conn) => {
-      const isCooldown = Object.entries(conn).some(
-        ([k, v]) =>
-          k.startsWith("modelLock_") && v && new Date(v).getTime() > Date.now(),
-      );
-      return conn.testStatus === "unavailable" && !isCooldown
-        ? "active"
-        : conn.testStatus;
-    };
-
-    const connected = providerConnections.filter((c) => {
-      // A disabled connection (isActive=false) must not count as connected,
-      // even if its testStatus is "active" — otherwise a fully-disabled
-      // provider would still rank as active and float to the top instead of
-      // sinking behind configured-but-disabled ones.
-      if (c.isActive === false) return false;
-      const status = getEffectiveStatus(c);
-      return status === "active" || status === "success";
-    }).length;
-
-    const errorConns = providerConnections.filter((c) => {
-      const status = getEffectiveStatus(c);
-      return (
-        status === "error" || status === "expired" || status === "unavailable"
-      );
-    });
-
-    const error = errorConns.length;
-    const total = providerConnections.length;
-    const allDisabled =
-      total > 0 && providerConnections.every((c) => c.isActive === false);
+    // Connection counting (connected / error / total / allDisabled) is shared
+    // with the media-providers pages; the error tag/time below is page-specific.
+    const stats = computeConnectionStats(connections, providerId, authTypes);
+    const errorConns = connections
+      .filter((c) => c.provider === providerId && authTypes.includes(c.authType))
+      .filter((c) => {
+        const status = effectiveConnectionStatus(c);
+        return (
+          status === "error" || status === "expired" || status === "unavailable"
+        );
+      });
 
     const latestError = errorConns.sort(
       (a, b) => new Date(b.lastErrorAt || 0) - new Date(a.lastErrorAt || 0),
     )[0];
-    const errorCode = latestError ? getConnectionErrorTag(latestError) : null;
-    const errorTime = latestError?.lastErrorAt
-      ? getRelativeTime(latestError.lastErrorAt)
-      : null;
 
-    return { connected, error, total, errorCode, errorTime, allDisabled };
+    return {
+      ...stats,
+      errorCode: latestError ? getConnectionErrorTag(latestError) : null,
+      errorTime: latestError?.lastErrorAt
+        ? getRelativeTime(latestError.lastErrorAt)
+        : null,
+    };
   };
 
   // Toggle all connections for a provider on/off. authType may be a single
@@ -485,25 +468,13 @@ export default function ProvidersPage() {
       if (!sourceId || !targetId || sourceId === targetId) return;
 
       setCardOrder((prev) => {
-        const allKnown = allDisplayKeys();
-        const base = [...prev];
-        for (const k of allKnown) {
-          if (!base.includes(k)) base.push(k);
-        }
-
-        const fromIdx = base.indexOf(sourceId);
-        const toIdx = base.indexOf(targetId);
-        if (fromIdx === -1 || toIdx === -1) return prev;
-
-        base.splice(fromIdx, 1);
-        base.splice(toIdx, 0, sourceId);
-
-        fetch("/api/settings", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ providerCardOrder: base }),
-        }).catch((err) => console.log("Failed to save provider card order:", err));
-
+        // Shared reorder math (merge known keys → splice) lives in
+        // shared/utils/providerCardOrder.js so every surface stays identical.
+        const base = moveCardInOrder(prev, allDisplayKeys(), sourceId, targetId);
+        if (base === prev) return prev;
+        saveProviderCardOrder(base).catch((err) =>
+          console.log("Failed to save provider card order:", err),
+        );
         return base;
       });
     },
@@ -884,48 +855,9 @@ export default function ProvidersPage() {
   );
 }
 
-function DraggableCardWrapper({
-  cardId,
-  isDragging,
-  isOver,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
-  children,
-}) {
-  return (
-    <div
-      draggable
-      onDragStart={(e) => {
-        onDragStart(cardId);
-        e.dataTransfer.effectAllowed = "move";
-        try {
-          e.dataTransfer.setData("text/plain", cardId);
-        } catch {}
-      }}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        onDragOver(cardId);
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        onDrop(cardId);
-      }}
-      onDragEnd={onDragEnd}
-      className={`min-w-0 transition-all rounded-xl cursor-grab active:cursor-grabbing ${
-        isDragging
-          ? "opacity-30 scale-[0.98]"
-          : isOver
-            ? "ring-2 ring-primary/60 scale-[1.01]"
-            : ""
-      }`}
-    >
-      {children}
-    </div>
-  );
-}
+// One implementation, shared with the media-providers listing pages
+// (@/shared/components/DraggableCard).
+const DraggableCardWrapper = DraggableCard;
 
 function ProviderCard({ providerId, provider, stats, authType, onToggle, topologyVisible, onToggleTopology }) {
   const { connected, error, errorCode, errorTime, allDisabled } = stats;

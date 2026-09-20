@@ -18,6 +18,8 @@
   - **官方高清图标**：注入官方透明 PNG 图标，覆盖大模型卡片与各媒体管理界面。
   - **模型类型图家族聚合**：`modelFamilyName` 新增品牌归一映射，把同一品牌的不同产品线前缀折叠成单一族——StepFun 的 `stepaudio-*`（TTS/ASR）与 `step-*`（LLM/视觉/图像）在「模型类型」用量图里不再拆成两根柱，统一聚合为 `step`。剥离 provider 前缀后匹配，覆盖 `stepp-cn/…`、`step-cn/…` 等带渠道别名的 id。附回归用例（`model-family-chart.test.js`）。
 
+- **媒体供应商列表支持拖拽排序与已连接前置**：此前只有主【模型提供商】页的卡片可拖拽重排（持久化 `providerCardOrder`）并按连接状态自适应置顶；媒体供应商列表（图像 / 语音合成 / 语音识别 / 向量 / 视频 / 音乐，以及合并后的 Web Search / Web Fetch 页）此前是纯注册表 `priority` 顺序——既不能拖拽，已连接的供应商也不会浮到前面。现两处共用同一套排序与持久化口径：排序链 = 连接状态 rank（已连接或免鉴权启用 → 0；免鉴权关闭 → 1；已配置但全部连接禁用 → 2；从未配置 → 3）→ 手动拖拽顺序（`providerCardOrder`）→ 注册表 `priority` → 名称。拖拽仍走原生 HTML5 并写入同一全局 `providerCardOrder`，所以任一面板的拖拽在其它面板同样生效，`/v1/models` 的 provider 顺序保持一致。连接状态统计（model lock 冷却判定、禁用连接不计入已连接）与排序／换位数学抽到共享模块 `src/shared/utils/providerCardOrder.js`，拖拽卡片抽到 `src/shared/components/DraggableCard.js`，主 providers 页改为复用同一实现（行为与既有 lint 基线不变）。附 `provider-card-order.test.js`（20 例：rank / 比较器 / 换位 / 边界）。
+
 - **ComfyUI 本地生图原生执行器实装**：
   - 接入本地 ComfyUI 实例（默认 `http://127.0.0.1:8188`），实装自动发现本地可用 Checkpoints、动态装配 SD / SDXL / Flux 标准文生图图工作流并排队轮询输出，经 `/v1/images/generations` 统一返回标准 base64 图像。
 
