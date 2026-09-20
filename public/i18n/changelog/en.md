@@ -18,6 +18,8 @@ User-facing highlights per release. See [CHANGELOG.md](https://github.com/techys
 
 - **Xiaomi MiMo browser sign-in over LAN / plain HTTP**: opening the dashboard from another device at `http://LAN-IP:20128` (the normal way to reach a NAS or self-hosted install) made the "Sign in via Browser" button fail with `crypto.randomUUID is not a function` and the whole flow became unreachable — that API only exists in a secure context (HTTPS or localhost), and the server requires a client-generated state. A browser-safe UUID generator (falling back to `getRandomValues`, which is not secure-context restricted) restores the flow.
 - **StepFun connection test**: All four StepFun channels (China / International × pay-as-you-go / Step Plan) previously had no connection-test handler, so even a healthy key reported `Provider test not supported`. They now share the standard `GET /models` validator, so the Test button and "test all connections" pass correctly; an invalid key reports `Invalid API key` and a gateway block reports maintenance.
+- **MiMo weekly-plan quota reminder**: when the weekly allowance runs out the connection row now shows "Subscription quota used up. Please wait for the quota reset." instead of the raw `[403]: {"error":…}` JSON blob.
+- **Multi-day countdowns no longer collapse**: expiry / reset countdowns over 24 hours render as `1d 17h` (zh: "1天17小时") instead of a bare `1d` that hides how much of the day is left; exact multiples of a day still show just the day count.
 
 ## v1.1.3 (2026-09-20)
 

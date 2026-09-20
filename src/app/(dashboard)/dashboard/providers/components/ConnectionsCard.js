@@ -38,7 +38,9 @@ function formatExpiry(iso) {
   const hours = Math.floor(diffMs / (1000 * 60 * 60));
   if (hours < 24) return `${hours}h`;
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d`;
+  // Keep this in step with ConnectionRow's formatExpiry: a multi-day wait renders
+  // as "1d 17h", not a bare "1d".
+  if (days < 30) return hours % 24 ? `${days}d ${hours % 24}h` : `${days}d`;
   return new Date(iso).toLocaleDateString();
 }
 
