@@ -2,25 +2,6 @@
 
 這裡展示面向用戶的關鍵更新；完整開發明細見 [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md)。
 
-## v1.1.4 (2026-09-20)
-
-### ✨ 新增
-
-- **StepFun（階躍星辰）原生接入**：
-  - **國內站 / 國際站 / 套餐渠道拆分與極簡別名**：`stepfun-cn`（國內站按量，扣現金/代金券）、`stepfun`（國際站按量，`api.stepfun.ai`）、`stepfun-plan-cn` / `stepfun-plan`（Step Plan 套餐，**消耗套餐 Credit、不扣現金**，含套餐專屬智能路由模型 `step-router-v1`，Claude Code 可直連）。端點別名全面縮寫為 `stepp-cn`、`step-cn`、`stepp`、`step`（並向下兼容 `sfp-cn`、`step-plan-cn` 等全套簡寫），存量連接自動遷移到 `stepfun-cn`。
-  - **大模型品類嚴格隔離**：文本與視覺大模型（`step-5-preview`、`step-3.7-flash`、`step-3.5-flash`、`step-1o-turbo-vision` 等）歸入【模型提供商】；語音合成（StepAudio 3/2.5 TTS、Step TTS 2/mini）歸入【語音合成】；語音識別（`stepaudio-2.5-asr`）歸入【語音識別】；生圖模型歸入【圖像生成】，互不干擾。
-  - **實時用量與餘額查詢**：直連官方賬戶接口，在卡片與用量面板實時展示現金餘額與代金券餘額。
-  - **官方高清圖標**：界面全面適配 StepFun 官方透明圖標。
-  - **模型類型圖表家族聚合**：StepFun 的 `stepaudio-*`（語音）與 `step-*`（大模型/視覺/圖像）在「模型類型」用量圖裡合併為單一 `step` 家族，不再拆成兩根柱。
-- **ComfyUI 本地生圖執行器**：原生對接本地 ComfyUI，自動識別本地 Checkpoint 並驅動文生圖標準流程。
-
-### 🐛 修復
-
-- **小米 MiMo 瀏覽器登入**：從另一台裝置用 `http://區域網路IP:20128` 開啟儀表板時（NAS / 自架常態），點擊「瀏覽器」報 `crypto.randomUUID is not a function` 且整條登入鏈路不可用 —— 該 API 僅在安全上下文（HTTPS / localhost）存在。現改用瀏覽器安全的 UUID 產生（回退到不受安全上下文限制的 `getRandomValues`），區域網路 HTTP 訪問下瀏覽器登入恢復正常。
-- **StepFun 連接測試**：四個 StepFun 渠道（國內站 / 國際站 × 按量 / Step Plan）此前未註冊連接測試，健康金鑰也報「Provider test not supported」。現統一走標準 `GET /models` 校驗，測試按鈕與「逐個測試連接」均可正常通過；無效金鑰報「Invalid API key」，網關攔截報「維護中」。
-- **MiMo 周套餐額度提醒**：周套餐額度用盡時，連接行不再直接鋪出原始 403 JSON（`[403]: {"error":…}`），而是顯示「該帳號額度已用完，請等待重置。」。
-- **剩餘時間多日不摺疊**：到期 / 重置倒計時超過 24 小時時顯示「1天17小時」（徽標為 `1d 17h`），不再只寫「1天」或 `1d` 掩蓋當天剩餘量；恰好整數天仍顯示整天數。
-
 ## v1.1.3 (2026-09-20)
 
 ### ✨ 新增

@@ -2,25 +2,6 @@
 
 User-facing highlights per release. See [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md) for the full developer log.
 
-## v1.1.4 (2026-09-20)
-
-### ✨ New
-
-- **StepFun Native Integration**:
-  - **China / International / Step Plan channels split & short aliases**: `stepfun-cn` (China pay-as-you-go, cash/voucher), `stepfun` (international pay-as-you-go, `api.stepfun.ai`), and `stepfun-plan-cn` / `stepfun-plan` (Step Plan subscription — **spends plan Credits, never your balance**, includes the plan-only smart router `step-router-v1`; usable directly from Claude Code). Streamlined endpoint aliases to `stepp-cn`, `step-cn`, `stepp`, `step` (with backward-compatible fallbacks `sfp-cn`, `step-plan-cn`, etc.). Existing connections are migrated to `stepfun-cn` automatically.
-  - **Clean Multimodal Category Partitioning**: Text & vision language models (`step-5-preview`, `step-3.7-flash`, `step-3.5-flash`, `step-1o-turbo-vision`, etc.) grouped cleanly under LLM Providers; Speech Synthesis (`stepaudio-3-tts`, `stepaudio-2.5-tts`, `step-tts-2`, `step-tts-mini`) under TTS Media Providers; Speech Transcription (`stepaudio-2.5-asr`) under STT Media Providers; Image Generation under Image Media Providers.
-  - **Live Balance & Voucher Tracking**: Direct connection to official accounts endpoint, displaying cash balance and voucher credits in real time on provider and quota cards.
-  - **Official High-Res Icon**: Transparent official branding across LLM and media provider cards.
-  - **Model Type chart family aggregation**: StepFun's `stepaudio-*` (speech) and `step-*` (LLM/vision/image) now fold into a single `step` family in the Model Type usage chart instead of splitting into two bars.
-- **ComfyUI Local Image Generation Executor**: Native support for local ComfyUI installations, auto-discovering available checkpoints and running standard txt2img workflows.
-
-### 🐛 Fixes
-
-- **Xiaomi MiMo browser sign-in over LAN / plain HTTP**: opening the dashboard from another device at `http://LAN-IP:20128` (the normal way to reach a NAS or self-hosted install) made the "Sign in via Browser" button fail with `crypto.randomUUID is not a function` and the whole flow became unreachable — that API only exists in a secure context (HTTPS or localhost), and the server requires a client-generated state. A browser-safe UUID generator (falling back to `getRandomValues`, which is not secure-context restricted) restores the flow.
-- **StepFun connection test**: All four StepFun channels (China / International × pay-as-you-go / Step Plan) previously had no connection-test handler, so even a healthy key reported `Provider test not supported`. They now share the standard `GET /models` validator, so the Test button and "test all connections" pass correctly; an invalid key reports `Invalid API key` and a gateway block reports maintenance.
-- **MiMo weekly-plan quota reminder**: when the weekly allowance runs out the connection row now shows "Subscription quota used up. Please wait for the quota reset." instead of the raw `[403]: {"error":…}` JSON blob.
-- **Multi-day countdowns no longer collapse**: expiry / reset countdowns over 24 hours render as `1d 17h` (zh: "1天17小时") instead of a bare `1d` that hides how much of the day is left; exact multiples of a day still show just the day count.
-
 ## v1.1.3 (2026-09-20)
 
 ### ✨ New
