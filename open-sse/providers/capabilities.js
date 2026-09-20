@@ -143,6 +143,7 @@ export const MODEL_CAPABILITIES = {
   "step-3.5-flash":     { reasoning: true, thinkingFormat: "step", contextWindow: 256000 }, // 仅文本（官方：不支持图片输入）
   "step-3.5-flash-2603": { reasoning: true, thinkingFormat: "step", contextWindow: 256000 },
   "step-1o-turbo-vision": { vision: true, contextWindow: 32000 },
+  "step-router-v1":     { reasoning: true, thinkingFormat: "step", contextWindow: 256000 }, // Step Plan 专属智能路由模型；官方未标注窗口，与 step-3.x 同档（否则 `*step-*` 兜底给 128K）
   "grok-4.5":       { vision: true, pdf: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 500000, maxOutput: 500000 }, // xai：输出上限等于窗口，与 `*grok-4.6*` 同值
   "grok-4.6":       { vision: true, pdf: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 500000, maxOutput: 500000 }, // xai：与 `*grok-4.6*` 同值，仅补 pdf
   "gpt-5.6-luna":   { vision: true, pdf: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 1050000, maxOutput: 128000 }, // openai（第一方）；`*gpt-5*` 给的 400000 是 codex 系列的保守值

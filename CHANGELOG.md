@@ -7,11 +7,13 @@
 ### ✨ 新功能
 
 - **StepFun（阶跃星辰）全系列原生接入与多媒体能力隔离**：
+  - **四通道拆分（国内站 / 国际站 × 按量 / Step Plan）**：`stepfun-cn`（国内站按量，`api.stepfun.com/v1`）、`stepfun`（国际站按量，`api.stepfun.ai/v1`）、`stepfun-plan-cn` / `stepfun-plan`（对应站点 Step Plan 套餐渠道，Base URL 带 `/step_plan` 前缀，**消耗套餐 Credit，不扣现金/代金券**）。既有 `stepfun` 连接经 DB 迁移（`002-stepfun-cn-rename`）自动归入 `stepfun-cn`，停用模型 / 参数覆写 / 卡片顺序等旧键同步迁移，绝不误接到国际站。
+  - **Step Plan 智能路由模型**：接入套餐专属的 `step-router-v1`（按任务复杂度自动调度上游）；Step Plan 渠道同时提供 Anthropic 原生 Messages（Claude Code 可直接接入 `…/step_plan`，消耗套餐 Credit）。
   - **大语言模型（LLM / Chat）**：纯正文本与视觉模型 `step-5-preview`、`step-3.7-flash`、`step-3.5-flash`、`step-3.5-flash-2603`、`step-1o-turbo-vision`，严格隔离于主菜单【模型提供商】与默认 `/v1/models`。
-  - **语音合成（TTS）**：接入 StepAudio 系列 `stepaudio-3-tts`、`stepaudio-2.5-tts`、`step-tts-2`、`step-tts-mini`，隔离至【媒体提供商 -> 语音合成】与 `/v1/models/tts`，默认音色设为 `cixingnansheng`（磁性男声，避免 OpenAI 默认 alloy 触发 400）。
+  - **语音合成（TTS）**：接入 StepAudio 系列 `stepaudio-3-tts`、`stepaudio-2.5-tts`、`step-tts-2`、`step-tts-mini`（Step Plan 渠道为 `stepaudio-2.5-tts`），隔离至【媒体提供商 -> 语音合成】与 `/v1/models/tts`，默认音色设为 `cixingnansheng`（磁性男声，避免 OpenAI 默认 alloy 触发 400）。
   - **语音识别（STT / ASR）**：接入 `stepaudio-2.5-asr`，隔离至【媒体提供商 -> 语音识别】与 `/v1/models/stt`。
   - **图像生成**：`step-image-edit-2`、`step-2x-large`，隔离至【媒体提供商 -> 图像生成】与 `/v1/models/image`。
-  - **实时余额与代金券查询**：对接 `GET https://api.stepfun.com/v1/accounts`，在仪表盘用量卡片与额度页直观展示现金余额与代金券余额。
+  - **实时余额与代金券查询**：对接 `GET /v1/accounts`，国内站按 CNY、国际站按 USD 展示现金与代金券余额（Step Plan 渠道无公开额度 API，不显示用量卡）。
   - **官方高清图标**：注入官方透明 PNG 图标，覆盖大模型卡片与各媒体管理界面。
 
 - **ComfyUI 本地生图原生执行器实装**：

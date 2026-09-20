@@ -1082,8 +1082,23 @@
     "format": "openai"
   },
   "stepfun": {
+    "baseUrl": "https://api.stepfun.ai/v1/chat/completions",
+    "validateUrl": "https://api.stepfun.ai/v1/models",
+    "format": "openai"
+  },
+  "stepfun-cn": {
     "baseUrl": "https://api.stepfun.com/v1/chat/completions",
     "validateUrl": "https://api.stepfun.com/v1/models",
+    "format": "openai"
+  },
+  "stepfun-plan": {
+    "baseUrl": "https://api.stepfun.ai/step_plan/v1/chat/completions",
+    "validateUrl": "https://api.stepfun.ai/step_plan/v1/models",
+    "format": "openai"
+  },
+  "stepfun-plan-cn": {
+    "baseUrl": "https://api.stepfun.com/step_plan/v1/chat/completions",
+    "validateUrl": "https://api.stepfun.com/step_plan/v1/models",
     "format": "openai"
   }
 }

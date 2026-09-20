@@ -123,7 +123,10 @@
     "agnes-ai": "agnes-ai",
     "agnes-ai-cn": "agnes-ai-cn",
     "step": "stepfun",
-    "stepfun": "stepfun"
+    "stepfun": "stepfun",
+    "stepfun-cn": "stepfun-cn",
+    "stepfun-plan": "stepfun-plan",
+    "stepfun-plan-cn": "stepfun-plan-cn"
   },
   "idToAlias": {
     "agnes-ai": "agnes-ai",
@@ -205,6 +208,9 @@
     "siliconflow": "siliconflow",
     "siliconflow-cn": "siliconflow-cn",
     "stepfun": "stepfun",
+    "stepfun-cn": "stepfun-cn",
+    "stepfun-plan": "stepfun-plan",
+    "stepfun-plan-cn": "stepfun-plan-cn",
     "tencent": "hunyuan",
     "together": "together",
     "tokenbom": "tokenbom",
@@ -316,6 +322,9 @@
     "siliconflow-cn",
     "stability-ai",
     "stepfun",
+    "stepfun-cn",
+    "stepfun-plan",
+    "stepfun-plan-cn",
     "together",
     "tokenbom",
     "tokenrouter",

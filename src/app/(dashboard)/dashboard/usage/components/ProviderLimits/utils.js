@@ -700,6 +700,7 @@ export function parseQuotaData(provider, data) {
 
       case "deepseek":
       case "stepfun":
+      case "stepfun-cn":
         // Credit balance — remainingPercentage only (no absolute remaining).
         if (data.quotas) {
           Object.entries(data.quotas).forEach(([name, quota]) => {

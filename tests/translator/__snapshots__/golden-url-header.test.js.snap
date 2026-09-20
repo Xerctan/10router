@@ -1379,6 +1379,63 @@ exports[`GOLDEN buildHeaders (default executor providers) > stepfun → headers 
 }
 `;
 
+exports[`GOLDEN buildHeaders (default executor providers) > stepfun-cn → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+}
+`;
+
+exports[`GOLDEN buildHeaders (default executor providers) > stepfun-plan → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+}
+`;
+
+exports[`GOLDEN buildHeaders (default executor providers) > stepfun-plan-cn → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+  },
+}
+`;
+
 exports[`GOLDEN buildHeaders (default executor providers) > tencent → headers (apiKey / oauth) 1`] = `
 {
   "apiKey": {
@@ -2001,8 +2058,29 @@ exports[`GOLDEN buildUrl (default executor providers) > siliconflow-cn → url (
 
 exports[`GOLDEN buildUrl (default executor providers) > stepfun → url (stream + non-stream) 1`] = `
 {
+  "nonStream": "https://api.stepfun.ai/v1/chat/completions",
+  "stream": "https://api.stepfun.ai/v1/chat/completions",
+}
+`;
+
+exports[`GOLDEN buildUrl (default executor providers) > stepfun-cn → url (stream + non-stream) 1`] = `
+{
   "nonStream": "https://api.stepfun.com/v1/chat/completions",
   "stream": "https://api.stepfun.com/v1/chat/completions",
+}
+`;
+
+exports[`GOLDEN buildUrl (default executor providers) > stepfun-plan → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "https://api.stepfun.ai/step_plan/v1/chat/completions",
+  "stream": "https://api.stepfun.ai/step_plan/v1/chat/completions",
+}
+`;
+
+exports[`GOLDEN buildUrl (default executor providers) > stepfun-plan-cn → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "https://api.stepfun.com/step_plan/v1/chat/completions",
+  "stream": "https://api.stepfun.com/step_plan/v1/chat/completions",
 }
 `;
 

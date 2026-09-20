@@ -1,6 +1,10 @@
 /**
- * StepFun usage — GET https://api.stepfun.com/v1/accounts
+ * StepFun usage — GET {base}/v1/accounts
  * Auth: Bearer <apiKey>
+ *
+ * Two hosts, one shape (docs/zh · docs/en api-reference/accounts/get):
+ *   - https://api.stepfun.ai  (international, USD)  ← provider `stepfun`
+ *   - https://api.stepfun.com (China, CNY)          ← provider `stepfun-cn`
  *
  * Response format:
  * {
@@ -10,25 +14,40 @@
  *   "total_cash_balance": 0.0,
  *   "total_voucher_balance": 14.97
  * }
+ *
+ * The Step Plan channels (stepfun-plan / stepfun-plan-cn) have no public quota
+ * endpoint (`/step_plan/v1/accounts` is 404), so they carry no usage handler.
  */
 
 import { proxyAwareFetch } from "../../utils/proxyFetch.js";
 import { toFiniteNumber } from "./shared.js";
 
-const ACCOUNTS_URL = "https://api.stepfun.com/v1/accounts";
+export const STEPFUN_ACCOUNTS_HOSTS = {
+  stepfun: { baseUrl: "https://api.stepfun.ai", currency: "USD", brand: "StepFun" },
+  "stepfun-cn": { baseUrl: "https://api.stepfun.com", currency: "CNY", brand: "StepFun CN" },
+};
 
 /**
  * @param {string|null|undefined} apiKey
  * @param {object|null} proxyOptions
+ * @param {{ baseUrl?: string, currency?: string, brand?: string }} [opts]
  */
-export async function getStepfunUsage(apiKey = null, proxyOptions = null) {
+export async function getStepfunUsage(apiKey = null, proxyOptions = null, opts = {}) {
+  const {
+    baseUrl = "https://api.stepfun.com",
+    currency = "CNY",
+    brand = "StepFun",
+  } = opts;
+
   if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
-    return { message: "StepFun API key not available. Add a key to view usage." };
+    return { message: `${brand} API key not available. Add a key to view usage.` };
   }
+
+  const accountsUrl = `${baseUrl.replace(/\/$/, "")}/v1/accounts`;
 
   try {
     const response = await proxyAwareFetch(
-      ACCOUNTS_URL,
+      accountsUrl,
       {
         method: "GET",
         headers: {
@@ -42,22 +61,22 @@ export async function getStepfunUsage(apiKey = null, proxyOptions = null) {
 
     if (response.status === 401 || response.status === 403) {
       return {
-        plan: "StepFun",
-        message: "StepFun authentication failed. Check the API key.",
+        plan: brand,
+        message: `${brand} authentication failed. Check the API key.`,
       };
     }
 
     if (!response.ok) {
       const errText = await response.text().catch(() => "");
       return {
-        plan: "StepFun",
-        message: `StepFun account API error (${response.status})${errText ? `: ${errText.slice(0, 120)}` : ""}`,
+        plan: brand,
+        message: `${brand} account API error (${response.status})${errText ? `: ${errText.slice(0, 120)}` : ""}`,
       };
     }
 
     const data = await response.json().catch(() => null);
     if (!data || typeof data !== "object") {
-      return { message: "StepFun account response was not JSON." };
+      return { message: `${brand} account response was not JSON.` };
     }
 
     const balance = toFiniteNumber(data.balance, 0);
@@ -67,48 +86,29 @@ export async function getStepfunUsage(apiKey = null, proxyOptions = null) {
     const isAvailable = balance > 0;
     const quotas = {};
 
-    quotas["Balance (CNY)"] = {
+    const balanceRow = (total) => ({
       used: 0,
-      total: Math.max(0, balance),
-      remainingPercentage: balance > 0 ? 100 : 0,
+      total: Math.max(0, total),
+      remainingPercentage: total > 0 ? 100 : 0,
       resetAt: null,
       displayRemaining: true,
       unlimited: false,
-    };
+    });
+
+    quotas[`Balance (${currency})`] = balanceRow(balance);
 
     if (voucher > 0 && cash > 0) {
-      quotas["Cash (CNY)"] = {
-        used: 0,
-        total: Math.max(0, cash),
-        remainingPercentage: cash > 0 ? 100 : 0,
-        resetAt: null,
-        displayRemaining: true,
-        unlimited: false,
-      };
-      quotas["Voucher (CNY)"] = {
-        used: 0,
-        total: Math.max(0, voucher),
-        remainingPercentage: voucher > 0 ? 100 : 0,
-        resetAt: null,
-        displayRemaining: true,
-        unlimited: false,
-      };
+      quotas[`Cash (${currency})`] = balanceRow(cash);
+      quotas[`Voucher (${currency})`] = balanceRow(voucher);
     } else if (voucher > 0) {
-      quotas["Voucher (CNY)"] = {
-        used: 0,
-        total: Math.max(0, voucher),
-        remainingPercentage: voucher > 0 ? 100 : 0,
-        resetAt: null,
-        displayRemaining: true,
-        unlimited: false,
-      };
+      quotas[`Voucher (${currency})`] = balanceRow(voucher);
     }
 
     return {
-      plan: isAvailable ? "StepFun" : "StepFun (Insufficient Balance)",
+      plan: isAvailable ? brand : `${brand} (Insufficient Balance)`,
       quotas,
     };
   } catch (error) {
-    return { message: `StepFun error: ${error.message}` };
+    return { message: `${brand} error: ${error.message}` };
   }
 }

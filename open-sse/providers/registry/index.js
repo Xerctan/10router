@@ -134,6 +134,9 @@ import p134 from "./amd.js";
 import p135 from "./siliconflow-cn.js";
 import p136 from "./qoder-cn.js";
 import p137 from "./stepfun.js";
+import p138 from "./stepfun-cn.js";
+import p139 from "./stepfun-plan.js";
+import p140 from "./stepfun-plan-cn.js";
 
 export default [
   p0,
@@ -269,4 +272,7 @@ export default [
   p135,
   p136,
   p137,
+  p138,
+  p139,
+  p140,
 ];
