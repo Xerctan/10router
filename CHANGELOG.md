@@ -2,6 +2,24 @@
 
 > 面向用户的精简更新见 [`public/i18n/changelog/`](https://github.com/techysy/10router/tree/main/public/i18n/changelog)（`en.md` / `zh-CN.md` / `zh-TW.md`，仪表盘「Change Log」按界面语言加载对应文件）。本文件为完整开发日志，按版本从上往下排列。
 
+## v1.1.4 (2026-09-20)
+
+### ✨ 新功能
+
+- **StepFun（阶跃星辰）全系列原生接入与多媒体能力隔离**：
+  - **大语言模型（LLM / Chat）**：纯正文本与视觉模型 `step-5-preview`、`step-3.7-flash`、`step-3.5-flash`、`step-3.5-flash-2603`、`step-1o-turbo-vision`，严格隔离于主菜单【模型提供商】与默认 `/v1/models`。
+  - **语音合成（TTS）**：接入 StepAudio 系列 `stepaudio-3-tts`、`stepaudio-2.5-tts`、`step-tts-2`、`step-tts-mini`，隔离至【媒体提供商 -> 语音合成】与 `/v1/models/tts`，默认音色设为 `cixingnansheng`（磁性男声，避免 OpenAI 默认 alloy 触发 400）。
+  - **语音识别（STT / ASR）**：接入 `stepaudio-2.5-asr`，隔离至【媒体提供商 -> 语音识别】与 `/v1/models/stt`。
+  - **图像生成**：`step-image-edit-2`、`step-2x-large`，隔离至【媒体提供商 -> 图像生成】与 `/v1/models/image`。
+  - **实时余额与代金券查询**：对接 `GET https://api.stepfun.com/v1/accounts`，在仪表盘用量卡片与额度页直观展示现金余额与代金券余额。
+  - **官方高清图标**：注入官方透明 PNG 图标，覆盖大模型卡片与各媒体管理界面。
+
+- **ComfyUI 本地生图原生执行器实装**：
+  - 接入本地 ComfyUI 实例（默认 `http://127.0.0.1:8188`），实装自动发现本地可用 Checkpoints、动态装配 SD / SDXL / Flux 标准文生图图工作流并排队轮询输出，经 `/v1/images/generations` 统一返回标准 base64 图像。
+
+- **Qoder 签到与额度识别优化**：
+  - 增强 Qoder 国际版与国内版签到容错，清晰展示当前账号代金券与 Credits 状态。
+
 ## v1.1.3 (2026-09-20)
 
 ### ✨ 新功能

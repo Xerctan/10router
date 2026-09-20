@@ -20,6 +20,10 @@ export function translateQuotaName(name) {
   if (mWeekly) return `${translate("Weekly")} ${mWeekly[1]} (7d)`;
   const mBalance = /^Balance(?:\s*\((.+)\))?$/i.exec(trimmed);
   if (mBalance) return mBalance[1] ? `${translate("Balance")} (${mBalance[1]})` : translate("Balance");
+  const mVoucher = /^Voucher(?:\s*\((.+)\))?$/i.exec(trimmed);
+  if (mVoucher) return mVoucher[1] ? `${translate("Voucher")} (${mVoucher[1]})` : translate("Voucher");
+  const mCash = /^Cash(?:\s*\((.+)\))?$/i.exec(trimmed);
+  if (mCash) return mCash[1] ? `${translate("Cash")} (${mCash[1]})` : translate("Cash");
   return trimmed;
 }
 

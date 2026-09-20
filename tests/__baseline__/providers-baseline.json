@@ -175,6 +175,9 @@
     "baseUrl": "https://copilot.tencent.com/v2/chat/completions",
     "forceStream": true,
     "thinkingFormat": "openai",
+    "quirks": {
+      "sanitizeToolSchema": true
+    },
     "headers": {
       "User-Agent": "CLI/2.108.1 CodeBuddy/2.108.1",
       "X-Product": "SaaS",
@@ -755,6 +758,7 @@
       "x-opencode-client": "desktop"
     },
     "noAuth": true,
+    "forceStream": true,
     "format": "openai"
   },
   "openrouter": {
@@ -1075,6 +1079,11 @@
     "usage": {
       "url": "https://openapi.qoder.com.cn/api/v2/quota/usage"
     },
+    "format": "openai"
+  },
+  "stepfun": {
+    "baseUrl": "https://api.stepfun.com/v1/chat/completions",
+    "validateUrl": "https://api.stepfun.com/v1/models",
     "format": "openai"
   }
 }

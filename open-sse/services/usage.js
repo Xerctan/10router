@@ -16,6 +16,7 @@ import { getKimiUsage } from "./usage/kimi.js";
 import { getDeepseekUsage } from "./usage/deepseek.js";
 import { getOpencodeGoUsage } from "./usage/opencode-go.js";
 import { getXiaomiMimoUsage } from "./usage/xiaomi-mimo.js";
+import { getStepfunUsage } from "./usage/stepfun.js";
 import { resolveQoderCredentials } from "./qoderModels.js";
 import {
   getIflowUsage,
@@ -64,6 +65,7 @@ const USAGE_HANDLERS = {
   deepseek: (c) => getDeepseekUsage(c.apiKey, c.proxyOptions),
   "opencode-go": (c) => getOpencodeGoUsage(c.apiKey, c.proxyOptions),
   "xiaomi-mimo": (c) => getXiaomiMimoUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
+  stepfun: (c) => getStepfunUsage(c.apiKey, c.proxyOptions),
   commandcode: (c) => getCommandCodeUsage(c.apiKey, c.proxyOptions),
 };
 

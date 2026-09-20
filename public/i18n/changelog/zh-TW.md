@@ -2,6 +2,16 @@
 
 這裡展示面向用戶的關鍵更新；完整開發明細見 [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md)。
 
+## v1.1.4 (2026-09-20)
+
+### ✨ 新增
+
+- **StepFun（階躍星辰）原生接入**：
+  - **大模型品類嚴格隔離**：文本與視覺大模型（`step-5-preview`、`step-3.7-flash`、`step-3.5-flash`、`step-1o-turbo-vision` 等）歸入【模型提供商】；語音合成（StepAudio 3/2.5 TTS、Step TTS 2/mini）歸入【語音合成】；語音識別（`stepaudio-2.5-asr`）歸入【語音識別】；生圖模型歸入【圖像生成】，互不干擾。
+  - **實時用量與餘額查詢**：直連官方賬戶接口，在卡片與用量面板實時展示現金餘額與代金券餘額。
+  - **官方高清圖標**：界面全面適配 StepFun 官方透明圖標。
+- **ComfyUI 本地生圖執行器**：原生對接本地 ComfyUI，自動識別本地 Checkpoint 並驅動文生圖標準流程。
+
 ## v1.1.3 (2026-09-20)
 
 ### ✨ 新增

@@ -699,6 +699,7 @@ export function parseQuotaData(provider, data) {
         break;
 
       case "deepseek":
+      case "stepfun":
         // Credit balance — remainingPercentage only (no absolute remaining).
         if (data.quotas) {
           Object.entries(data.quotas).forEach(([name, quota]) => {
@@ -708,6 +709,7 @@ export function parseQuotaData(provider, data) {
               total: quota.total || 0,
               resetAt: quota.resetAt || null,
               remainingPercentage: quota.remainingPercentage,
+              displayRemaining: quota.displayRemaining,
             });
           });
         }

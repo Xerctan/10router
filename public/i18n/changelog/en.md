@@ -2,6 +2,16 @@
 
 User-facing highlights per release. See [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md) for the full developer log.
 
+## v1.1.4 (2026-09-20)
+
+### ✨ New
+
+- **StepFun Native Integration**:
+  - **Clean Multimodal Category Partitioning**: Text & vision language models (`step-5-preview`, `step-3.7-flash`, `step-3.5-flash`, `step-1o-turbo-vision`, etc.) grouped cleanly under LLM Providers; Speech Synthesis (`stepaudio-3-tts`, `stepaudio-2.5-tts`, `step-tts-2`, `step-tts-mini`) under TTS Media Providers; Speech Transcription (`stepaudio-2.5-asr`) under STT Media Providers; Image Generation under Image Media Providers.
+  - **Live Balance & Voucher Tracking**: Direct connection to official accounts endpoint, displaying cash balance and voucher credits in real time on provider and quota cards.
+  - **Official High-Res Icon**: Transparent official branding across LLM and media provider cards.
+- **ComfyUI Local Image Generation Executor**: Native support for local ComfyUI installations, auto-discovering available checkpoints and running standard txt2img workflows.
+
 ## v1.1.3 (2026-09-20)
 
 ### ✨ New
