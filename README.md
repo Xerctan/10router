@@ -94,6 +94,12 @@ docker run -d \
 
 支持 `linux/amd64` 和 `linux/arm64`。
 
+> 💡 **自托管内网 / 容器互联（Issue #25）**：
+> 若在 Docker 内部网络需要连接同网络下的其他容器或私网端点（如 `http://cli-proxy-api-plus:8317/v1`），默认会被 SSRF 防护拦截。可通过注入环境变量按需放行：
+> - `ALLOW_PRIVATE_HOSTS=1`：总开关，放行全部内网私有地址。
+> - `PRIVATE_HOST_ALLOWLIST=cli-proxy-api-plus,host.docker.internal`：精细主机白名单（精确匹配）。
+> ⚠️ *注意：仅建议在受信任的内网/自托管环境中使用，请勿将开启此开关的实例直接无保护暴露在公网。*
+
 ### 📦 fnOS fpk 安装
 
 从 [Releases](https://github.com/techysy/10router/releases) 下载对应架构的 `.fpk` 文件：
