@@ -35,6 +35,13 @@ import {
   saveProviderCardOrder,
 } from "@/shared/utils/providerCardOrder";
 
+// One implementation, shared with the media-providers listing pages
+// (@/shared/components/DraggableCard). Declared at module top level so it is
+// initialised before ProvidersPage() can render it — the previous local
+// `function DraggableCardWrapper` was hoisted; a bare `const` beside
+// ProviderCard() would leave a use-before-init (TDZ) window on first paint.
+const DraggableCardWrapper = DraggableCard;
+
 function getStatusDisplay(connected, error, errorCode) {
   const parts = [];
   if (connected > 0) {
@@ -855,9 +862,7 @@ export default function ProvidersPage() {
   );
 }
 
-// One implementation, shared with the media-providers listing pages
-// (@/shared/components/DraggableCard).
-const DraggableCardWrapper = DraggableCard;
+// (Aliased to the shared DraggableCard at module top level.)
 
 function ProviderCard({ providerId, provider, stats, authType, onToggle, topologyVisible, onToggleTopology }) {
   const { connected, error, errorCode, errorTime, allDisabled } = stats;
