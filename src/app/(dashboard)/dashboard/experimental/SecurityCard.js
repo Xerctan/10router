@@ -129,6 +129,14 @@ export default function SecurityCard({ settings, patch }) {
               }
               tone={localOnlyEffective ? "ok" : "warn"}
             />
+            {/* Issue #9, item 2 — the one high-risk finding that is still open.
+                Showing it here keeps the read-out honest instead of implying the
+                instance is clean because the switches are green. */}
+            <Row
+              label={translate("Credential storage")}
+              value={translate("Plain text in the local database (encryption is planned)")}
+              tone="warn"
+            />
             {noPassword && !loginOff && (
               <p className="text-xs text-red-600 dark:text-red-400 pt-2">
                 {translate("No password is set yet, so the dashboard opens on this machine only. Set a password on the Settings page to reach it from other devices. The gateway API (/v1) is unaffected.")}

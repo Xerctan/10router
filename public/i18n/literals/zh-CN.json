@@ -1832,5 +1832,13 @@
   "No password is set yet, so the dashboard opens on this machine only. Set a password on the Settings page to reach it from other devices. The gateway API (/v1) is unaffected.": "尚未设置密码：仪表盘目前只能在本机打开。请在「设置」页设置一个密码，即可从其它设备访问；网关接口（/v1）不受影响。",
   "Log-in check is off: anyone who can reach this port can manage every provider and credential. Turn it on again on the Settings page.": "登录校验已关闭：任何能访问该端口的人都能管理全部供应商与凭据。请在「设置」页重新开启。",
   "Only this machine can open the dashboard until one is set. Set a password on the Settings page and LAN access turns back on.": "在设置密码前，只有本机可以打开仪表盘。请在「设置」页设置密码，随后局域网访问会自动恢复。",
-  "No dashboard password is set — set one on the Settings page.": "尚未设置仪表盘密码 —— 请在「设置」页设置。"
+  "No dashboard password is set — set one on the Settings page.": "尚未设置仪表盘密码 —— 请在「设置」页设置。",
+  "Log-in check is off — anyone who can reach this port can manage every provider, key and credential.": "登录校验已关闭 —— 任何能访问该端口的人都能管理全部供应商、密钥与凭据。",
+  "No dashboard password is set — the dashboard opens on this machine only. Set one on the Settings page.": "尚未设置仪表盘密码 —— 仪表盘目前只能在本机打开。请在「设置」页设置密码。",
+  "Turn off the log-in check?": "关闭登录校验？",
+  "Anyone who can reach this port will be able to manage every provider, key and credential without a password. The dashboard keeps a warning banner while it is off.": "关闭后，任何能访问该端口的人无需密码即可管理全部供应商、密钥与凭据。关闭期间仪表盘会常驻一条警告横幅。",
+  "Turn it off": "确认关闭",
+  "Credential storage": "凭据存储",
+  "Plain text in the local database (encryption is planned)": "本地数据库明文存储（计划加密）",
+  "Configure enterprise Single Sign-On (SSO) for dashboard access using SAML 2.0 or OIDC.": "使用 SAML 2.0 或 OIDC 为企业单点登录（SSO）配置仪表盘访问。"
 }

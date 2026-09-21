@@ -186,9 +186,11 @@ describe("the 'set a password' advice leads somewhere", () => {
 
   it("flips the setting the right way when the key is absent", () => {
     // `!settings.requireLogin` on an absent key is true, so the switch would
-    // look unresponsive: click -> set true -> still on.
+    // look unresponsive: click -> set true -> still on. Turning it ON is
+    // immediate; turning it OFF goes through the confirmation dialog below.
     expect(profile).not.toContain("updateRequireLogin(!settings.requireLogin)");
-    expect(profile).toContain("updateRequireLogin(settings.requireLogin === false)");
+    expect(profile).toContain("if (settings.requireLogin === false) updateRequireLogin(true);");
+    expect(profile).toContain("else setLoginOffConfirmOpen(true);");
   });
 });
 
@@ -244,6 +246,113 @@ describe("the security card read-out does not contradict itself", () => {
 
   it("says what to do and that the gateway API keeps working", () => {
     expect(card).toContain("The gateway API (/v1) is unaffected.");
+  });
+});
+
+describe("the insecure states are visible from every page", () => {
+  // Issue #9 items 3 and 4: the endpoint page had warnings, but nothing said
+  // "this instance has no password" or "the login check is off" on the pages an
+  // operator actually visits. The banner is mounted in the dashboard layout, so
+  // it covers every dashboard route.
+  const layout = readSource("src/shared/components/layouts/DashboardLayout.js");
+  const banner = readSource("src/shared/components/SecurityBanner.js");
+
+  it("mounts a banner inside the dashboard layout", () => {
+    expect(layout).toContain("SecurityBanner");
+  });
+
+  it("only warns for the two states that matter", () => {
+    expect(banner).toContain("hasPassword");
+    expect(banner).toContain("bootstrapPassword");
+    expect(banner).toContain("ssoConfigured");
+    expect(banner).toContain("status.requireLogin === false");
+  });
+
+  it("stays silent when the probe fails or the instance is fine", () => {
+    expect(banner).toContain("if (!status) return null;");
+    expect(banner).toContain("if (!noPassword && !loginOff) return null;");
+  });
+
+  it("links to the page that can actually fix it", () => {
+    expect(banner).toContain('href="/dashboard/profile"');
+  });
+});
+
+describe("turning the log-in check off takes a confirmation", () => {
+  // Issue #9 item 4: requireLogin=false publishes every provider and credential
+  // to whoever can route to the port, and it used to be a single click with no
+  // dialog and no warning anywhere but the endpoint page.
+  const profile = readSource("src/app/(dashboard)/dashboard/profile/page.js");
+
+  it("opens a confirmation instead of flipping the switch straight away", () => {
+    expect(profile).toContain("setLoginOffConfirmOpen(true)");
+    expect(profile).toContain("loginOffConfirmOpen");
+  });
+
+  it("only writes false after that confirmation", () => {
+    const confirmBlock = profile.slice(profile.indexOf("loginOffConfirmOpen}"));
+    expect(confirmBlock).toContain("updateRequireLogin(false)");
+  });
+
+  it("turning it back ON is immediate — no dialog to re-enable", () => {
+    expect(profile).toContain("if (settings.requireLogin === false) updateRequireLogin(true);");
+  });
+
+  it("warns about the consequence in the dialog itself", () => {
+    expect(profile).toContain("Anyone who can reach this port will be able to manage every provider, key and credential without a password.");
+  });
+});
+
+describe("every new security string has zh-CN and zh-TW text", () => {
+  // The DOM-level i18n runtime swaps text by exact match, so a literal that is
+  // missing from a locale table silently stays English.
+  const zhCN = JSON.parse(readSource("public/i18n/literals/zh-CN.json"));
+  const zhTW = JSON.parse(readSource("public/i18n/literals/zh-TW.json"));
+
+  const securityLiterals = [
+    "Log-in check is off — anyone who can reach this port can manage every provider, key and credential.",
+    "No dashboard password is set — the dashboard opens on this machine only. Set one on the Settings page.",
+    "Open Settings",
+    "Turn off the log-in check?",
+    "Anyone who can reach this port will be able to manage every provider, key and credential without a password. The dashboard keeps a warning banner while it is off.",
+    "Turn it off",
+    "Credential storage",
+    "Plain text in the local database (encryption is planned)",
+    "Configure enterprise Single Sign-On (SSO) for dashboard access using SAML 2.0 or OIDC.",
+    "No password is set yet, so the dashboard opens on this machine only. Set a password on the Settings page to reach it from other devices. The gateway API (/v1) is unaffected.",
+    "Log-in check is off: anyone who can reach this port can manage every provider and credential. Turn it on again on the Settings page.",
+    "Only this machine can open the dashboard until one is set. Set a password on the Settings page and LAN access turns back on.",
+    "No dashboard password is set — set one on the Settings page.",
+  ];
+
+  it("covers them all in zh-CN", () => {
+    const missing = securityLiterals.filter((k) => !(k in zhCN));
+    expect(missing).toEqual([]);
+  });
+
+  it("covers them all in zh-TW", () => {
+    const missing = securityLiterals.filter((k) => !(k in zhTW));
+    expect(missing).toEqual([]);
+  });
+
+  it("translates the login page's own text nodes in both locales", () => {
+    for (const table of [zhCN, zhTW]) {
+      expect(table["Enter your password to access the dashboard"]).toBeTruthy();
+      expect(table["Password"]).toBeTruthy();
+      expect(table["Enter password"]).toBeTruthy();
+      expect(table["Open dashboard"]).toBeTruthy();
+    }
+  });
+});
+
+describe("the security card reports storage honestly", () => {
+  // Issue #9 item 2 is still open; a read-out of switches alone would imply the
+  // instance is clean.
+  const card = readSource("src/app/(dashboard)/dashboard/experimental/SecurityCard.js");
+
+  it("shows that credentials are stored in plain text", () => {
+    expect(card).toContain("Credential storage");
+    expect(card).toContain("Plain text in the local database (encryption is planned)");
   });
 });
 

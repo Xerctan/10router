@@ -30,6 +30,10 @@ export default function ProfilePage() {
   const [compactUnits, setCompactUnits] = useState(true);
   const [langOpen, setLangOpen] = useState(false);
   const [shutdownOpen, setShutdownOpen] = useState(false);
+  // Turning the login check off is a one-click way to publish every provider and
+  // credential to anyone who can route to this port (issue #9, item 4), so it
+  // goes through a confirmation the way "require API key" already does.
+  const [loginOffConfirmOpen, setLoginOffConfirmOpen] = useState(false);
   const [isShuttingDown, setIsShuttingDown] = useState(false);
   const [settings, setSettings] = useState({ fallbackStrategy: "fill-first" });
   const [loading, setLoading] = useState(true);
@@ -1043,7 +1047,10 @@ export default function ProfilePage() {
               </div>
               <Toggle
                 checked={settings.requireLogin !== false}
-                onChange={() => updateRequireLogin(settings.requireLogin === false)}
+                onChange={() => {
+                  if (settings.requireLogin === false) updateRequireLogin(true);
+                  else setLoginOffConfirmOpen(true);
+                }}
                 disabled={loading}
               />
             </div>
@@ -1847,6 +1854,19 @@ export default function ProfilePage() {
           setLangOpen(false);
           setLocale(next);
         }}
+      />
+      <ConfirmModal
+        isOpen={loginOffConfirmOpen}
+        onClose={() => setLoginOffConfirmOpen(false)}
+        onConfirm={() => {
+          setLoginOffConfirmOpen(false);
+          updateRequireLogin(false);
+        }}
+        title={translate("Turn off the log-in check?")}
+        message={translate("Anyone who can reach this port will be able to manage every provider, key and credential without a password. The dashboard keeps a warning banner while it is off.")}
+        confirmText={translate("Turn it off")}
+        cancelText={translate("Cancel")}
+        variant="danger"
       />
       <ConfirmModal
         isOpen={shutdownOpen}

@@ -654,5 +654,20 @@
   "No password is set yet, so the dashboard opens on this machine only. Set a password on the Settings page to reach it from other devices. The gateway API (/v1) is unaffected.": "尚未設定密碼：儀表板目前只能在本機開啟。請在「設定」頁設定一組密碼，即可從其它裝置存取；閘道介面（/v1）不受影響。",
   "Log-in check is off: anyone who can reach this port can manage every provider and credential. Turn it on again on the Settings page.": "登入檢查已關閉：任何能存取該連接埠的人都能管理全部供應商與憑證。請在「設定」頁重新開啟。",
   "Only this machine can open the dashboard until one is set. Set a password on the Settings page and LAN access turns back on.": "在設定密碼前，只有本機可以開啟儀表板。請在「設定」頁設定密碼，之後區域網路存取會自動恢復。",
-  "No dashboard password is set — set one on the Settings page.": "尚未設定儀表板密碼 —— 請在「設定」頁設定。"
+  "No dashboard password is set — set one on the Settings page.": "尚未設定儀表板密碼 —— 請在「設定」頁設定。",
+  "Log-in check is off — anyone who can reach this port can manage every provider, key and credential.": "登入檢查已關閉 —— 任何能存取該連接埠的人都能管理全部供應商、金鑰與憑證。",
+  "No dashboard password is set — the dashboard opens on this machine only. Set one on the Settings page.": "尚未設定儀表板密碼 —— 儀表板目前只能在本機開啟。請在「設定」頁設定密碼。",
+  "Turn off the log-in check?": "關閉登入檢查？",
+  "Anyone who can reach this port will be able to manage every provider, key and credential without a password. The dashboard keeps a warning banner while it is off.": "關閉後，任何能存取該連接埠的人無需密碼即可管理全部供應商、金鑰與憑證。關閉期間儀表板會常駐一條警告橫幅。",
+  "Turn it off": "確認關閉",
+  "Credential storage": "憑證儲存",
+  "Plain text in the local database (encryption is planned)": "本機資料庫明文儲存（計劃加密）",
+  "Configure enterprise Single Sign-On (SSO) for dashboard access using SAML 2.0 or OIDC.": "使用 SAML 2.0 或 OIDC 為企業單一登入（SSO）設定儀表板存取。",
+  "Open Settings": "開啟設定",
+  "Enter your password to access the dashboard": "請輸入密碼以存取儀表板",
+  "Password": "密碼",
+  "Enter password": "輸入密碼",
+  "Display language": "顯示語言",
+  "Regional currency": "區域貨幣",
+  "Single Sign-On (SSO)": "單一登入（SSO）"
 }
