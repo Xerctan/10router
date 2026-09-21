@@ -68,9 +68,15 @@ function setPhase(phase) {
   persistStatus();
 }
 
-// HTTP server exposing status (browser polls this while Next server is dead)
+// HTTP server exposing status on loopback (issue #9, item 6).
+//
+// It used to answer with `Access-Control-Allow-Origin: *`, which let any web page
+// the operator happened to visit read this endpoint (package name, version,
+// phase, log tail) — a free fingerprint of the install. Nothing needs the wide
+// header any more: the dashboard's legacy status poll was replaced by the
+// "copy install command + shutdown" flow, so the only readers left are the
+// updater's own status.json and a human curling 127.0.0.1.
 const server = http.createServer((req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   if (req.url === "/update/status" || req.url === "/") {
     res.setHeader("Content-Type", "application/json");

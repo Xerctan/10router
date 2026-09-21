@@ -2,6 +2,27 @@
 
 User-facing highlights per release. See [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md) for the full developer log.
 
+## v1.2.0 (2026-09-21)
+
+### 🔒 Security (the focus of this release)
+
+- **No more built-in default password.** An instance with no password set used to be one guess away from full admin over the LAN. There is now **no default password**: with none set (and no SSO configured) the dashboard **opens on this machine only** — remote requests are refused with a clear pointer to set one locally. Headless installs (Docker / fnOS) set `INITIAL_PASSWORD`. **If you had been signing in from another device with the default, set a password on the host once after upgrading.**
+- **Upstream credentials are encrypted at rest.** OAuth tokens and API keys are no longer plain text in the database (AES-256-GCM, key kept outside it), so a copied or synced database file is no longer a credential dump. Back the key file up with the database, or set `CREDENTIAL_SECRET`.
+- **The usage log no longer stores full API keys** — the history table and per-day aggregates keep a readable prefix (`sk-496f00***`) plus a one-way digest; per-key stats and names keep working.
+- **New Security card** (Settings → Experimental): listener and LAN addresses, password state, log-in check state, effective access, credential storage — plus a **"dashboard: local access only"** switch that applies per request. A warning banner sits on top of every page while no password is set or the log-in check is off.
+- **Remaining audit items**: turning the log-in check off now takes a confirmation; sessions shortened from 24h to 2h with **sliding renewal** (no interruption while you work); `/api/version` and `/api/init` are no longer world-readable (the local CLI and tray still work); on Windows the MITM root CA key is now owner-only, and the MITM sudo password no longer encrypts with a key hardcoded in the source.
+
+### ✨ New
+
+- **MiMo Token Plan channel**: the card is now "MiMo Token Plan" with its own brand icon, and the quota row explains itself instead of saying "not implemented" — the plan has no public quota API, and the weekly quota still shows when the connection also carries a desktop account session.
+- Provider banners and every new security string are translated (zh-CN / zh-TW).
+
+### 🛠️ Improvements & Fixes
+
+- The Security card no longer reports "encryption failed" on a fully encrypted database (an empty proxy URL was mistaken for a plaintext secret).
+- Backup files: a downloaded backup used to be written as ciphertext that could not be restored anywhere else, while restoring an old one quietly put credentials back in the clear — exports are now portable and imports are encrypted on the way in.
+- The backup UI now says the file holds readable credentials.
+
 ## v1.1.3 (2026-09-20)
 
 ### ✨ New

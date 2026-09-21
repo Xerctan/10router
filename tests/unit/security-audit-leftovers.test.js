@@ -16,6 +16,65 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (rel) => fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
 
+describe("issue #9 item 6 — updater status server is not readable by web pages", () => {
+  const updater = read("src/lib/updater/updater.js");
+
+  it("no longer answers with a wildcard CORS header", () => {
+    // The comment explains what was removed, so check executable text only.
+    const code = updater
+      .split("\n")
+      .filter((line) => !/^\s*(\/\/|\*)/.test(line))
+      .join("\n");
+    expect(code).not.toContain("Access-Control-Allow-Origin");
+    expect(code).not.toContain('setHeader("Access-Control"');
+  });
+
+  it("still binds loopback and still serves the status for a human/curl", () => {
+    expect(updater).toContain('server.listen(port, "127.0.0.1"');
+    expect(updater).toContain('"/update/status"');
+  });
+
+  it("nothing in the app polls the old endpoint any more (why dropping it is safe)", () => {
+    const files = ["src/shared/components/Sidebar.js", "src/lib/appUpdater.js", "src/app/api/version/route.js"];
+    for (const f of files) expect(read(f)).not.toMatch(/https?:\/\/127\.0\.0\.1:20129|:20129\/update/);
+  });
+});
+
+describe("issue #9 item 7 — Root CA key is owner-only on Windows too", () => {
+  const rootCA = read("src/mitm/cert/rootCA.js");
+
+  it("no longer returns early on win32", () => {
+    const fn = /function hardenKeyPermissions\(\) \{[\s\S]*?\n\}/.exec(rootCA);
+    expect(fn, "hardenKeyPermissions disappeared").toBeTruthy();
+    expect(fn[0]).not.toMatch(/if \(process\.platform === "win32"\) return;/);
+  });
+
+  it("uses icacls with inheritance removed and a single account grant", () => {
+    const fn = /function hardenKeyPermissions\(\) \{[\s\S]*?\n\}/.exec(rootCA)[0];
+    expect(fn).toContain('process.platform === "win32"');
+    expect(fn).toContain("icacls");
+    expect(fn).toContain("/inheritance:r");
+    expect(fn).toContain("/grant:r");
+    // (F), not (R,W): the owner must still be able to unlink its own key when the
+    // CA expires, and (R,W) omits DELETE.
+    expect(fn).toContain(":(F)`");
+    expect(fn).toMatch(/USERDOMAIN|userInfo\(\)\.username/);
+  });
+
+  it("keeps the POSIX path and stays best-effort on both", () => {
+    const fn = /function hardenKeyPermissions\(\) \{[\s\S]*?\n\}/.exec(rootCA)[0];
+    expect(fn).toContain("chmodSync(ROOT_CA_KEY_PATH, 0o600)");
+    // Two warning paths (win32 + posix) — neither throws.
+    expect((fn.match(/console\.warn/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect(fn).not.toMatch(/throw /);
+  });
+
+  it("runs for existing and freshly generated keys alike", () => {
+    const calls = (rootCA.match(/hardenKeyPermissions\(\);/g) || []).length;
+    expect(calls).toBeGreaterThanOrEqual(2);
+  });
+});
+
 describe("issue #9 item 7 — MITM password key has no constant fallback", () => {
   const manager = read("src/mitm/manager.js");
 
