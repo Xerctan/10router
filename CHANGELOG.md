@@ -71,6 +71,11 @@
   - **官方图标**：新增 `public/providers/xiaomi-tokenplan.png`，不再回退到 `smart_toy` / `XT` 占位。
   - **额度行不再显示「未实现」**：`tp-` 密钥所在的 token-plan 集群**没有任何额度接口**（实测：`token-plan-cn/sgp/ams` 上逐一试过的候选路径全部 404（openresty），而带周额度的 `aistudio.xiaomimimo.com/open-apis/v1/user/usage` 对 `tp-` 密钥返回 401 —— 它要的是 MiMo **账号会话**，不是套餐密钥）。此前该供应商没注册 usage handler，额度行直接回退成英文原句 `Usage API not implemented for xiaomi-tokenplan`。现注册 handler：若该连接另外带桌面端账号会话（`mimoPassToken`）就照旧读周额度，否则给出一句**说明性文案**（已译 zh-CN / zh-TW），并在官方控制台看套餐用量。
   - **横幅 i18n**：`display.notice.text`（“Xiaomi MiMo Token Plan subscription (API key starts with tp-)…”）补上 zh-CN / zh-TW —— 此前只有英文（与 AMD/byteplus/grok-cli 等同类横幅一起漏掉）。附 `mimo-tokenplan-wiring.test.js`（8 例）。
+- **安全审计收尾三项（#9 第 7 / 8 / 11 项）**：
+  - **第 11 项 `/api/version`、`/api/init` 不再对网络公开**：两者从公开白名单移出，改为**仅本机（或已登录）可达** —— CLI 的陈旧进程探测/`doctor`、桌面壳的更新检查都是访 `127.0.0.1` 轮询，照旧 200；徽章/登录页带会话 cookie 也是 200；未鉴权的远程调用现在 **401**（此前可用来指纹识别构建版本与更新状态）。`/api/health` 仍公开（托盘/浏览器需要），`/api/version/shutdown` 与 `/update` 本就在 ALWAYS_PROTECTED 里且先于该白名单判定。实测（临时关掉「仅本机」开关以避免被它先拦）：本机 200 / 局域网 401 / 局域网 `/api/health` 200 / 局域网 shutdown 401，验完已还原开关。
+  - **第 8 项 会话从 24h 缩到 2h，并改为滑动续期**：泄露的 cookie 从“可用一整天”变成“两小时内失效”，而**正在使用的操作员不会被打断** —— `/api/auth/status`（仪表盘每次导航都会调，头部组件按路由重挂载）在会话过半时自动重新签发并保留身份声明。附回归：2h 的 exp 与 cookie maxAge 一致、新鲜令牌不续期、过半则续期且保留 oidc/saml 声明。
+  - **第 7 项 MITM 密码加密不再有常量兜底**：原实现在取不到机器码时回退到 `sha256("10router-mitm-pwd")` —— 一个写在本仓库里的密钥，意味着那个“加密”文件对任何拿到源码的人都可解。现在取不到机器码就**报错拒绕**（保存失败会落日志，下次操作重新询问密码），不做假安全。
+  - 附 `security-audit-leftovers.test.js`（10 例）+ 更新两处原本锁定 24h 旧契约的用例。
 
 ## v1.1.3 (2026-09-20)
 

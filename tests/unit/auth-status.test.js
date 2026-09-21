@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   getDashboardAuthSession: vi.fn(),
   isDashboardAuthConfigured: vi.fn(() => true),
   isLocalRequest: vi.fn(() => false),
+  renewDashboardAuthCookie: vi.fn(async () => false),
 }));
 
 vi.mock("next/server", () => ({
@@ -32,6 +33,7 @@ vi.mock("@/lib/auth/oidc", () => ({
 vi.mock("@/lib/auth/dashboardSession", () => ({
   getDashboardAuthSession: mocks.getDashboardAuthSession,
   isDashboardAuthConfigured: mocks.isDashboardAuthConfigured,
+  renewDashboardAuthCookie: mocks.renewDashboardAuthCookie,
 }));
 
 // The route asks the guard whether the caller is on this machine; mocking it keeps
@@ -51,12 +53,31 @@ describe("GET /api/auth/status", () => {
   });
 
   it("reports an authenticated session when the auth cookie is valid", async () => {
-    mocks.getDashboardAuthSession.mockResolvedValue({ authenticated: true });
+    mocks.getDashboardAuthSession.mockResolvedValue({ authenticated: true, iat: 1 });
 
     const response = await GET();
 
     expect(response.body.authenticated).toBe(true);
     expect(mocks.getDashboardAuthSession).toHaveBeenCalledWith("session-token");
+  });
+
+  // Sliding session (issue #9, item 8): the dashboard hits this endpoint on every
+  // navigation, and that is what lets a 2h token keep an active operator signed in.
+  it("offers to renew the session whenever one is presented", async () => {
+    mocks.getDashboardAuthSession.mockResolvedValue({ authenticated: true, iat: 1 });
+
+    await GET();
+
+    expect(mocks.renewDashboardAuthCookie).toHaveBeenCalledTimes(1);
+    expect(mocks.renewDashboardAuthCookie.mock.calls[0][2]).toMatchObject({ iat: 1 });
+  });
+
+  it("does not try to renew without a session", async () => {
+    mocks.getDashboardAuthSession.mockResolvedValue(null);
+
+    await GET();
+
+    expect(mocks.renewDashboardAuthCookie).not.toHaveBeenCalled();
   });
 
   it("reports unauthenticated when the auth cookie is invalid", async () => {

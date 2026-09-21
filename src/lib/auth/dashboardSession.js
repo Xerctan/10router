@@ -44,8 +44,14 @@ export function isDashboardAuthConfigured(settings) {
 // Session lifetime. The token's `exp` and the cookie's `maxAge` are both derived
 // from this one value on purpose: with no maxAge at all the browser treats
 // `auth_token` as a session cookie and drops it on browser close, so a user who
-// is still well inside their 24h token gets logged out by closing a window.
-const SESSION_MAX_AGE_SEC = 24 * 60 * 60;
+// is still well inside their token gets logged out by closing a window.
+//
+// Shortened from 24h (issue #9, item 8: a stolen cookie stayed usable for a
+// whole day). Two hours is only comfortable because the session SLIDES: see
+// renewDashboardAuthCookie — any authenticated page view re-issues the token
+// once it is past half its life, so an active operator is never interrupted
+// while a token that leaks is worthless within two hours.
+const SESSION_MAX_AGE_SEC = 2 * 60 * 60;
 
 // Placeholder values that ship in .env.example / old builds' source. A secret
 // the whole internet can guess is worse than no secret — fall back to the
@@ -128,6 +134,30 @@ export async function setDashboardAuthCookie(cookieStore, request, claims = {}) 
 
 export function clearDashboardAuthCookie(cookieStore) {
   cookieStore.delete("auth_token");
+}
+
+// Sliding session (issue #9, item 8). Call on an authenticated request: when the
+// presented token is past half its life, hand back a fresh one so an active user
+// never hits an expiry, while a token that leaked has a short window. Failures are
+// silent — the worst case is the old behaviour (the user re-authenticates).
+export async function renewDashboardAuthCookie(cookieStore, request, session) {
+  try {
+    const iat = typeof session?.iat === "number" ? session.iat * 1000 : 0;
+    if (!iat) return false;
+    const halfLifeMs = (SESSION_MAX_AGE_SEC * 1000) / 2;
+    if (Date.now() - iat < halfLifeMs) return false;
+    await setDashboardAuthCookie(cookieStore, request, {
+      ...(session?.oidcName ? { oidcName: session.oidcName } : {}),
+      ...(session?.oidcEmail ? { oidcEmail: session.oidcEmail } : {}),
+      ...(session?.samlName ? { samlName: session.samlName } : {}),
+      ...(session?.samlEmail ? { samlEmail: session.samlEmail } : {}),
+      ...(session?.oidc ? { oidc: true } : {}),
+      ...(session?.saml ? { saml: true } : {}),
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Verify the current dashboard password (re-auth for sensitive actions).

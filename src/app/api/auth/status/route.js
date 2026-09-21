@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { getSettings } from "@/lib/localDb";
 import { isOidcConfigured } from "@/lib/auth/oidc";
 import { isSamlConfigured } from "@/lib/auth/saml.js";
-import { getDashboardAuthSession, isDashboardAuthConfigured } from "@/lib/auth/dashboardSession";
+import { getDashboardAuthSession, isDashboardAuthConfigured, renewDashboardAuthCookie } from "@/lib/auth/dashboardSession";
 import { isLocalRequest } from "@/dashboardGuard";
 
 // The guard's peer check needs a real request object; this route is also called
@@ -38,6 +38,14 @@ export async function GET(request) {
       (session?.saml ? "SAML user" : session?.oidc ? "OIDC user" : "Password user");
 
     const loginMethod = session?.saml ? "SAML" : session?.oidc ? "OIDC" : "Password";
+
+    // Sliding session (issue #9, item 8): the dashboard calls this on every
+    // navigation (the header remounts per route), so re-issuing here is what keeps
+    // a 2h token from logging an active operator out. No-op while the token is
+    // fresh, and never fatal — a failed renewal just means re-authenticating later.
+    if (session) {
+      await renewDashboardAuthCookie(cookieStore, request, session);
+    }
 
     // Nothing configured at all (no password hash, no INITIAL_PASSWORD, no SSO)
     // and the caller is not on the machine itself: there is no secret they could

@@ -22,7 +22,6 @@ async function hasValidCliToken(request) {
 // Public API paths — no auth required (LLM API has its own key auth inside handler).
 const PUBLIC_API_PATHS = [
   "/api/health",
-  "/api/init",
   "/api/locale",
   "/api/auth/login",
   "/api/auth/logout",
@@ -32,8 +31,23 @@ const PUBLIC_API_PATHS = [
   // Pre-flight dashboard-password check for gated UI flows (same exposure
   // class as /api/auth/login; leaks nothing but ok).
   "/api/auth/verify-password",
-  "/api/version",
   "/api/settings/require-login",
+];
+
+// Reachable without a session only from THIS machine (or with one from
+// anywhere). Issue #9 item 11: /api/version and /api/init used to be public, so
+// any remote caller could fingerprint the exact build and update state without
+// authenticating. The consumers are all local — the CLI's stale-server probe and
+// doctor reach http://127.0.0.1:<port>/api/version, desktop/main.js polls it for
+// the update check — while the dashboard's Changelog modal fetches it with the
+// user's session cookie, which the normal auth branch covers.
+//
+// NOTE: /api/version/shutdown and /api/version/update match this prefix too. They
+// are listed in ALWAYS_PROTECTED, which is evaluated first, so they keep
+// requiring a token.
+const LOCAL_OR_AUTH_API_PATHS = [
+  "/api/version",
+  "/api/init",
 ];
 
 // Public top-level prefixes (LLM API endpoints with their own API key auth).
@@ -284,6 +298,16 @@ export async function proxy(request) {
   if (isPublicLlmApi(pathname)) {
     if (await canAccessPublicLlmApi(request)) return NextResponse.next();
     return NextResponse.json({ error: "API key required for remote API access" }, { status: 401 });
+  }
+
+  // Version/init info: local callers (CLI, tray, same-machine dashboard) as
+  // before, plus any authenticated session — but no longer an open book to the
+  // network (issue #9, item 11).
+  if (LOCAL_OR_AUTH_API_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    if (isLocalRequest(request) || (await hasValidCliToken(request)) || (await isAuthenticated(request))) {
+      return NextResponse.next();
+    }
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   // Deny-by-default for /api/* — public allow-list bypasses, everything else requires auth.
