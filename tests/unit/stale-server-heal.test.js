@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createRequire } from "node:module";
-import { mkdtempSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -193,5 +193,50 @@ describe("killPid", () => {
   it("swallows a kill failure and reports false-ish for a missing pid", () => {
     expect(stale.killPid(0, { killImpl: () => { throw new Error("nope"); } })).toBe(false);
     expect(stale.killPid(9, { platform: "linux", killImpl: () => { throw new Error("ESRCH"); } })).toBe(false);
+  });
+});
+
+/**
+ * §3.3 — WHO writes the marker, and WHEN. Both gaps below were found live, after
+ * the marker itself already worked:
+ *
+ *   - cli.js stamped it even for `--help` / `--version`, because the write sat
+ *     above the argv loop. Running this repo's launcher once (to check a build)
+ *     advertised the checkout's version to an *installed* app that shares
+ *     %APPDATA%/10router, so the dashboard claimed the on-disk build differed
+ *     from the running one when nothing had changed.
+ *   - the desktop shell never runs cli.js (it spawns custom-server.js directly),
+ *     so on a desktop install nothing ever wrote the marker: the banner could not
+ *     fire on exactly the install where a half-applied upgrade is most visible.
+ */
+describe("disk-version marker wiring", () => {
+  const cliSrc = readFileSync(new URL("../../cli/cli.js", import.meta.url), "utf8");
+  const shellSrc = readFileSync(new URL("../../desktop/main.js", import.meta.url), "utf8");
+
+  it("writes the marker only after the read-only exits (--help / --version)", () => {
+    const writeAt = cliSrc.indexOf("writeDiskVersion(getDataDir(), pkg.version)");
+    const parseAt = cliSrc.indexOf("for (let i = 0; i < args.length; i++)");
+    const versionExit = cliSrc.indexOf('args[i] === "--version"');
+    expect(writeAt).toBeGreaterThan(-1);
+    expect(parseAt).toBeGreaterThan(-1);
+    expect(versionExit).toBeGreaterThan(-1);
+    expect(writeAt).toBeGreaterThan(parseAt);
+    expect(writeAt).toBeGreaterThan(versionExit);
+  });
+
+  it("has the desktop shell write the marker from the bundled build's version", () => {
+    expect(shellSrc).toMatch(/function writeDiskVersionMarker\(\)/);
+    expect(shellSrc).toMatch(/getServiceVersion\(\)/);
+    expect(shellSrc).toMatch(/path\.join\(DATA_DIR, '\.disk-version'\)/);
+  });
+
+  it("writes it before the port is judged, so a still-running old server sees the new version", () => {
+    // scope to the function body: checkHealth() is also awaited earlier in the file
+    const body = shellSrc.slice(shellSrc.indexOf("async function startServer()"));
+    const call = body.indexOf("writeDiskVersionMarker();");
+    const health = body.indexOf("await checkHealth()");
+    expect(call).toBeGreaterThan(-1);
+    expect(health).toBeGreaterThan(-1);
+    expect(call).toBeLessThan(health);
   });
 });

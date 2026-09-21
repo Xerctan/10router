@@ -90,13 +90,6 @@ try { ensureSqliteRuntime({ silent: true }); } catch {}
 // Self-heal tray runtime (systray for macOS/Linux only). Windows skipped.
 try { ensureTrayRuntime({ silent: true }); } catch {}
 
-// Record the version that is now ON DISK. An upgrade (npm i -g / fpk / desktop)
-// replaces the package dir while a detached server from the old build may still
-// be running; this marker lets that old process — and the dashboard — see that
-// the disk has moved on. postinstall.js writes it too (it runs while the old
-// server is still alive); this covers installs where postinstall never ran.
-try { writeDiskVersion(getDataDir(), pkg.version); } catch {}
-
 // Configuration constants
 // Two different names, identical until the npm package was renamed to
 // 10router-cli: APP_NAME is what you install, BIN_NAME is what you then type.
@@ -168,6 +161,19 @@ if (skipUpdate && !trayMode && !process.stdin.isTTY) {
   trayMode = true;
   process.env.TRAY_MODE = "1";
 }
+
+// Record the version that is now ON DISK. An upgrade (npm i -g / fpk / desktop)
+// replaces the package dir while a detached server from the old build may still
+// be running; this marker lets that old process — and the dashboard — see that
+// the disk has moved on. postinstall.js writes it too (it runs while the old
+// server is still alive); this covers installs where postinstall never ran.
+//
+// Deliberately AFTER the `--help` / `--version` exits above: those are read-only
+// queries and must not stamp the user's data dir. Otherwise a stray run of this
+// script from a source checkout advertises the checkout's version (e.g. 1.1.4)
+// to an *installed* app that shares the same data dir, and the dashboard shows a
+// "disk differs from the running build" banner that is simply not true.
+try { writeDiskVersion(getDataDir(), pkg.version); } catch {}
 
 // Always use Node.js runtime with absolute path
 const RUNTIME = process.execPath;
