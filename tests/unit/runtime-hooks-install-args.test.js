@@ -126,7 +126,11 @@ describe("runtime install hooks — npm args", () => {
     const { sqlite, restore } = loadHooksWithFakeSpawn(fake);
     const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
     try {
-      // This box is win32, so baseline is shell: true.
+      // Both branches are asserted explicitly: the host platform must not decide
+      // what this test checks, or it only ever passes on the machine it was
+      // written on (the first CI run on ubuntu failed exactly here).
+      // runNpmInstall() reads process.platform at call time, so this works.
+      Object.defineProperty(process, "platform", { value: "win32", configurable: true });
       sqlite.npmInstall(["better-sqlite3@12.6.2"], { silent: true });
       expect(calls[0].opts.shell).toBe(true);
       expect(calls[0].cmd).toBe("npm.cmd");
