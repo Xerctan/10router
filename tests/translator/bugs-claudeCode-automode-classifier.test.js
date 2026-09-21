@@ -2,38 +2,41 @@
 // gateway when traffic routes to a non-Claude model (reporter: HTTP 200 but
 // deepseek-v4.1-flash via CodeBuddy CN answered without the expected XML).
 //
-// Per the triage plan (docs/zh-CN/impl-plan-issue24-25-agent.md, appendix A):
-// before closing as upstream-model non-compliance, rule out ADAPTER
-// INTERFERENCE with a direct-vs-gateway byte comparison of classifier-shaped
-// traffic. This file is the offline half of that comparison: it pins the exact
-// pipeline CC classifier traffic takes through the gateway —
+// STATE OF THE INVESTIGATION (2026-09-21, reverse-engineered from the shipped
+// Claude Code 2.1.278 binary — the classifier module is plain JS inside it):
 //
-//   CC (claude) → translateRequest(claude→openai) → CodeBuddyExecutor
-//               .transformRequest → upstream
-//   upstream (openai SSE) → translateResponse(openai→claude) → CC
+//  * The classifier runs TWO stages. Stage 1 is a cheap pre-filter:
+//      request  → max_tokens 64, stop_sequences:["</block>"] (severity mode:
+//                 "</severity>"), system = the security-monitor prompt
+//      expected → one <block>yes|no</block> verdict, nothing after it
+//      parse    → l4e(): every <block>(yes|no) match must AGREE (closing tag
+//                 optional); severity mode r4e() additionally REQUIRES
+//                 stop_reason ∈ {stop_sequence, end_turn}
+//    Stage 2 (max_tokens 8192) runs only when stage 1 says BLOCK.
 //
-// — and proves it is byte-faithful for classifier-shaped prompts/answers:
+//  * The client parsers tolerate the missing closing tag precisely BECAUSE the
+//    stop sequence is supposed to cut the turn the instant the tag appears —
+//    stop_sequences is load-bearing, not decorative.
 //
-//   1. A classifier system prompt WITHOUT agent-identity markers survives both
-//      hops verbatim: the XML output instructions are neither truncated nor
-//      rewritten, user turns pass unchanged, and the model's answer (XML or
-//      prose) reaches the client byte-for-byte — the gateway never "repairs"
-//      or damages it. → If the reporter's classifier prompt reached upstream
-//      intact, the non-XML answer is purely the model's own output, and the
-//      fix is client-side (compliant model for the classifier slot, or auto
-//      mode off).
+//  * FOUND AND FIXED HERE: open-sse/translator/request/claude-to-openai.js never
+//    mapped Anthropic `stop_sequences` to OpenAI `stop`, so every claude→openai
+//    request silently lost its stop sequences. Verified live: stepfun honours
+//    `stop` (the gateway forwards it), so before this fix a Claude client's stop
+//    sequences were ignored on every OpenAI-shaped provider.
 //
-//   2. THE ONE gateway-side path that CAN strip the instructions is documented
-//      below: the cbcn WAF workaround (open-sse/executors/codebuddy-cn.js,
-//      transformRequest) replaces system prompts matching AGENT_PATTERN —
-//      e.g. anything carrying the "You are Claude Code, Anthropic's official
-//      CLI" identity preamble — with a neutral prompt, XML instructions
-//      included. If CC's auto-mode classifier call carries that preamble, this
-//      replacement alone reproduces the reported symptom (200 + non-XML).
-//      Which case the reporter hit is decidable ONLY from their raw classifier
-//      request (the requestDetails byte capture offered in the issue thread);
-//      the workaround itself must stay — without it Tencent's WAF rejects the
-//      whole request (11128/11129-class blocks), which is strictly worse.
+//  * NOT fixable in the translator (verified by calling CodeBuddy CN's upstream
+//    directly, gateway bypassed): cbcn IGNORES `stop` outright — it answers the
+//    full string with stop:["GAMMA"] present. So on cbcn stage 1 still runs to
+//    its 64-token cap; that only breaks the parse in severity mode, where
+//    r4e() rejects a `max_tokens` stop_reason. See the issue thread.
+//
+//  * RULED OUT (previous hypothesis in this file): the cbcn WAF workaround
+//    (executors/codebuddy-cn.js) replaces system prompts matching AGENT_PATTERN.
+//    The REAL classifier prompt (39,485 chars, "You are a security monitor for
+//    autonomous AI coding agents.") does NOT match AGENT_PATTERN and is not
+//    whitelisted either → it passes through untouched, XML contract intact. The
+//    workaround is still exercised below because it is a real (if unmatched in
+//    this traffic) path that must stay for the WAF.
 import { describe, it, expect } from "vitest";
 import "./registerAll.js";
 import { translateRequest, translateResponse, initState } from "../../open-sse/translator/index.js";
@@ -144,6 +147,81 @@ describe("issue #18: classifier request fidelity (claude → openai → cbcn exe
     const sys = systemOf(transformed.messages);
     expect(sys).toBe(NEUTRAL_PROMPT);
     expect(sys).not.toContain("<classification>");
+  });
+
+  // The real classifier prompt (extracted from the shipped CC binary) opens with
+  // "You are a security monitor for autonomous AI coding agents." — it carries no
+  // agent-identity preamble, so the workaround above does NOT fire on it. This
+  // case pins that distinction: the marker that would trip the WAF is absent.
+  it("a security-monitor classifier prompt is not identity-prefixed and survives untouched", () => {
+    const REAL_OPENING =
+      "You are a security monitor for autonomous AI coding agents.\n\n## Context\nThe agent you are monitoring is an autonomous coding agent with shell access.";
+    const translated = T(FORMATS.CLAUDE, FORMATS.OPENAI, classifierBody(`${REAL_OPENING}\n\n${XML_INSTRUCTIONS}`));
+    const transformed = executor.transformRequest("deepseek-v4.1-flash", translated, true, {});
+    expect(systemOf(transformed.messages)).toContain("You are a security monitor for autonomous AI coding agents.");
+  });
+});
+
+describe("issue #18: stop_sequences survive the claude → openai hop", () => {
+  it("maps Anthropic stop_sequences to OpenAI stop (stage 1's halt on </block>)", () => {
+    const out = T(FORMATS.CLAUDE, FORMATS.OPENAI, {
+      ...classifierBody(XML_INSTRUCTIONS),
+      stop_sequences: ["</block>"],
+      max_tokens: 64,
+    });
+    expect(out.stop).toEqual(["</block>"]);
+    expect(out.max_tokens).toBe(64);
+  });
+
+  it("preserves order and every sequence in a multi-stop request", () => {
+    const out = T(FORMATS.CLAUDE, FORMATS.OPENAI, {
+      ...classifierBody(XML_INSTRUCTIONS),
+      stop_sequences: ["</block>", "\n\nHuman:", "</severity>"],
+    });
+    expect(out.stop).toEqual(["</block>", "\n\nHuman:", "</severity>"]);
+  });
+
+  it("omits the field entirely when the client sent none (no behaviour change)", () => {
+    const out = T(FORMATS.CLAUDE, FORMATS.OPENAI, classifierBody(XML_INSTRUCTIONS));
+    expect("stop" in out).toBe(false);
+  });
+
+  it("ignores an empty list rather than sending a request the provider 400s", () => {
+    const out = T(FORMATS.CLAUDE, FORMATS.OPENAI, { ...classifierBody(XML_INSTRUCTIONS), stop_sequences: [] });
+    expect("stop" in out).toBe(false);
+  });
+
+  it("drops blank / non-string entries (Anthropic rejects whitespace-only stops)", () => {
+    const out = T(FORMATS.CLAUDE, FORMATS.OPENAI, {
+      ...classifierBody(XML_INSTRUCTIONS),
+      stop_sequences: ["", null, 42, "</block>"],
+    });
+    expect(out.stop).toEqual(["</block>"]);
+  });
+
+  it("caps at Anthropic's 4-sequence limit instead of forwarding an invalid request", () => {
+    const out = T(FORMATS.CLAUDE, FORMATS.OPENAI, {
+      ...classifierBody(XML_INSTRUCTIONS),
+      stop_sequences: ["a", "b", "c", "d", "e", "f"],
+    });
+    expect(out.stop).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("a bare string is tolerated, not silently discarded", () => {
+    const out = T(FORMATS.CLAUDE, FORMATS.OPENAI, { ...classifierBody(XML_INSTRUCTIONS), stop_sequences: "</block>" });
+    expect(out.stop).toEqual(["</block>"]);
+  });
+
+  it("stop survives the cbcn executor transform (stage 1's end-to-end shape)", () => {
+    const executor2 = new CodeBuddyExecutor();
+    const translated = T(FORMATS.CLAUDE, FORMATS.OPENAI, {
+      ...classifierBody(XML_INSTRUCTIONS),
+      stop_sequences: ["</block>"],
+      max_tokens: 64,
+    });
+    const transformed = executor2.transformRequest("deepseek-v4.1-flash", translated, true, {});
+    expect(transformed.stop).toEqual(["</block>"]);
+    expect(transformed.stream).toBe(true);
   });
 });
 
