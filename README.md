@@ -140,7 +140,7 @@ PORT=20128 HOSTNAME=0.0.0.0 npm run start
 
 - Dashboard: `http://localhost:20128/dashboard`
 - API endpoint: `http://localhost:20128/v1`
-- 初始密码: `123456`（登录后请修改）
+- 初始密码: **无内置默认值**。首次启动未设密码（且未配置 SSO）时，仪表盘仅本机可访问 —— 请在同一台机器上打开仪表盘设置密码；无头部署（Docker / fnOS）用 `INITIAL_PASSWORD` 指定初始口令，登录后请在「设置 → 个人资料」修改
 
 ### ⚙️ 数据目录与驱动诊断
 

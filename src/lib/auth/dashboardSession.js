@@ -6,7 +6,40 @@ import crypto from "node:crypto";
 import { DATA_DIR } from "@/lib/dataDir";
 import { getSettings } from "@/lib/localDb";
 
-const DEFAULT_PASSWORD = "123456";
+// There is deliberately no hardcoded fallback password. A fresh install used to
+// accept the literal "123456", and because the launcher binds 0.0.0.0 by
+// default that made every un-configured instance admin-open to the whole LAN in
+// one guess (issue #9: default listener + default password + plaintext
+// credentials). Instead:
+//   * `INITIAL_PASSWORD` is the only non-interactive bootstrap password (it is
+//     what Docker / fnOS installs set, and it is never "123456" by default);
+//   * with no password configured at all the dashboard is loopback-only, so the
+//     operator sitting at the machine can set one while remote clients are
+//     refused outright (see dashboardGuard.isAuthenticated).
+const BOOTSTRAP_PASSWORD_ENV = "INITIAL_PASSWORD";
+
+export function getBootstrapPassword() {
+  const fromEnv = process.env[BOOTSTRAP_PASSWORD_ENV];
+  return typeof fromEnv === "string" ? fromEnv.trim() : "";
+}
+
+// Does the dashboard have *any* way to authenticate a client? Password hash,
+// bootstrap env var or SSO. When false, "unauthenticated" means "nothing to ask
+// for", and the guard falls back to loopback trust so a password can be set.
+// The SSO checks mirror isOidcConfigured / isSamlConfigured but are inlined on
+// purpose: this helper runs inside the per-request proxy, and importing the SAML
+// module there would pull XML/crypto machinery into that graph for two key
+// reads.
+export function isDashboardAuthConfigured(settings) {
+  if (settings?.password) return true;
+  if (getBootstrapPassword()) return true;
+  const oidcReady =
+    String(settings?.oidcIssuerUrl || "").trim() &&
+    String(settings?.oidcClientId || "").trim() &&
+    String(settings?.oidcClientSecret || "").trim();
+  if (oidcReady) return true;
+  return Boolean(settings?.samlEntryPoint && settings?.samlCert);
+}
 
 // Session lifetime. The token's `exp` and the cookie's `maxAge` are both derived
 // from this one value on purpose: with no maxAge at all the browser treats
@@ -103,6 +136,7 @@ export async function verifyDashboardPassword(password) {
   const settings = await getSettings();
   const storedHash = settings?.password;
   if (storedHash) return bcrypt.compare(password, storedHash);
-  const initialPassword = process.env.INITIAL_PASSWORD || DEFAULT_PASSWORD;
-  return password === initialPassword;
+  const bootstrap = getBootstrapPassword();
+  if (!bootstrap) return false;
+  return password === bootstrap;
 }

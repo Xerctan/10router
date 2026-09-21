@@ -95,7 +95,7 @@ export default function APIPageClient({ machineId }) {
   const isLoginUnsafe = !requireLogin || !hasPassword;
   const unsafeReason = !requireLogin
     ? "Enable \"Require login\" and set a custom password before activating the tunnel."
-    : "Change the default dashboard password before activating the tunnel.";
+    : "Set a dashboard password before activating the tunnel.";
 
   // Auto-scroll install log
   useEffect(() => {
@@ -981,7 +981,7 @@ export default function APIPageClient({ machineId }) {
                 message={
                   !requireLogin
                     ? translate("Require login is disabled — anyone can access your dashboard via tunnel.")
-                    : translate("Dashboard uses the default password — change it in Profile settings.")
+                    : translate("No dashboard password is set — set one in Profile settings.")
                 }
                 action={{
                   label: !requireLogin ? translate("Enable") : translate("Change password"),

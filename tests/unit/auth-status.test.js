@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   getSettings: vi.fn(),
   isOidcConfigured: vi.fn(),
   getDashboardAuthSession: vi.fn(),
+  isDashboardAuthConfigured: vi.fn(() => true),
+  isLocalRequest: vi.fn(() => false),
 }));
 
 vi.mock("next/server", () => ({
@@ -29,6 +31,13 @@ vi.mock("@/lib/auth/oidc", () => ({
 
 vi.mock("@/lib/auth/dashboardSession", () => ({
   getDashboardAuthSession: mocks.getDashboardAuthSession,
+  isDashboardAuthConfigured: mocks.isDashboardAuthConfigured,
+}));
+
+// The route asks the guard whether the caller is on this machine; mocking it keeps
+// the peer-token plumbing out of an endpoint test.
+vi.mock("@/dashboardGuard", () => ({
+  isLocalRequest: mocks.isLocalRequest,
 }));
 
 const { GET } = await import("../../src/app/api/auth/status/route.js");
@@ -65,5 +74,40 @@ describe("GET /api/auth/status", () => {
 
     expect(response.body.authenticated).toBe(false);
     expect(response.body.requireLogin).toBe(true);
+  });
+
+  // A fresh install has no password hash, no INITIAL_PASSWORD and no SSO. The
+  // login form cannot possibly succeed in that state (the literal "123456"
+  // fallback is gone), so the page has to be told which side of the wire the
+  // caller is on: remote callers get "set it on the machine", the machine itself
+  // gets "open the dashboard and set it".
+  it("flags a remote caller when nothing is configured at all", async () => {
+    mocks.isDashboardAuthConfigured.mockReturnValue(false);
+    mocks.isLocalRequest.mockReturnValue(false);
+
+    const response = await GET({});
+
+    expect(response.body.needsLocalSetup).toBe(true);
+    expect(response.body.bootstrapLocal).toBe(false);
+  });
+
+  it("flags the machine itself for the bootstrap path", async () => {
+    mocks.isDashboardAuthConfigured.mockReturnValue(false);
+    mocks.isLocalRequest.mockReturnValue(true);
+
+    const response = await GET({});
+
+    expect(response.body.needsLocalSetup).toBe(false);
+    expect(response.body.bootstrapLocal).toBe(true);
+  });
+
+  it("stays quiet once a password exists", async () => {
+    mocks.isDashboardAuthConfigured.mockReturnValue(true);
+    mocks.isLocalRequest.mockReturnValue(false);
+
+    const response = await GET({});
+
+    expect(response.body.needsLocalSetup).toBe(false);
+    expect(response.body.bootstrapLocal).toBe(false);
   });
 });

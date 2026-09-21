@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, Toggle } from "@/shared/components";
 import { translate } from "@/i18n/runtime";
+import SecurityCard from "./SecurityCard";
 
 // Beta toggles lifted out of Settings. They all act on provider *accounts*
 // rather than on request routing (credential transfer, daily check-in and
@@ -137,6 +138,9 @@ export default function ExperimentalClient() {
             </div>
           </div>
         </Card>
+
+        {/* Security — dashboard exposure + local-only lockdown (issue #9) */}
+        <SecurityCard settings={settings} patch={patch} />
       </div>
     </div>
   );
