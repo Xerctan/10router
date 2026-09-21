@@ -29,6 +29,8 @@
   "launcher.crashedRestarting": "\n⚠️  服务已退出(code={code}),将在 {seconds} 秒后重启...({attempt}/{max})",
   "launcher.crashLogHeader": "\n--- 服务崩溃日志 ---",
   "launcher.crashLogFooter": "--- 崩溃日志结束 ---",
+  "launcher.staleServerKilled": "\n🔁 检测到旧构建的服务进程仍在运行（运行 v{running}，磁盘已是 v{disk}）——正在停止它，让新构建接管端口。",
+  "launcher.staleServerNoPid": "\n⚠️ 一个不同构建的服务进程（v{running}）占着端口，但没有 PID 文件可安全停止——仍继续启动。若启动失败，请退出另一个实例后重试。",
 
   "menu.interfaceTitle": "选择界面 (v{version})",
   "menu.serverSubtitle": "🚀 服务地址: {url}",

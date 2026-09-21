@@ -64,8 +64,9 @@ function createSpinner(text) {
 }
 
 const pkg = require("./package.json");
-const { ensureSqliteRuntime, buildEnvWithRuntime } = require("./hooks/sqliteRuntime");
+const { ensureSqliteRuntime, buildEnvWithRuntime, getDataDir } = require("./hooks/sqliteRuntime");
 const { ensureTrayRuntime } = require("./hooks/trayRuntime");
+const { healStaleServer, writeDiskVersion, writePidFile, removePidFile } = require("./src/cli/staleServer");
 const args = process.argv.slice(2);
 
 // Subcommands (`10router xai video …`) run against an already-running gateway
@@ -88,6 +89,13 @@ try { ensureSqliteRuntime({ silent: true }); } catch {}
 
 // Self-heal tray runtime (systray for macOS/Linux only). Windows skipped.
 try { ensureTrayRuntime({ silent: true }); } catch {}
+
+// Record the version that is now ON DISK. An upgrade (npm i -g / fpk / desktop)
+// replaces the package dir while a detached server from the old build may still
+// be running; this marker lets that old process — and the dashboard — see that
+// the disk has moved on. postinstall.js writes it too (it runs while the old
+// server is still alive); this covers installs where postinstall never ran.
+try { writeDiskVersion(getDataDir(), pkg.version); } catch {}
 
 // Configuration constants
 // Two different names, identical until the npm package was renamed to
@@ -527,8 +535,25 @@ if (!fs.existsSync(serverPath)) {
 
 // Start server immediately; run update check in parallel (not on the critical path).
 const updatePromise = checkForUpdate();
+
+// Stop a server left over from a PREVIOUS build before trying to own the port:
+// otherwise the new server dies on EADDRINUSE while the stale one keeps serving
+// chunk hashes that no longer exist on disk (blank dashboard). Never fatal.
+function logStaleServerResult(result) {
+  if (result && result.action === "killed") {
+    console.log(t("launcher.staleServerKilled", { running: result.running, disk: pkg.version }));
+  } else if (result && result.action === "warn") {
+    console.log(t("launcher.staleServerNoPid", { running: result.running, port: String(port) }));
+  }
+}
+
 killAllAppProcesses(port)
   .then(() => killProcessOnPort(port))
+  .then(() =>
+    healStaleServer({ port, version: pkg.version, dataDir: getDataDir() })
+      .then(logStaleServerResult)
+      .catch(() => {}),
+  )
   .then(() => startServer(updatePromise));
 
 // Show interface selection menu
@@ -610,6 +635,9 @@ function startServer(updatePromise) {
         HOSTNAME: host
       }
     });
+    // Pidfile: lets a later launcher run stop a server this process left behind
+    // (an upgrade replaces the package dir under a detached server). Best-effort.
+    if (child.pid) writePidFile(getDataDir(), child.pid);
     if (!showLog && child.stderr) {
       child.stderr.on("data", (data) => {
         const lines = data.toString().split("\n").filter(Boolean);
@@ -643,6 +671,7 @@ function startServer(updatePromise) {
       }
       // Also try to kill process group
       process.kill(-server.pid, "SIGKILL");
+      removePidFile(getDataDir());
     } catch (e) { }
   }
 

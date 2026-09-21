@@ -29,6 +29,8 @@
   "launcher.crashedRestarting": "\n⚠️  服務已結束(code={code}),將於 {seconds} 秒後重新啟動...({attempt}/{max})",
   "launcher.crashLogHeader": "\n--- 服務當機日誌 ---",
   "launcher.crashLogFooter": "--- 當機日誌結束 ---",
+  "launcher.staleServerKilled": "\n🔁 偵測到舊建置的服務行程仍在執行（執行 v{running}，磁碟已是 v{disk}）——正在停止它，讓新建置接管連接埠。",
+  "launcher.staleServerNoPid": "\n⚠️ 一個不同建置的服務行程（v{running}）占用連接埠，但沒有 PID 檔案可安全停止——仍繼續啟動。若啟動失敗，請結束另一個實例後重試。",
 
   "menu.interfaceTitle": "選擇介面 (v{version})",
   "menu.serverSubtitle": "🚀 服務位址: {url}",

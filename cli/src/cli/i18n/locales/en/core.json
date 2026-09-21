@@ -29,6 +29,8 @@
   "launcher.crashedRestarting": "\n⚠️  Server exited (code={code}). Restarting in {seconds}s... ({attempt}/{max})",
   "launcher.crashLogHeader": "\n--- Server crash log ---",
   "launcher.crashLogFooter": "--- End crash log ---",
+  "launcher.staleServerKilled": "\n🔁 A server from a different build is still running (running v{running}; disk has v{disk}) — stopping it so the new build can take the port.",
+  "launcher.staleServerNoPid": "\n⚠️ A server from a different build (v{running}) is holding the port, but there is no PID file to stop it safely — starting anyway. If startup fails, quit the other instance and retry.",
 
   "menu.interfaceTitle": "Choose Interface (v{version})",
   "menu.serverSubtitle": "🚀 Server: {url}",
