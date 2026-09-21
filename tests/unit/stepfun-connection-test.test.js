@@ -26,7 +26,7 @@ const VALIDATE_URLS = {
 };
 
 beforeAll(async () => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-stepfun-test-"));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "10router-stepfun-test-"));
   process.env.DATA_DIR = tempDir;
   vi.resetModules();
   db = await import("@/lib/db/index.js");

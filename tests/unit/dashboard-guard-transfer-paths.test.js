@@ -36,7 +36,7 @@ const PEER = "peer-token-fixture";
 function req(pathname, ip = "127.0.0.1", extra = {}) {
   return {
     nextUrl: { pathname, searchParams: new URL(`http://x${pathname}`).searchParams },
-    headers: new Headers({ "x-9r-peer-token": PEER, "x-9r-real-ip": ip, host: "localhost:20128", ...extra }),
+    headers: new Headers({ "x-10r-peer-token": PEER, "x-10r-real-ip": ip, host: "localhost:20128", ...extra }),
     cookies: { get: () => undefined },
     url: `http://localhost${pathname}`,
     method: "POST",
@@ -46,7 +46,7 @@ function req(pathname, ip = "127.0.0.1", extra = {}) {
 describe("audit: guard behavior for new sensitive paths (requireLogin=false)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.NINEROUTER_PEER_TOKEN = PEER;
+    process.env.TENROUTER_PEER_TOKEN = PEER;
     mocks.getSettings.mockResolvedValue({ requireLogin: false });
     mocks.validateApiKey.mockResolvedValue(false);
     mocks.getConsistentMachineId.mockResolvedValue("cli-token");

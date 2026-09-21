@@ -56,7 +56,7 @@ function loadManager() {
 }
 
 beforeEach(() => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-mitm-pwd-"));
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "10router-mitm-pwd-"));
   process.env.DATA_DIR = tempDir;
   settings = {};
 });

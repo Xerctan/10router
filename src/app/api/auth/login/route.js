@@ -4,7 +4,7 @@ import { checkLock, recordFail, recordSuccess, getClientIp } from "@/lib/auth/lo
 import { cookies } from "next/headers";
 
 // Progressive lockout lives in loginLimiter (in-memory, resets on restart) —
-// the same limiter the SAML acs route uses. getClientIp trusts x-9r-real-ip
+// the same limiter the SAML acs route uses. getClientIp trusts x-10r-real-ip
 // only when custom-server.js stamped it, so remote clients cannot rotate
 // their own bucket.
 export async function POST(request) {

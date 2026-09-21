@@ -21,7 +21,7 @@ let db;
 const RAW_KEY = "sk-496f00bc7e460c8d-7if42g-960faa00";
 
 beforeAll(async () => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-usage-key-"));
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "10router-usage-key-"));
   process.env.DATA_DIR = tempDir;
   vi.resetModules();
   db = await import("@/lib/db/index.js");

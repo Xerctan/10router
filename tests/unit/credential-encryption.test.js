@@ -20,7 +20,7 @@ const originalDataDir = process.env.DATA_DIR;
 const originalSecret = process.env.CREDENTIAL_SECRET;
 
 beforeEach(() => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-cred-"));
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "10router-cred-"));
   process.env.DATA_DIR = tempDir;
   delete process.env.CREDENTIAL_SECRET;
   delete global._dbAdapter;

@@ -14,7 +14,7 @@ const originalDataDir = process.env.DATA_DIR;
 let db;
 
 beforeAll(async () => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-err-reset-"));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "10router-err-reset-"));
   process.env.DATA_DIR = tempDir;
   vi.resetModules();
   db = await import("@/lib/db/index.js");

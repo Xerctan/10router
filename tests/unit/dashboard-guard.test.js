@@ -54,13 +54,13 @@ function request(pathname, headers = {}) {
 // A request that actually came through custom-server.js: peer IP stamped from the TCP
 // socket and proven by the per-process secret.
 function localRequest(pathname, headers = {}) {
-  return request(pathname, { "x-9r-peer-token": PEER_TOKEN, "x-9r-real-ip": "127.0.0.1", ...headers });
+  return request(pathname, { "x-10r-peer-token": PEER_TOKEN, "x-10r-real-ip": "127.0.0.1", ...headers });
 }
 
 describe("dashboard guard public LLM API access", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.NINEROUTER_PEER_TOKEN = PEER_TOKEN;
+    process.env.TENROUTER_PEER_TOKEN = PEER_TOKEN;
     mocks.getSettings.mockResolvedValue({ requireLogin: true });
     mocks.validateApiKey.mockResolvedValue(false);
     mocks.getConsistentMachineId.mockResolvedValue("cli-token");
@@ -77,7 +77,7 @@ describe("dashboard guard public LLM API access", () => {
   it("rejects remote Host-spoof when real peer IP is non-loopback", async () => {
     const response = await proxy(localRequest("/v1/chat/completions", {
       host: "localhost",
-      "x-9r-real-ip": "10.204.111.34",
+      "x-10r-real-ip": "10.204.111.34",
     }));
 
     expect(response.status).toBe(401);
@@ -87,7 +87,7 @@ describe("dashboard guard public LLM API access", () => {
   it("allows loopback peer IP regardless of Host", async () => {
     const response = await proxy(localRequest("/v1/chat/completions", {
       host: "localhost:20128",
-      "x-9r-real-ip": "127.0.0.1",
+      "x-10r-real-ip": "127.0.0.1",
     }));
 
     expect(response).toBe(mocks.nextResponse);
@@ -223,7 +223,7 @@ describe("dashboard guard public LLM API access", () => {
 describe("dashboard guard local-only access", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.NINEROUTER_PEER_TOKEN = PEER_TOKEN;
+    process.env.TENROUTER_PEER_TOKEN = PEER_TOKEN;
     mocks.getSettings.mockResolvedValue({ requireLogin: true });
     mocks.validateApiKey.mockResolvedValue(false);
     mocks.getConsistentMachineId.mockResolvedValue("cli-token");
@@ -294,7 +294,7 @@ describe("dashboard guard local-only access", () => {
 describe("dashboard guard xiaomi-mimo auto-import (credential-bearing, P1)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.NINEROUTER_PEER_TOKEN = PEER_TOKEN;
+    process.env.TENROUTER_PEER_TOKEN = PEER_TOKEN;
     mocks.getSettings.mockResolvedValue({ requireLogin: false });
     mocks.validateApiKey.mockResolvedValue(false);
     mocks.getConsistentMachineId.mockResolvedValue("cli-token");
@@ -346,7 +346,7 @@ describe("dashboard guard xiaomi-mimo auto-import (credential-bearing, P1)", () 
 describe("dashboard guard bootstrap state (no password configured)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.NINEROUTER_PEER_TOKEN = PEER_TOKEN;
+    process.env.TENROUTER_PEER_TOKEN = PEER_TOKEN;
     // The state itself: getSettings has no password hash and no SSO keys.
     mocks.getSettings.mockResolvedValue({ requireLogin: true });
     mocks.validateApiKey.mockResolvedValue(false);
@@ -396,7 +396,7 @@ describe("dashboard guard bootstrap state (no password configured)", () => {
 describe("dashboard guard dashboardLocalOnly switch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.NINEROUTER_PEER_TOKEN = PEER_TOKEN;
+    process.env.TENROUTER_PEER_TOKEN = PEER_TOKEN;
     mocks.getSettings.mockResolvedValue({ requireLogin: true, password: "$2a$hash", dashboardLocalOnly: true });
     mocks.validateApiKey.mockResolvedValue(false);
     mocks.getConsistentMachineId.mockResolvedValue("cli-token");

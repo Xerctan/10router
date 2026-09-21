@@ -6,12 +6,12 @@ const { pathToFileURL } = require("url");
 
 const origCreate = http.createServer.bind(http);
 
-// Per-process secret proving x-9r-real-ip was stamped below rather than sent by the client.
+// Per-process secret proving x-10r-real-ip was stamped below rather than sent by the client.
 // A bare `next start` / `next dev` never loads this file, so it cannot produce a matching
 // header even though the env var is inherited by child processes. Named like x-9r-cli-token
 // so the request-detail header sanitizer redacts it too.
 const PEER_TOKEN = crypto.randomBytes(24).toString("hex");
-process.env.NINEROUTER_PEER_TOKEN = PEER_TOKEN;
+process.env.TENROUTER_PEER_TOKEN = PEER_TOKEN;
 
 // Long-term console archive: tee server console output into a per-day file under
 // the data dir (logs/app-YYYY-MM-DD.log, append-only, no cap — the durable record
@@ -100,13 +100,13 @@ http.createServer = (...args) => {
     // Direct/public sockets remain keyed by the unspoofable peer address.
     const proxyIp = xRealIp || (xff ? String(xff).split(",")[0].trim() : "");
     const ip = isLoopbackProxy && proxyIp ? proxyIp : socketIp;
-    delete req.headers["x-9r-real-ip"];
+    delete req.headers["x-10r-real-ip"];
     delete req.headers["x-forwarded-for"];
-    delete req.headers["x-9r-via-proxy"];
-    delete req.headers["x-9r-peer-token"];
-    req.headers["x-9r-real-ip"] = ip;
-    req.headers["x-9r-peer-token"] = PEER_TOKEN;
-    if (viaProxy) req.headers["x-9r-via-proxy"] = "1";
+    delete req.headers["x-10r-via-proxy"];
+    delete req.headers["x-10r-peer-token"];
+    req.headers["x-10r-real-ip"] = ip;
+    req.headers["x-10r-peer-token"] = PEER_TOKEN;
+    if (viaProxy) req.headers["x-10r-via-proxy"] = "1";
     return handler(req, res);
   };
   const server = origCreate(...rest, wrapped);

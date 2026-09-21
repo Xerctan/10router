@@ -20,7 +20,7 @@ import { getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
 import { detectFormatByEndpoint, FORMATS } from "open-sse/translator/formats.js";
 import * as log from "../utils/logger.js";
 
-export const INTERNAL_COMPACTION_HEADER = "x-9r-internal-compaction";
+export const INTERNAL_COMPACTION_HEADER = "x-10r-internal-compaction";
 
 const DEFAULT_RATIO = 0.9;
 const DEFAULT_KEEP_MESSAGES = 8;

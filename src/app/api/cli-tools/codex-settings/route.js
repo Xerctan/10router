@@ -74,7 +74,7 @@ const readConfig = async () => {
 };
 
 // Check if config has 10Router settings
-const has9RouterConfig = (config) => {
+const has10RouterConfig = (config) => {
   if (!config) return false;
   return config.includes("model_provider = \"10router\"") || config.includes("[model_providers.10router]");
 };
@@ -97,7 +97,7 @@ export async function GET() {
     return NextResponse.json({
       installed: true,
       config,
-      has10Router: has9RouterConfig(config),
+      has10Router: has10RouterConfig(config),
       configPath: getCodexConfigPath(),
     });
   } catch (error) {

@@ -121,7 +121,7 @@ describe("issue #9 item 8 — short session that slides while you work", () => {
   let tempDir;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-session-"));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "10router-session-"));
     process.env.DATA_DIR = tempDir;
     process.env.JWT_SECRET = "test-secret-for-sliding-session";
     vi.resetModules();
