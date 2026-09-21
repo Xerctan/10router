@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, Button, Input, Modal, Toggle, ConfirmModal } from "@/shared/components";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
-import { getCurrentLocale, onLocaleChange } from "@/i18n/runtime";
+import { getCurrentLocale, onLocaleChange, translate } from "@/i18n/runtime";
 import {
   WENYAN_LOCALES,
   CAVEMAN_LEVELS,
@@ -57,6 +57,10 @@ export default function TokenSaverClient() {
   const [showPxpipeModal, setShowPxpipeModal] = useState(false);
   const [pxpipeActionLoading, setPxpipeActionLoading] = useState(false);
   const [pxpipeActionError, setPxpipeActionError] = useState("");
+  // Server-side auto-compaction of oversized contexts (moved here from Settings —
+  // it is a dispatch-side token saver, not a general preference).
+  const [autoCompactEnabled, setAutoCompactEnabled] = useState(true);
+  const [autoCompactRatio, setAutoCompactRatio] = useState(0.9);
   const [locale, setLocale] = useState("en");
 
   const { copied, copy } = useCopyToClipboard();
@@ -102,6 +106,20 @@ export default function TokenSaverClient() {
     } catch (error) {
       console.log("Error updating rtkEnabled:", error);
     }
+  };
+
+  // Auto-compaction ships ON (the alternative is a hard "prompt is too long"
+  // failure); the toggle stores an explicit false to opt out.
+  const handleAutoCompactEnabled = (value) => {
+    setAutoCompactEnabled(value);
+    patchSetting({ autoCompactEnabled: value });
+  };
+
+  const handleAutoCompactRatio = (value) => {
+    const ratio = Number(value);
+    if (!Number.isFinite(ratio)) return;
+    setAutoCompactRatio(ratio);
+    patchSetting({ autoCompactRatio: ratio });
   };
 
   const handleCavemanEnabled = (value) => {
@@ -413,6 +431,8 @@ export default function TokenSaverClient() {
         if (res.ok) {
           const data = await res.json();
           setRtkEnabledState(data.rtkEnabled !== false);
+          setAutoCompactEnabled(data.autoCompactEnabled !== false);
+          if (typeof data.autoCompactRatio === "number") setAutoCompactRatio(data.autoCompactRatio);
           setHeadroomEnabled(!!data.headroomEnabled);
           setHeadroomUrl(data.headroomUrl || "http://localhost:8787");
           setCodeAware(data.headroomCodeAware === true);
@@ -495,6 +515,33 @@ export default function TokenSaverClient() {
           <Toggle
             checked={rtkEnabled}
             onChange={() => handleRtkEnabled(!rtkEnabled)}
+          />
+        </div>
+        {/* Auto-compact — summarize older turns when the prompt nears the model limit */}
+        <div className="flex items-start justify-between py-4 gap-4 border-b border-border">
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">{translate("Auto-compact oversized context")}</p>
+            <p className="text-sm text-text-muted">
+              {translate("Summarize older turns before dispatch when a request nears the model's context limit")}
+            </p>
+            {autoCompactEnabled && (
+              <label className="mt-2 flex items-center gap-2 text-xs text-text-muted">
+                {translate("Trigger threshold")}
+                <select
+                  value={String(autoCompactRatio)}
+                  onChange={(e) => handleAutoCompactRatio(e.target.value)}
+                  className="rounded border border-border bg-surface px-2 py-1 text-xs text-text"
+                >
+                  <option value="0.8">80%</option>
+                  <option value="0.9">90%</option>
+                  <option value="0.95">95%</option>
+                </select>
+              </label>
+            )}
+          </div>
+          <Toggle
+            checked={autoCompactEnabled}
+            onChange={() => handleAutoCompactEnabled(!autoCompactEnabled)}
           />
         </div>
         <div className="flex items-center justify-between py-4 gap-4 flex-wrap">
