@@ -65,9 +65,9 @@ export default function LoginPage() {
             <div className="flex flex-col gap-3">
               <p className="text-sm font-medium">No dashboard password is set yet</p>
               <p className="text-xs text-text-muted">
-                Remote access stays disabled until a password exists — set the first password on the
-                machine running 10Router (open http://127.0.0.1:20128 there), or start it with the
-                INITIAL_PASSWORD environment variable.
+                Remote access to the dashboard stays disabled until a password is set. Set the first
+                password on the machine running 10Router (open http://127.0.0.1:20128 there), or start
+                it with the INITIAL_PASSWORD environment variable.
               </p>
             </div>
           ) : bootstrapLocal ? (

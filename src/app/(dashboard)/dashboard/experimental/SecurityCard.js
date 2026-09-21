@@ -53,6 +53,11 @@ export default function SecurityCard({ settings, patch }) {
 
   const noPassword = info ? !info.hasPassword && !info.bootstrapPassword && !info.ssoConfigured : false;
   const loginOff = info ? info.requireLogin === false : false;
+  // The dashboard's real reach, which is not just this switch: with no password
+  // set (and no SSO) the guard refuses non-local callers outright, so a row
+  // reading "anyone who can reach the port" would flatly contradict the sentence
+  // right below it saying remote access is off.
+  const localOnlyEffective = localOnly || (noPassword && !loginOff);
 
   return (
     <Card>
@@ -115,20 +120,25 @@ export default function SecurityCard({ settings, patch }) {
             />
             <Row
               label={translate("Dashboard access")}
-              value={localOnly ? translate("This machine only") : translate("Anyone who can reach the port")}
-              tone={localOnly ? "ok" : "warn"}
+              value={
+                localOnlyEffective
+                  ? translate("This machine only")
+                  : loginOff
+                    ? translate("Anyone who can reach the port")
+                    : translate("Anyone who can reach the port and knows the password")
+              }
+              tone={localOnlyEffective ? "ok" : "warn"}
             />
-            {noPassword && (
+            {noPassword && !loginOff && (
               <p className="text-xs text-red-600 dark:text-red-400 pt-2">
-                {translate("No password is set, so remote dashboard access is disabled until one exists. Set it in Settings → Profile — the machine running 10Router keeps working.")}
+                {translate("No password is set yet, so the dashboard opens on this machine only. Set one in Settings → Profile to reach it from other devices. The gateway API (/v1) is unaffected.")}
               </p>
             )}
             {loginOff && (
               <p className="text-xs text-red-600 dark:text-red-400 pt-2">
                 {translate("Log-in check is off: anyone who can reach this port can manage every provider and credential. Turn it back on in Settings → Profile.")}
               </p>
-            )}
-          </div>
+            )}          </div>
         )}
       </div>
     </Card>

@@ -1042,12 +1042,17 @@ export default function ProfilePage() {
                 </p>
               </div>
               <Toggle
-                checked={settings.requireLogin === true}
-                onChange={() => updateRequireLogin(!settings.requireLogin)}
+                checked={settings.requireLogin !== false}
+                onChange={() => updateRequireLogin(settings.requireLogin === false)}
                 disabled={loading}
               />
             </div>
-            {settings.requireLogin === true && (
+            {/* Default is ON — the server only treats an explicit `false` as off
+                (`requireLogin !== false` everywhere in the guard). Testing
+                `=== true` here hid the form on every install that never touched
+                this setting, i.e. exactly the installations that still need to
+                set a first password. */}
+            {settings.requireLogin !== false && (
               <form onSubmit={handlePasswordChange} className="flex flex-col gap-4 pt-4 border-t border-border/50">
                 {settings.hasPassword && (
                   <div className="flex flex-col gap-2">

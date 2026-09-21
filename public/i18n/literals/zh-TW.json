@@ -630,7 +630,7 @@
   "No claimable activity available for this account": "該帳號目前無可領取的活動",
   "Beta toggles for provider transfer and daily credit check-ins": "提供商傳輸與每日積分簽到的內測開關",
   "No dashboard password is set yet": "尚未設定儀表板密碼",
-  "Remote access stays disabled until a password exists — set the first password on the machine running 10Router (open http://127.0.0.1:20128 there), or start it with the INITIAL_PASSWORD environment variable.": "在設定密碼之前，區域網路存取維持關閉 —— 請在執行 10Router 的機器上設定第一個密碼（在該機開啟 http://127.0.0.1:20128），或以 INITIAL_PASSWORD 環境變數啟動。",
+
   "Only this machine can open the dashboard until one is set. Set it from Settings → Profile, and LAN access turns back on.": "在設定密碼前，只有本機可以開啟儀表板。請在「設定 → 個人資料」中設定，之後區域網路存取會自動恢復。",
   "Open dashboard": "開啟儀表板",
   "Dashboard: local access only": "儀表板僅本機存取",
@@ -649,7 +649,10 @@
   "Dashboard access": "儀表板存取範圍",
   "This machine only": "僅本機",
   "Anyone who can reach the port": "任何能存取該連接埠的人",
-  "No password is set, so remote dashboard access is disabled until one exists. Set it in Settings → Profile — the machine running 10Router keeps working.": "尚未設定密碼，因此遠端存取儀表板已被停用。請在「設定 → 個人資料」中設定 —— 執行 10Router 的本機不受影響。",
+
   "Log-in check is off: anyone who can reach this port can manage every provider and credential. Turn it back on in Settings → Profile.": "登入檢查已關閉：任何能存取該連接埠的人都能管理全部供應商與憑證。請在「設定 → 個人資料」中重新開啟。",
-  "Unknown": "未知"
+  "Unknown": "未知",
+  "Anyone who can reach the port and knows the password": "任何能存取該連接埠且知道密碼的人",
+  "No password is set yet, so the dashboard opens on this machine only. Set one in Settings → Profile to reach it from other devices. The gateway API (/v1) is unaffected.": "尚未設定密碼：儀表板目前只能在本機開啟。請在「設定 → 個人資料」設定一組密碼，即可從其它裝置存取；閘道介面（/v1）不受影響。",
+  "Remote access to the dashboard stays disabled until a password is set. Set the first password on the machine running 10Router (open http://127.0.0.1:20128 there), or start it with the INITIAL_PASSWORD environment variable.": "在設定密碼之前，儀表板的遠端存取維持關閉。請在執行 10Router 的機器上設定第一個密碼（在該機開啟 http://127.0.0.1:20128），或以 INITIAL_PASSWORD 環境變數啟動。"
 }

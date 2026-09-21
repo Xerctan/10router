@@ -1810,7 +1810,7 @@
   "No claimable activity available for this account": "该账号当前无可领取的活动",
   "Beta toggles for provider transfer and daily credit check-ins": "提供商传输与每日积分签到的内测开关",
   "No dashboard password is set yet": "尚未设置仪表盘密码",
-  "Remote access stays disabled until a password exists — set the first password on the machine running 10Router (open http://127.0.0.1:20128 there), or start it with the INITIAL_PASSWORD environment variable.": "在设置密码之前，局域网访问保持关闭 —— 请在运行 10Router 的机器上设置首个密码（在那里打开 http://127.0.0.1:20128），或使用 INITIAL_PASSWORD 环境变量启动。",
+
   "Only this machine can open the dashboard until one is set. Set it from Settings → Profile, and LAN access turns back on.": "在设置密码前，只有本机可以打开仪表盘。请在「设置 → 个人资料」中设置，随后局域网访问会自动恢复。",
   "Open dashboard": "打开仪表盘",
   "Dashboard: local access only": "仪表盘仅本机访问",
@@ -1829,6 +1829,9 @@
   "Dashboard access": "仪表盘访问范围",
   "This machine only": "仅本机",
   "Anyone who can reach the port": "任何能访问该端口的人",
-  "No password is set, so remote dashboard access is disabled until one exists. Set it in Settings → Profile — the machine running 10Router keeps working.": "尚未设置密码，因此远程访问仪表盘已被禁用。请在「设置 → 个人资料」中设置 —— 运行 10Router 的本机不受影响。",
-  "Log-in check is off: anyone who can reach this port can manage every provider and credential. Turn it back on in Settings → Profile.": "登录校验已关闭：任何能访问该端口的人都能管理全部供应商与凭据。请在「设置 → 个人资料」中重新开启。"
+
+  "Log-in check is off: anyone who can reach this port can manage every provider and credential. Turn it back on in Settings → Profile.": "登录校验已关闭：任何能访问该端口的人都能管理全部供应商与凭据。请在「设置 → 个人资料」中重新开启。",
+  "Anyone who can reach the port and knows the password": "任何能访问该端口且知道密码的人",
+  "No password is set yet, so the dashboard opens on this machine only. Set one in Settings → Profile to reach it from other devices. The gateway API (/v1) is unaffected.": "尚未设置密码：仪表盘目前只能在本机打开。请在「设置 → 个人资料」设置一个密码，即可从其它设备访问；网关接口（/v1）不受影响。",
+  "Remote access to the dashboard stays disabled until a password is set. Set the first password on the machine running 10Router (open http://127.0.0.1:20128 there), or start it with the INITIAL_PASSWORD environment variable.": "在设置密码之前，仪表盘的远程访问保持关闭。请在运行 10Router 的机器上设置首个密码（在那里打开 http://127.0.0.1:20128），或使用 INITIAL_PASSWORD 环境变量启动。"
 }

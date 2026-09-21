@@ -166,6 +166,49 @@ describe("the CLI reset flow no longer revives a public password", () => {
   });
 });
 
+describe("the 'set a password' advice leads somewhere", () => {
+  // The profile page used to test `requireLogin === true`, but the server's
+  // default is ON and an install that never touched the setting has no key at
+  // all — so the toggle rendered OFF and the password form was hidden on
+  // exactly the instances that had no password yet. Every other reader of this
+  // setting uses `!== false`; the form has to as well, or the guidance the
+  // dashboard shows in that state is a dead end.
+  const profile = readSource("src/app/(dashboard)/dashboard/profile/page.js");
+
+  it("does not use the strict check that hides the form", () => {
+    expect(profile).not.toContain("settings.requireLogin === true");
+  });
+
+  it("renders the toggle and the password form with the server's default", () => {
+    expect(profile).toContain("checked={settings.requireLogin !== false}");
+    expect(profile).toContain("{settings.requireLogin !== false && (");
+  });
+
+  it("flips the setting the right way when the key is absent", () => {
+    // `!settings.requireLogin` on an absent key is true, so the switch would
+    // look unresponsive: click -> set true -> still on.
+    expect(profile).not.toContain("updateRequireLogin(!settings.requireLogin)");
+    expect(profile).toContain("updateRequireLogin(settings.requireLogin === false)");
+  });
+});
+
+describe("the security card read-out does not contradict itself", () => {
+  const card = readSource("src/app/(dashboard)/dashboard/experimental/SecurityCard.js");
+
+  it("reports the effective scope, not just the switch", () => {
+    expect(card).toContain("localOnlyEffective");
+    expect(card).toContain("noPassword && !loginOff");
+  });
+
+  it("drops the sentence that called the dashboard remote-reachable and unreachable at once", () => {
+    expect(card).not.toContain("so remote dashboard access is disabled until one exists");
+  });
+
+  it("says what to do and that the gateway API keeps working", () => {
+    expect(card).toContain("The gateway API (/v1) is unaffected.");
+  });
+});
+
 describe("the fnOS package does not ship a public initial password", () => {
   const main = readSource("fnos-packaging/cmd/main");
 
