@@ -238,9 +238,26 @@ git show upstream/master:<path>    # 阅读某文件的上游实现
 
 ## 👥 贡献者
 
-- [techysy](https://github.com/techysy) — 主要维护者
-- [shiyangyuda](https://github.com/shiyangyuda) — 代码优化
-- [monkey2jack](https://github.com/monkey2jack) — arm64 Docker 支持
+<!-- 头像列表：主要维护者在前，其余按「PR + issue 数」降序。名单由 issue / PR 的创建者汇总而来，
+     改动时请一并更新（头像取自 GitHub 公开头像，链接即个人主页）。 -->
+<p>
+  <a href="https://github.com/techysy" title="techysy — 主要维护者"><img src="https://github.com/techysy.png?size=80" width="48" height="48" alt="techysy" /></a>
+  <a href="https://github.com/shiyangyuda" title="shiyangyuda — 代码优化"><img src="https://github.com/shiyangyuda.png?size=80" width="48" height="48" alt="shiyangyuda" /></a>
+  <a href="https://github.com/monkey2jack" title="monkey2jack — arm64 Docker 支持（PR #1 #8 #20 #22）"><img src="https://github.com/monkey2jack.png?size=80" width="48" height="48" alt="monkey2jack" /></a>
+  <a href="https://github.com/IOPQWE51" title="IOPQWE51 — PR #5 #23"><img src="https://github.com/IOPQWE51.png?size=80" width="48" height="48" alt="IOPQWE51" /></a>
+  <a href="https://github.com/lan5635" title="lan5635 — issue 反馈"><img src="https://github.com/lan5635.png?size=80" width="48" height="48" alt="lan5635" /></a>
+  <a href="https://github.com/RyuuzakiLu2023" title="RyuuzakiLu2023 — issue 反馈（安全审计）"><img src="https://github.com/RyuuzakiLu2023.png?size=80" width="48" height="48" alt="RyuuzakiLu2023" /></a>
+  <a href="https://github.com/alchohol" title="alchohol — issue 反馈"><img src="https://github.com/alchohol.png?size=80" width="48" height="48" alt="alchohol" /></a>
+  <a href="https://github.com/iMissNan" title="iMissNan — issue 反馈"><img src="https://github.com/iMissNan.png?size=80" width="48" height="48" alt="iMissNan" /></a>
+  <a href="https://github.com/JasonXX89" title="JasonXX89 — issue 反馈"><img src="https://github.com/JasonXX89.png?size=80" width="48" height="48" alt="JasonXX89" /></a>
+  <a href="https://github.com/nansheng365" title="nansheng365 — issue 反馈"><img src="https://github.com/nansheng365.png?size=80" width="48" height="48" alt="nansheng365" /></a>
+  <a href="https://github.com/TIANXT97" title="TIANXT97 — issue 反馈"><img src="https://github.com/TIANXT97.png?size=80" width="48" height="48" alt="TIANXT97" /></a>
+  <a href="https://github.com/weltyang1216" title="weltyang1216 — issue 反馈"><img src="https://github.com/weltyang1216.png?size=80" width="48" height="48" alt="weltyang1216" /></a>
+  <a href="https://github.com/anupamme" title="anupamme — PR #28"><img src="https://github.com/anupamme.png?size=80" width="48" height="48" alt="anupamme" /></a>
+  <a href="https://github.com/yet791080885-jpg" title="yet791080885-jpg — PR #11"><img src="https://github.com/yet791080885-jpg.png?size=80" width="48" height="48" alt="yet791080885-jpg" /></a>
+</p>
+
+<sub>名单汇总自 issue 与 PR 的创建者（含已关闭/未合入的反馈），头像与链接均指向其 GitHub 主页；若遗漏请联系维护者补上。</sub>
 
 ## 📄 License
 

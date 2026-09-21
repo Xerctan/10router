@@ -127,6 +127,15 @@ function nestedSecretKeys(providerSpecificData) {
   );
 }
 
+// Non-empty secret-looking string values. Empty strings are skipped everywhere:
+// `connectionProxyUrl` is stored as "" whenever a connection has no proxy, and
+// encrypting an empty value is a no-op — counting those as "plaintext still
+// present" made the Security card claim encryption had failed on a database that
+// was fully encrypted.
+function nonEmptyNestedSecretKeys(providerSpecificData) {
+  return nestedSecretKeys(providerSpecificData).filter((k) => providerSpecificData[k] !== "");
+}
+
 // Returns a NEW object; the input is never mutated.
 export function encryptConnectionData(data) {
   if (!data || typeof data !== "object") return data;
@@ -159,7 +168,9 @@ export function decryptConnectionData(data) {
       error = err.message;
     }
   }
-  const keys = nestedSecretKeys(out.providerSpecificData).filter((k) => isEncrypted(out.providerSpecificData[k]));
+  const keys = nonEmptyNestedSecretKeys(out.providerSpecificData).filter(
+    (k) => isEncrypted(out.providerSpecificData[k]),
+  );
   if (keys.length) {
     const psd = { ...out.providerSpecificData };
     for (const k of keys) {
@@ -182,5 +193,7 @@ export function connectionDataHasPlaintextSecrets(data) {
   for (const field of CONNECTION_SECRET_FIELDS) {
     if (typeof data[field] === "string" && data[field] !== "" && !isEncrypted(data[field])) return true;
   }
-  return nestedSecretKeys(data.providerSpecificData).some((k) => !isEncrypted(data.providerSpecificData[k]));
+  return nonEmptyNestedSecretKeys(data.providerSpecificData).some(
+    (k) => !isEncrypted(data.providerSpecificData[k]),
+  );
 }

@@ -141,6 +141,29 @@ describe("connection field coverage", () => {
     expect(out.accessToken).not.toBe("at");
   });
 
+  it("does not mistake an empty value for a plaintext secret", async () => {
+    // `connectionProxyUrl` is stored as "" when a connection has no proxy.
+    // Counting that as "still in plain text" made the Security card report an
+    // encryption failure on a fully encrypted database.
+    const { encryptConnectionData, connectionDataHasPlaintextSecrets } = await cipher();
+    const conn = encryptConnectionData({
+      apiKey: "sk-1",
+      providerSpecificData: { connectionProxyUrl: "", connectionNoProxy: "", connectionProxyEnabled: false },
+    });
+    expect(connectionDataHasPlaintextSecrets(conn)).toBe(false);
+    expect(connectionDataHasPlaintextSecrets({ providerSpecificData: { connectionProxyUrl: "" } })).toBe(false);
+  });
+
+  it("still flags a real plaintext value next to an empty one", async () => {
+    const { encryptConnectionData, connectionDataHasPlaintextSecrets } = await cipher();
+    const conn = encryptConnectionData({
+      apiKey: "sk-1",
+      providerSpecificData: { connectionProxyUrl: "" },
+    });
+    conn.providerSpecificData = { ...conn.providerSpecificData, mimoPassToken: "left-in-the-clear" };
+    expect(connectionDataHasPlaintextSecrets(conn)).toBe(true);
+  });
+
   it("reports plaintext leftovers and round-trips", async () => {
     const { encryptConnectionData, decryptConnectionData, connectionDataHasPlaintextSecrets } = await cipher();
     const plain = { accessToken: "at", providerSpecificData: { mimoPassToken: "pt" } };
