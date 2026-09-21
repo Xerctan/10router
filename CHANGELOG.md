@@ -13,7 +13,7 @@
   - **大语言模型（LLM / Chat）**：纯正文本与视觉模型 `step-5-preview`、`step-3.7-flash`、`step-3.5-flash`、`step-3.5-flash-2603`、`step-1o-turbo-vision`，严格隔离于主菜单【模型提供商】与默认 `/v1/models`。
   - **语音合成（TTS）**：接入 StepAudio 系列 `stepaudio-3-tts`、`stepaudio-2.5-tts`、`step-tts-2`、`step-tts-mini`（Step Plan 渠道为 `stepaudio-2.5-tts`），隔离至【媒体提供商 -> 语音合成】与 `/v1/models/tts`，默认音色设为 `cixingnansheng`（磁性男声，避免 OpenAI 默认 alloy 触发 400）。
   - **语音识别（STT / ASR）**：接入 `stepaudio-2.5-asr`，隔离至【媒体提供商 -> 语音识别】与 `/v1/models/stt`。
-  - **图像生成**：`step-image-edit-2`、`step-2x-large`，隔离至【媒体提供商 -> 图像生成】与 `/v1/models/image`。
+  - **图像生成（未放出，直接下架）**：官方公告（`docs/zh/guides/image-offline-notice`）`step-2x-large` / `step-image-edit-2` 与国内外 `/v1/images/{generations,image2image,edits}`、`/step_plan/v1/images/*` 于 2026-10-10 同步停服（`step-1x-edit` 更早已不可调用），实测下线前该服务已持续返回 503。故本次不放出图像能力：不再暴露 `kind:"image"` 模型、`imageConfig` 与 `serviceKinds` 中的 `"image"`，【媒体提供商 -> 图像生成】与 `/v1/models/image` 里不再出现 StepFun 四条渠道（`stepfun` / `stepfun-cn` / `stepfun-plan` / `stepfun-plan-cn`）。
   - **实时余额与代金券查询**：对接 `GET /v1/accounts`，国内站按 CNY、国际站按 USD 展示现金与代金券余额（Step Plan 渠道无公开额度 API，不显示用量卡）。
   - **官方高清图标**：注入官方透明 PNG 图标，覆盖大模型卡片与各媒体管理界面。
   - **模型类型图家族聚合**：`modelFamilyName` 新增品牌归一映射，把同一品牌的不同产品线前缀折叠成单一族——StepFun 的 `stepaudio-*`（TTS/ASR）与 `step-*`（LLM/视觉/图像）在「模型类型」用量图里不再拆成两根柱，统一聚合为 `step`。剥离 provider 前缀后匹配，覆盖 `stepp-cn/…`、`step-cn/…` 等带渠道别名的 id。附回归用例（`model-family-chart.test.js`）。

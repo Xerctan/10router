@@ -5,15 +5,16 @@
 // dual-protocol（OpenAI Chat Completions + 原生 Anthropic Messages，docs 2026-09）：
 // base https://api.stepfun.ai/v1，Bearer API key 取自 platform.stepfun.ai/interface-key。
 //
-// 图像生成上游正在下线：/v1/images/{generations,edits} 与两个图像模型将于 2026-10-10
-// 停止服务（官方公告 docs/en/guides/image-offline-notice）。仍照常入库（用户决策 B），
-// 把下线日期写进展示名，让行在下线后自解释。
+// 图像生成已下架（2026-09-21）：官方公告（docs/en/guides/image-offline-notice）宣布
+// step-2x-large / step-image-edit-2 与 /v1/images/{generations,image2image,edits} 于
+// 2026-10-10 在国内外同步停服（step-1x-edit 更早已不可调用），而实测该服务在下线前
+// 就已持续返回 503。故本渠道不再暴露图像能力：移除两个 kind:"image" 模型、imageConfig
+// 与 serviceKinds 中的 "image"，媒体提供商「文本转图像」不再出现 StepFun 卡片。
 //
 // step-router-v1 故意不在本渠道：它只在 Step Plan 渠道提供。
 //
 // 模型按 kind 严格分区：
 //   - LLM（chat/vision）：step-5-preview, step-3.7-flash, step-3.5-flash(-2603), step-1o-turbo-vision
-//   - Image：step-image-edit-2, step-2x-large（kind: "image"，归 media-providers/image）
 //   - TTS：stepaudio-3-tts, stepaudio-2.5-tts, step-tts-2, step-tts-mini（kind: "tts"，归 media-providers/tts）
 //   - STT：stepaudio-2.5-asr（kind: "stt"，归 media-providers/stt）
 //
@@ -45,22 +46,16 @@ export default {
     { id: "step-3.5-flash", name: "Step 3.5 Flash" },
     { id: "step-3.5-flash-2603", name: "Step 3.5 Flash 2603" },
     { id: "step-1o-turbo-vision", name: "Step-1o Turbo Vision" },
-    { id: "step-image-edit-2", name: "Step Image Edit 2（retiring 2026-10-10）", params: ["size", "n"], kind: "image" },
-    { id: "step-2x-large", name: "Step 2X Large（retiring 2026-10-10）", params: ["size", "n"], kind: "image" },
     { id: "stepaudio-3-tts", name: "StepAudio 3 TTS", kind: "tts" },
     { id: "stepaudio-2.5-tts", name: "StepAudio 2.5 TTS", kind: "tts" },
     { id: "step-tts-2", name: "Step TTS 2", kind: "tts" },
     { id: "step-tts-mini", name: "Step TTS Mini", kind: "tts" },
     { id: "stepaudio-2.5-asr", name: "StepAudio 2.5 ASR", kind: "stt" },
   ],
-  serviceKinds: ["llm", "imageToText", "image", "tts", "stt"],
+  serviceKinds: ["llm", "imageToText", "tts", "stt"],
   features: {
     usage: true,
     usageApikey: true,
-  },
-  imageConfig: {
-    baseUrl: "https://api.stepfun.ai/v1/images/generations",
-    bodyFields: ["model", "prompt", "n", "size", "response_format"],
   },
   // OpenAI-compatible TTS. Voice is required upstream; clients encode it in the
   // model string ("stepaudio-2.5-tts/cixingnansheng"), defaultVoice covers a bare

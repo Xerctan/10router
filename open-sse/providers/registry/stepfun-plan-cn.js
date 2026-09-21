@@ -10,13 +10,16 @@
 //   - Chat Completions：https://api.stepfun.com/step_plan/v1/chat/completions
 //   - Anthropic Messages：https://api.stepfun.com/step_plan（客户端自动补 /v1/messages）
 //   - TTS：/step_plan/v1/audio/speech
-//   - 图像：/step_plan/v1/images/{generations,edits}
 //   - ASR：仅 /step_plan/v1/audio/asr/sse（专用 JSON+SSE 格式，非 OpenAI 转录格式），
 //     本渠道不暴露 STT 行，避免误接到不存在的 /audio/transcriptions。
 //
 // 支持的模型（实测 GET /step_plan/v1/models 与文档一致）：step-5-preview,
-// step-3.7-flash, step-3.5-flash(-2603), step-router-v1, stepaudio-2.5-tts,
-// step-image-edit-2。对话式音频（stepaudio-2.5-chat/realtime）不入库。
+// step-3.7-flash, step-3.5-flash(-2603), step-router-v1, stepaudio-2.5-tts。
+// 对话式音频（stepaudio-2.5-chat/realtime）不入库。
+//
+// 图像已下架（2026-09-21）：step-image-edit-2 与 /step_plan/v1/images/{generations,edits}
+// 随官方公告于 2026-10-10 停服（实测下线前已持续 503），故不再暴露 kind:"image"
+// 模型、imageConfig 与 serviceKinds 中的 "image"。
 export default {
   id: "stepfun-plan-cn",
   priority: 64,
@@ -44,16 +47,11 @@ export default {
     { id: "step-3.5-flash-2603", name: "Step 3.5 Flash 2603" },
     // 智能路由模型：Step Plan 专属，按任务复杂度自动调度上游模型。
     { id: "step-router-v1", name: "Step Router V1" },
-    { id: "step-image-edit-2", name: "Step Image Edit 2（2026-10-10 下线）", params: ["size", "n"], kind: "image" },
     { id: "stepaudio-2.5-tts", name: "StepAudio 2.5 TTS", kind: "tts" },
   ],
-  serviceKinds: ["llm", "imageToText", "image", "tts"],
+  serviceKinds: ["llm", "imageToText", "tts"],
   // 套餐 Credit 无公开查询 API（/step_plan/v1/accounts 为 404），不做用量卡片。
   features: {},
-  imageConfig: {
-    baseUrl: "https://api.stepfun.com/step_plan/v1/images/generations",
-    bodyFields: ["model", "prompt", "n", "size", "response_format"],
-  },
   ttsConfig: {
     baseUrl: "https://api.stepfun.com/step_plan/v1/audio/speech",
     authType: "apikey",
