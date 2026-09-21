@@ -618,5 +618,6 @@
   "Summarize older turns before dispatch when a request nears the model's context limit": "請求接近模型上下文上限時，先摘要較早的輪次再轉發",
   "Trigger threshold": "觸發閾值",
   "Installed version ${disk} differs from the running build ${current}.": "已安裝版本 ${disk} 與執行中的建置 ${current} 不一致。",
-  "Quit and reopen 10router, then refresh this page.": "請結束並重新執行 10router，然後重新整理本頁。"
+  "Quit and reopen 10router, then refresh this page.": "請結束並重新執行 10router，然後重新整理本頁。",
+  "Bonus Pack (unitemized)": "贈送包（未明細）"
 }
