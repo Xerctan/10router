@@ -2,18 +2,20 @@
  * §5.1 / §5.2 / §5.3 of docs/zh-CN/impl-plan-issue24-25-agent.md.
  *
  * `cli/cli.js` is a launcher script, not a module: importing it starts a server.
- * The only entry point that exits before any spawn is `--help`, so the real
- * behavioural check here is that `--help` renders in every locale (argv parsing
- * intact) and advertises the new flag. Everything else is a source guard —
- * deliberately narrow regexes over one file, so a refactor that drops the
- * no-TTY SIGHUP exemption or re-swallows the tray error fails loudly.
+ * It is also NOT safe to spawn here — the script calls ensureSqliteRuntime() at
+ * module scope, so on any machine without a warmed ~/.10router/runtime (CI) it
+ * shells out to `npm install sql.js better-sqlite3`, each with a 180s timeout and
+ * a native build for the latter. Rendering the dictionary straight from
+ * cli/src/cli/i18n tests the same strings without any of that, and the launcher's
+ * argv handling is pinned against the source below instead.
  */
-import { describe, it, expect } from "vitest";
-import { execFileSync } from "node:child_process";
+import { describe, it, expect, afterAll } from "vitest";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
-const REPO = fileURLToPath(new URL("../../", import.meta.url));
+const require = createRequire(import.meta.url);
+
 const CLI = fileURLToPath(new URL("../../cli/cli.js", import.meta.url));
 const LANGS = ["en", "zh-CN", "zh-TW"];
 
@@ -21,40 +23,39 @@ const abs = (rel) => fileURLToPath(new URL(`../../${rel}`, import.meta.url));
 const readJson = (rel) => JSON.parse(readFileSync(abs(rel), "utf8"));
 const coreJson = (lang) => readJson(`cli/src/cli/i18n/locales/${lang}/core.json`);
 
-// Node's locale detection is env-driven; TENROUTER_LANG pins it so the expected
-// strings below are deterministic.
-const helpCache = new Map();
-function help(lang) {
-  if (!helpCache.has(lang)) {
-    helpCache.set(
-      lang,
-      execFileSync(process.execPath, [CLI, "--help"], {
-        cwd: REPO,
-        encoding: "utf8",
-        timeout: 25000,
-        env: { ...process.env, TENROUTER_LANG: lang },
-      }),
-    );
+const originalLang = process.env.TENROUTER_LANG;
+afterAll(() => {
+  if (originalLang === undefined) delete process.env.TENROUTER_LANG;
+  else process.env.TENROUTER_LANG = originalLang;
+});
+
+/** The launcher's i18n binds its locale at require time, so reload it per language. */
+function loadI18n(lang) {
+  process.env.TENROUTER_LANG = lang;
+  for (const key of Object.keys(require.cache)) {
+    if (key.replace(/\\/g, "/").includes("/cli/src/cli/i18n/")) delete require.cache[key];
   }
-  return helpCache.get(lang);
+  return require("../../cli/src/cli/i18n");
 }
 
 describe("CLI --help advertises --no-tray", () => {
-  it(
-    "renders in all three locales and lists the flag",
-    () => {
-      for (const lang of LANGS) {
-        const out = help(lang);
-        expect(out.length, lang).toBeGreaterThan(100);
-        expect(out, lang).toContain("--no-tray");
-        expect(out, lang).toContain("--tray");
-      }
-      expect(help("en")).toContain("Don't create a tray icon");
-      expect(help("zh-CN")).toContain("不创建托盘图标");
-      expect(help("zh-TW")).toContain("不建立托盤圖示");
-    },
-    60000,
-  );
+  it("renders it in all three locales", () => {
+    for (const lang of LANGS) {
+      const { t, locale } = loadI18n(lang);
+      expect(locale, lang).toBe(lang);
+      const help = t("help.text", { bin: "10router", port: 20128, host: "0.0.0.0" });
+      expect(help.length, lang).toBeGreaterThan(100);
+      expect(help, lang).toContain("--no-tray");
+      expect(help, lang).toContain("--tray");
+      expect(help, lang).toContain("--skip-update");
+    }
+  });
+
+  it("uses the localised wording", () => {
+    expect(loadI18n("en").t("help.text")).toContain("Don't create a tray icon");
+    expect(loadI18n("zh-CN").t("help.text")).toContain("不创建托盘图标");
+    expect(loadI18n("zh-TW").t("help.text")).toContain("不建立托盤圖示");
+  });
 });
 
 describe("CLI tray locale strings", () => {
@@ -67,14 +68,6 @@ describe("CLI tray locale strings", () => {
       }
       // the warn site interpolates the real error message
       expect(dict["launcher.trayUnavailable"], lang).toContain("{error}");
-    }
-  });
-
-  it("keeps help.text valid JSON with the new option line", () => {
-    for (const lang of LANGS) {
-      const dict = coreJson(lang);
-      expect(dict["help.text"], lang).toContain("--no-tray");
-      expect(dict["help.text"], lang).toContain("--skip-update");
     }
   });
 });
