@@ -317,7 +317,9 @@ describe("every new security string has zh-CN and zh-TW text", () => {
     "Anyone who can reach this port will be able to manage every provider, key and credential without a password. The dashboard keeps a warning banner while it is off.",
     "Turn it off",
     "Credential storage",
-    "Plain text in the local database (encryption is planned)",
+    "Encrypted in the local database (AES-256-GCM)",
+    "Plain text in the local database — encryption failed, check the data directory",
+    "The key lives outside the database, so a copied data.sqlite alone cannot be read. Back up the key file with the database, or set CREDENTIAL_SECRET.",
     "Configure enterprise Single Sign-On (SSO) for dashboard access using SAML 2.0 or OIDC.",
     "No password is set yet, so the dashboard opens on this machine only. Set a password on the Settings page to reach it from other devices. The gateway API (/v1) is unaffected.",
     "Log-in check is off: anyone who can reach this port can manage every provider and credential. Turn it on again on the Settings page.",
@@ -346,13 +348,23 @@ describe("every new security string has zh-CN and zh-TW text", () => {
 });
 
 describe("the security card reports storage honestly", () => {
-  // Issue #9 item 2 is still open; a read-out of switches alone would imply the
-  // instance is clean.
+  // Issue #9 item 2 is implemented (encryption at rest); the row reads the
+  // database rather than assuming, because a row that could not be encrypted
+  // stays in the clear and must not be reported as safe.
   const card = readSource("src/app/(dashboard)/dashboard/experimental/SecurityCard.js");
 
-  it("shows that credentials are stored in plain text", () => {
+  it("reports what is actually on disk", () => {
     expect(card).toContain("Credential storage");
-    expect(card).toContain("Plain text in the local database (encryption is planned)");
+    expect(card).toContain("info.credentialsEncrypted === true");
+    expect(card).toContain("Plain text in the local database — encryption failed, check the data directory");
+  });
+
+  it("no longer claims encryption is merely planned", () => {
+    expect(card).not.toContain("encryption is planned");
+  });
+
+  it("warns that the key must be backed up with the database", () => {
+    expect(card).toContain("Back up the key file with the database");
   });
 });
 

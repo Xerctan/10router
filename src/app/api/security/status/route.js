@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import os from "node:os";
 import { getSettings } from "@/lib/localDb";
+import { getAdapter } from "@/lib/db/driver";
+import { connectionDataHasPlaintextSecrets } from "@/lib/db/crypto/credentialCipher";
 
 // Read-out behind the Security card (Settings → Experimental → Security): the
 // point of the card is to put the *facts* next to the switches that change them,
@@ -30,6 +32,25 @@ export async function GET(request) {
     const rawHost = request.headers.get("host") || "";
     const port = rawHost.includes(":") ? rawHost.split(":").pop() : "";
 
+    // Issue #9 item 2: report what is actually on disk rather than what the
+    // release intends. A row whose credentials could not be encrypted (no
+    // writable key material) stays in the clear, and that has to be visible.
+    let credentialsEncrypted = null;
+    try {
+      const rows = (await getAdapter()).all(`SELECT data FROM providerConnections`);
+      credentialsEncrypted = rows.every((row) => {
+        let data;
+        try {
+          data = JSON.parse(row.data || "{}");
+        } catch {
+          return true; // unparsable rows are not a plaintext-secret signal here
+        }
+        return !connectionDataHasPlaintextSecrets(data);
+      });
+    } catch {
+      credentialsEncrypted = null;
+    }
+
     return NextResponse.json({
       // The switches themselves
       dashboardLocalOnly: settings?.dashboardLocalOnly === true,
@@ -40,6 +61,8 @@ export async function GET(request) {
       listenHost: process.env.HOSTNAME || process.env.HOST || null,
       port: port || null,
       lanAddresses: lanAddresses(),
+      credentialsEncrypted,
+      credentialKeyFromEnv: !!(process.env.CREDENTIAL_SECRET || "").trim(),
       // Anything other than password/SSO means a remote caller has nothing to
       // present; the guard then refuses it and only loopback gets in.
       ssoConfigured: Boolean(

@@ -661,7 +661,6 @@
   "Anyone who can reach this port will be able to manage every provider, key and credential without a password. The dashboard keeps a warning banner while it is off.": "關閉後，任何能存取該連接埠的人無需密碼即可管理全部供應商、金鑰與憑證。關閉期間儀表板會常駐一條警告橫幅。",
   "Turn it off": "確認關閉",
   "Credential storage": "憑證儲存",
-  "Plain text in the local database (encryption is planned)": "本機資料庫明文儲存（計劃加密）",
   "Configure enterprise Single Sign-On (SSO) for dashboard access using SAML 2.0 or OIDC.": "使用 SAML 2.0 或 OIDC 為企業單一登入（SSO）設定儀表板存取。",
   "Open Settings": "開啟設定",
   "Enter your password to access the dashboard": "請輸入密碼以存取儀表板",
@@ -669,5 +668,8 @@
   "Enter password": "輸入密碼",
   "Display language": "顯示語言",
   "Regional currency": "區域貨幣",
-  "Single Sign-On (SSO)": "單一登入（SSO）"
+  "Single Sign-On (SSO)": "單一登入（SSO）",
+  "Encrypted in the local database (AES-256-GCM)": "本機資料庫加密儲存（AES-256-GCM）",
+  "Plain text in the local database — encryption failed, check the data directory": "本機資料庫明文儲存 —— 加密失敗，請檢查資料目錄",
+  "The key lives outside the database, so a copied data.sqlite alone cannot be read. Back up the key file with the database, or set CREDENTIAL_SECRET.": "金鑰存放在資料庫之外，因此單獨複製 data.sqlite 無法解密。備份時請連同金鑰檔一起備份，或設定 CREDENTIAL_SECRET。"
 }

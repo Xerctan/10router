@@ -129,14 +129,25 @@ export default function SecurityCard({ settings, patch }) {
               }
               tone={localOnlyEffective ? "ok" : "warn"}
             />
-            {/* Issue #9, item 2 — the one high-risk finding that is still open.
-                Showing it here keeps the read-out honest instead of implying the
-                instance is clean because the switches are green. */}
+            {/* Issue #9, item 2 — read from the database rather than assumed:
+                a row whose key material could not be created stays in the
+                clear, and "everything is green" would then be a lie. */}
             <Row
               label={translate("Credential storage")}
-              value={translate("Plain text in the local database (encryption is planned)")}
-              tone="warn"
+              value={
+                info.credentialsEncrypted === true
+                  ? translate("Encrypted in the local database (AES-256-GCM)")
+                  : info.credentialsEncrypted === false
+                    ? translate("Plain text in the local database — encryption failed, check the data directory")
+                    : translate("Unknown")
+              }
+              tone={info.credentialsEncrypted === true ? "ok" : "warn"}
             />
+            {info.credentialsEncrypted === true && (
+              <p className="text-xs text-text-muted pt-2">
+                {translate("The key lives outside the database, so a copied data.sqlite alone cannot be read. Back up the key file with the database, or set CREDENTIAL_SECRET.")}
+              </p>
+            )}
             {noPassword && !loginOff && (
               <p className="text-xs text-red-600 dark:text-red-400 pt-2">
                 {translate("No password is set yet, so the dashboard opens on this machine only. Set a password on the Settings page to reach it from other devices. The gateway API (/v1) is unaffected.")}
