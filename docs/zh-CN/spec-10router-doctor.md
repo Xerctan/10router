@@ -1,6 +1,7 @@
-# 规格提案：`10router doctor` 自检命令（§5.4，另立 issue）
+# 规格与实现：`10router doctor` 自检命令（§5.4）
 
-> 归属：issue #24 §5.4。本批**不实现**，只出方案，等排期。
+> 归属：issue #24 §5.4。**已实现**：`cli/src/cli/doctor.js` + `tests/unit/doctor.test.js`（63 例）。
+> 下面保留原始规格，文末「实现记录」列出落地时与规格的差异（三处）。
 > 与 `docs/zh-CN/design-tray-ready-handshake.md` 同类：给维护者一份可直接贴进 issue 的稿子。
 
 ## 为什么要它
@@ -67,3 +68,42 @@
   `--json` 的稳定性（快照）。沿用 `tests/unit/` 既有手法：
   CJS 模块用 `createRequire(import.meta.url)` + 打桩 `child_process.spawnSync`
   （见 `tests/unit/stale-server-heal.test.js`），**不要**真的起进程或写真实 `~/.10router`。
+
+---
+
+## 实现记录（落地时的差异）
+
+实现与上面的规格有三处不同，都是实现过程中被真实数据逼出来的：
+
+### 1. `runtime-deps` 增加了 `broken-artifact`（red）
+
+规格只要求查「既在 `node_modules` 又在 `runtime/package.json` 的 deps 里」。
+在开发机上首次跑真实报告时发现这不够：`better-sqlite3` 的 `package.json` 在、
+deps 里也登记了，但 `build/Release/better_sqlite3.node` **不存在**（编译产物从未生成）——
+于是 `npm ls` 和本检查都说 OK，而 §4 的驱动层一直在降级。这正是 doctor 要抓的那类问题，
+所以补了一项：装了但产物缺失 → red。判定直接复用 `hooks/sqliteRuntime.js` 的
+`isBetterSqliteBinaryValid()` / `isSqlJsWasmValid()`（本次为 doctor 把这两个函数
+**参数化 + 导出**，默认参数保持原行为，`ensureSqliteRuntime()` 不受影响）。
+
+### 2. `data-dir` 的 legacy 判定用 `hasAppData()`，不是「旧目录存在」
+
+`src/lib/dataDir.js` 的迁移是**一次性**的，且刻意**不删**旧目录（保留是为了让用户
+能手动重试）。所以「`~/.9router` 存在」对老用户是**永久成立**的条件——照规格写法会
+永远报 yellow，变成噪音。改成与 app 同款判定：旧目录存在 **且** 新目录还没有本应用的
+数据（`db/data.sqlite` 或四个 pre-SQLite json 之一）才算 pending。文件清单与
+`dataDir.js` 的 `LEGACY_JSON_FILES` 保持一致，两处不会对「是否已迁移」产生分歧。
+
+### 3. `version` 不依赖「服务正在运行」
+
+初版在没有服务应答时直接返回 OK，于是「启动器 ≠ 磁盘标记」这个真实信号被吞掉了
+（`--port <空闲端口>` 时可见）。现在三者只要有分歧就 red，与是否有服务无关；
+「端口有人应答但不是我们的 `/api/version`」单独给 yellow。
+
+### 另有两点按规格但值得记下
+
+- **托盘**：win32 视为 ok——Windows 的托盘是 Electron/app 进程内的，本来就不装
+  `systray2`，把它当缺失会误报。
+- **只读**：`tests/unit/doctor.test.js` 有一条源码守卫，断言 `doctor.js` 内不含
+  `writeFileSync` / `mkdirSync` / `unlinkSync` / `ensureSqliteRuntime` / `npmInstall` /
+  `killPid` / `spawnSync` / `exec(`；另有断言 `cli.js` 里 `doctor` 的分发**早于**
+  `ensureSqliteRuntime()` 与 `writeDiskVersion()`（否则它会先「修好」再汇报）。

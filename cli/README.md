@@ -136,6 +136,30 @@ systemctl --user enable --now 10router
 
 ---
 
+## 🩺 Diagnosing problems
+
+`10router doctor` inspects the installation and prints what is wrong, without
+changing anything:
+
+```bash
+10router doctor                 # human-readable report
+10router doctor --json          # stable schema, for a support ticket or CI
+10router doctor --port 20129    # inspect a different port
+```
+
+It checks what versions you actually have (launcher, on-disk marker, and whatever
+is serving), a server left over from a previous build, which SQLite driver won,
+the runtime dependencies, the port, the tray, the build's completeness and the
+data dir. It never installs, repairs, restarts or kills anything, and it exits
+non-zero when something is genuinely broken — so it is safe to run in CI and safe
+to paste into an issue.
+
+> A red line is a fact, not always something to fix: running `doctor` from a
+> source checkout while an installed build is serving reports a version mismatch,
+> because those really are two different builds.
+
+---
+
 ## 🔄 Updating
 
 How you update depends on how you installed. The dashboard shows an update

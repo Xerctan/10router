@@ -41,12 +41,17 @@ function ensureRuntimeDir() {
   return dir;
 }
 
-function hasModule(name) {
-  return fs.existsSync(path.join(getRuntimeNodeModules(), name, "package.json"));
+// Both helpers take the node_modules dir explicitly so a *diagnostic* can ask
+// about a directory it was handed (doctor) while production code keeps the one
+// default that matters. They are the single source of truth for "installed" vs
+// "installed and actually usable": npm happily reports better-sqlite3 as present
+// when its compiled binary never got built.
+function hasModule(name, nodeModulesDir = getRuntimeNodeModules()) {
+  return fs.existsSync(path.join(nodeModulesDir, name, "package.json"));
 }
 
-function isBetterSqliteBinaryValid() {
-  const binary = path.join(getRuntimeNodeModules(), "better-sqlite3", "build", "Release", "better_sqlite3.node");
+function isBetterSqliteBinaryValid(nodeModulesDir = getRuntimeNodeModules()) {
+  const binary = path.join(nodeModulesDir, "better-sqlite3", "build", "Release", "better_sqlite3.node");
   if (!fs.existsSync(binary)) return false;
   try {
     const fd = fs.openSync(binary, "r");
@@ -115,10 +120,10 @@ function npmInstall(pkgs, opts = {}) {
 // from nested node_modules — verify and reinstall if missing. node:sqlite is
 // built-in. This is purely a *speed optimization* — app works without
 // better-sqlite3 via fallbacks.
-function isSqlJsWasmValid() {
+function isSqlJsWasmValid(nodeModulesDir = getRuntimeNodeModules()) {
   const bundledWasm = path.join(__dirname, "..", "app", "node_modules", "sql.js", "dist", "sql-wasm.wasm");
   if (fs.existsSync(bundledWasm)) return true;
-  const runtimeWasm = path.join(getRuntimeNodeModules(), "sql.js", "dist", "sql-wasm.wasm");
+  const runtimeWasm = path.join(nodeModulesDir, "sql.js", "dist", "sql-wasm.wasm");
   return fs.existsSync(runtimeWasm);
 }
 
@@ -163,4 +168,7 @@ module.exports = {
   summarizeNpmError,
   npmInstall,
   getDataDir,
+  hasModule,
+  isBetterSqliteBinaryValid,
+  isSqlJsWasmValid,
 };

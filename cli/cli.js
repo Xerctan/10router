@@ -82,6 +82,21 @@ if (args[0] === "xai" && args[1] === "video") {
   return;
 }
 
+// `10router doctor` is dispatched BEFORE the runtime self-heal below on purpose:
+// it exists to REPORT a broken runtime, so it must not silently repair one first.
+// It is read-only (no installs, no writes, no kills) and exits non-zero when any
+// check is red, which makes it usable as a CI/"is my install broken" gate.
+if (args[0] === "doctor") {
+  const { run } = require("./src/cli/doctor");
+  run(args.slice(1))
+    .then((code) => process.exit(code))
+    .catch((err) => {
+      console.error(`❌ ${err?.message || err}`);
+      process.exit(1);
+    });
+  return;
+}
+
 // Self-heal SQLite runtime deps (sql.js + better-sqlite3) into ~/.10router/runtime
 // so the server can resolve them via NODE_PATH. Best-effort — sql.js is required,
 // better-sqlite3 is optional. Logs to stderr only on failure.
