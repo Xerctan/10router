@@ -26,7 +26,13 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { DATA_DIR } from "@/lib/dataDir";
+// Relative, not `@/lib/dataDir`: keep this module free of build aliases so any
+// bundler can resolve it. The MITM bundle (`cli/scripts/buildMitm.js`) esbuilds
+// `src/mitm/` with `external: []` and no `@/` mapping. It does not reach this
+// module today — `server.js` is the only entry and `manager.js`, which imports us
+// dynamically, is stripped from that bundle — but an aliased import would break
+// the moment an entry that does reach us is added.
+import { DATA_DIR } from "../../dataDir.js";
 
 const PREFIX = "enc:v1:";
 const ALGORITHM = "aes-256-gcm";

@@ -75,25 +75,44 @@ describe("issue #9 item 7 — Root CA key is owner-only on Windows too", () => {
   });
 });
 
-describe("issue #9 item 7 — MITM password key has no constant fallback", () => {
+describe("issue #9 item 7 — MITM password uses the shared credential cipher", () => {
   const manager = read("src/mitm/manager.js");
 
-  it("derives the key only from the machine id", () => {
-    expect(manager).toContain("function deriveKey()");
-    // The old shape: catch → hash the salt alone.
-    expect(manager).not.toMatch(/catch\s*\{\s*return crypto\.createHash\("sha256"\)\.update\(ENCRYPT_SALT\)\.digest\(\);/);
+  it("no longer derives a key of its own", () => {
+    // The machine-id derivation is gone (it was obfuscation, not encryption — any
+    // local process can read the machine id), along with the constant fallback it
+    // used to have.
+    expect(manager).not.toContain("const ENCRYPT_SALT");
+    expect(manager).not.toContain("function deriveKey()");
+    expect(manager).not.toMatch(/catch\s*\{\s*return crypto\.createHash\("sha256"\)\.update\(ENCRYPT_SALT\)/);
   });
 
-  it("refuses when the machine id is unavailable instead of weakening", () => {
-    const fn = /function deriveKey\(\) \{[\s\S]*?\n\}/.exec(manager);
-    expect(fn, "deriveKey disappeared").toBeTruthy();
-    expect(fn[0]).toContain("throw new Error");
-    expect(fn[0]).toContain("machineIdSync()");
+  it("delegates to credentialCipher (the same key lifecycle as provider credentials)", () => {
+    expect(manager).toContain('import("../lib/db/crypto/credentialCipher.js")');
+    expect(manager).toContain("encryptSecret(plaintext)");
+    expect(manager).toContain("decryptSecret(stored)");
+    expect(manager).toContain("isEncrypted(stored)");
+  });
+
+  it("still reads values written by the old derivation", () => {
+    expect(manager).toContain("LEGACY_ENCRYPT_SALT");
+    expect(manager).toMatch(/LEGACY_HEX_RE = \/\^\[0-9a-f\]\{24\}/);
+    expect(manager).toContain("legacyDeriveKey()");
+  });
+
+  it("upgrades a legacy value in place when it is read", () => {
+    const fn = /async function loadEncryptedPassword\(\) \{[\s\S]*?\n\}/.exec(manager);
+    expect(fn, "loadEncryptedPassword disappeared").toBeTruthy();
+    expect(fn[0]).toMatch(/if \(!isEncrypted\(stored\) && _updateSettings\)/);
+    expect(fn[0]).toContain("mitmSudoEncrypted: await encryptPassword(password)");
   });
 
   it("keeps the failure contained — storing is best-effort, reading is guarded", () => {
     expect(manager).toMatch(/function saveMitmSettings[\s\S]*?catch/);
     expect(manager).toMatch(/function loadEncryptedPassword[\s\S]*?catch/);
+    // A wrong/rotated key returns null (ask again) rather than throwing.
+    const fn = /async function decryptPassword\(stored\) \{[\s\S]*?\n\}/.exec(manager);
+    expect(fn[0]).toContain("return null");
   });
 });
 
