@@ -1796,5 +1796,7 @@
   "Failed to save model settings": "保存模型设置失败",
   "Auto-compact oversized context": "超长上下文自动压缩",
   "Summarize older turns before dispatch when a request nears the model's context limit": "请求接近模型上下文上限时，先摘要较早的轮次再转发",
-  "Trigger threshold": "触发阈值"
+  "Trigger threshold": "触发阈值",
+  "Installed version ${disk} differs from the running build ${current}.": "已安装版本 ${disk} 与运行中的构建 ${current} 不一致。",
+  "Quit and reopen 10router, then refresh this page.": "请退出并重新运行 10router，然后刷新本页。"
 }
