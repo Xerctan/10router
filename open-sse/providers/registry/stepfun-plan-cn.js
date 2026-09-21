@@ -23,7 +23,7 @@ export default {
   alias: "stepp-cn",
   aliases: ["step-plan-cn", "sfp-cn", "sfpcn", "stepfun-plan-cn"],
   display: {
-    name: "StepFun CN Step Plan",
+    name: "StepFun CN Plan",
     icon: "bolt",
     color: "#2E5BFF",
     textIcon: "SF",

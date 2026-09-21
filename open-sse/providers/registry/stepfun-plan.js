@@ -17,7 +17,7 @@ export default {
   alias: "stepp",
   aliases: ["step-plan", "sfp", "stepfun-plan"],
   display: {
-    name: "StepFun Step Plan",
+    name: "StepFun Plan",
     icon: "bolt",
     color: "#2E5BFF",
     textIcon: "SF",
