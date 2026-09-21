@@ -76,6 +76,18 @@ describe("settings reorganisation", () => {
     expect(src).not.toContain("data.autoCompactEnabled === true");
   });
 
+  it("places auto-compact below the Lazy senior dev (Ponytail) row", () => {
+    // Requested layout: the bottom "be lazy about it" group — Ponytail, then
+    // auto-compact, then the (currently hidden) PXPIPE row.
+    const src = read(TOKEN_SAVER);
+    const lazy = src.indexOf("Lazy senior dev");
+    const autoCompact = src.indexOf('translate("Auto-compact oversized context")');
+    const pxpipe = src.indexOf("Compress prompts as images");
+    expect(lazy).toBeGreaterThan(-1);
+    expect(autoCompact).toBeGreaterThan(lazy);
+    expect(pxpipe).toBeGreaterThan(autoCompact);
+  });
+
   it("puts the sidebar entry between Console Log and Settings", () => {
     const src = read(SIDEBAR);
     const consoleLog = src.indexOf("/dashboard/console-log");

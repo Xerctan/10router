@@ -517,33 +517,6 @@ export default function TokenSaverClient() {
             onChange={() => handleRtkEnabled(!rtkEnabled)}
           />
         </div>
-        {/* Auto-compact — summarize older turns when the prompt nears the model limit */}
-        <div className="flex items-start justify-between py-4 gap-4 border-b border-border">
-          <div className="min-w-0 flex-1">
-            <p className="font-medium">{translate("Auto-compact oversized context")}</p>
-            <p className="text-sm text-text-muted">
-              {translate("Summarize older turns before dispatch when a request nears the model's context limit")}
-            </p>
-            {autoCompactEnabled && (
-              <label className="mt-2 flex items-center gap-2 text-xs text-text-muted">
-                {translate("Trigger threshold")}
-                <select
-                  value={String(autoCompactRatio)}
-                  onChange={(e) => handleAutoCompactRatio(e.target.value)}
-                  className="rounded border border-border bg-surface px-2 py-1 text-xs text-text"
-                >
-                  <option value="0.8">80%</option>
-                  <option value="0.9">90%</option>
-                  <option value="0.95">95%</option>
-                </select>
-              </label>
-            )}
-          </div>
-          <Toggle
-            checked={autoCompactEnabled}
-            onChange={() => handleAutoCompactEnabled(!autoCompactEnabled)}
-          />
-        </div>
         <div className="flex items-center justify-between py-4 gap-4 flex-wrap">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-3 flex-wrap">
@@ -778,6 +751,34 @@ export default function TokenSaverClient() {
               onChange={() => handlePonytailEnabled(!ponytailEnabled)}
             />
           </div>
+        </div>
+        {/* Auto-compact — the lazy way to stay under the window: let the server
+            summarize older turns instead of curating context by hand. */}
+        <div className="flex items-start justify-between pt-4 mt-4 border-t border-border gap-4 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">{translate("Auto-compact oversized context")}</p>
+            <p className="text-sm text-text-muted">
+              {translate("Summarize older turns before dispatch when a request nears the model's context limit")}
+            </p>
+            {autoCompactEnabled && (
+              <label className="mt-2 flex items-center gap-2 text-xs text-text-muted">
+                {translate("Trigger threshold")}
+                <select
+                  value={String(autoCompactRatio)}
+                  onChange={(e) => handleAutoCompactRatio(e.target.value)}
+                  className="rounded border border-border bg-surface px-2 py-1 text-xs text-text"
+                >
+                  <option value="0.8">80%</option>
+                  <option value="0.9">90%</option>
+                  <option value="0.95">95%</option>
+                </select>
+              </label>
+            )}
+          </div>
+          <Toggle
+            checked={autoCompactEnabled}
+            onChange={() => handleAutoCompactEnabled(!autoCompactEnabled)}
+          />
         </div>
         {/* PXPIPE hidden from UI — experimental, not exposed to users yet */}
         {false && (
