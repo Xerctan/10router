@@ -11,7 +11,7 @@ export default {
   ],
   uiAlias: "xmtp",
   display: {
-    name: "Xiaomi MiMo (Token Plan)",
+    name: "MiMo Token Plan",
     icon: "smart_toy",
     color: "#FF6700",
     textIcon: "XT",

@@ -66,6 +66,11 @@
   - 连带改的地方：每日聚合的 map key 从 `原key|模型|供应商` 换成 `摘要|模型|供应商`；按 key 查名字（`apiKeys` 表）改成按摘要建映射；写入时的去重比对（两处）改成比摘要。
   - 一次性迁移 `004-usage-apikey-digest` 重写存量行与聚合（幂等；已掩码/已有摘要的跳过），兼容读：旧聚合里残留的 `apiKey` 会被现场转成摘要，**升级前的历史统计不会丢 key 名字**。
   - 在真实库副本上实测：3024 行 / 20 个按天聚合（87 处 raw 值 + 87 处 raw map key）→ 迁移后 **残留 0**，聚合请求总数 3024 不变，摘要能解析出名字；重跑不改文件（幂等）。附 `usage-apikey-digest.test.js`（7 例）。
+- **MiMo Token Plan 卡片改名 + 官方图标 + 额度行说明（含 i18n）**：
+  - **改名**：`Xiaomi MiMo (Token Plan)` → **`MiMo Token Plan`**（卡头太长，且父卡已经叫 Xiaomi MiMo，重复前缀是噪音）。
+  - **官方图标**：新增 `public/providers/xiaomi-tokenplan.png`，不再回退到 `smart_toy` / `XT` 占位。
+  - **额度行不再显示「未实现」**：`tp-` 密钥所在的 token-plan 集群**没有任何额度接口**（实测：`token-plan-cn/sgp/ams` 上逐一试过的候选路径全部 404（openresty），而带周额度的 `aistudio.xiaomimimo.com/open-apis/v1/user/usage` 对 `tp-` 密钥返回 401 —— 它要的是 MiMo **账号会话**，不是套餐密钥）。此前该供应商没注册 usage handler，额度行直接回退成英文原句 `Usage API not implemented for xiaomi-tokenplan`。现注册 handler：若该连接另外带桌面端账号会话（`mimoPassToken`）就照旧读周额度，否则给出一句**说明性文案**（已译 zh-CN / zh-TW），并在官方控制台看套餐用量。
+  - **横幅 i18n**：`display.notice.text`（“Xiaomi MiMo Token Plan subscription (API key starts with tp-)…”）补上 zh-CN / zh-TW —— 此前只有英文（与 AMD/byteplus/grok-cli 等同类横幅一起漏掉）。附 `mimo-tokenplan-wiring.test.js`（8 例）。
 
 ## v1.1.3 (2026-09-20)
 

@@ -672,5 +672,8 @@
   "Encrypted in the local database (AES-256-GCM)": "本機資料庫加密儲存（AES-256-GCM）",
   "Plain text in the local database — encryption failed, check the data directory": "本機資料庫明文儲存 —— 加密失敗，請檢查資料目錄",
   "The key lives outside the database, so a copied data.sqlite alone cannot be read. Back up the key file with the database, or set CREDENTIAL_SECRET.": "金鑰存放在資料庫之外，因此單獨複製 data.sqlite 無法解密。備份時請連同金鑰檔一起備份，或設定 CREDENTIAL_SECRET。",
-  "The backup file contains provider credentials in readable form — store it like a password.": "備份檔裡包含可讀的供應商憑證 —— 請像保管密碼一樣保管它。"
+  "The backup file contains provider credentials in readable form — store it like a password.": "備份檔裡包含可讀的供應商憑證 —— 請像保管密碼一樣保管它。",
+  "Xiaomi MiMo Token Plan subscription (API key starts with tp-). Token Plan keys are cluster-specific — select the region matching your subscription.": "小米 MiMo Token Plan 訂閱（API key 以 tp- 開頭）。Token Plan 金鑰依叢集劃分 —— 請選擇與你的訂閱相符的區域。",
+  "Token Plan does not expose a quota API for standalone keys — check your plan usage in the MiMo console.": "Token Plan 未提供可用獨立金鑰查詢的額度介面 —— 請在 MiMo 控制台查看方案用量。",
+  "API key not available. Add a key to view usage.": "未設定 API key，請先新增金鑰後查看用量。"
 }
