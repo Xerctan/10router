@@ -162,6 +162,35 @@ describe("issue #18: classifier request fidelity (claude → openai → cbcn exe
   });
 });
 
+describe("issue #18: stop sequences survive the openai → claude hop", () => {
+  const openaiBody = (extra = {}) => ({
+    model: "some-gpt",
+    messages: [{ role: "user", content: "go" }],
+    max_tokens: 64,
+    ...extra,
+  });
+
+  it("maps OpenAI stop to Anthropic stop_sequences", () => {
+    const out = T(FORMATS.OPENAI, FORMATS.CLAUDE, openaiBody({ stop: ["</block>"] }));
+    expect(out.stop_sequences).toEqual(["</block>"]);
+  });
+
+  it("omits the field entirely when the client sent none", () => {
+    const out = T(FORMATS.OPENAI, FORMATS.CLAUDE, openaiBody());
+    expect("stop_sequences" in out).toBe(false);
+  });
+
+  it("drops blanks and caps at Anthropic's limit of 4", () => {
+    const out = T(FORMATS.OPENAI, FORMATS.CLAUDE, openaiBody({ stop: ["", null, "a", "b", "c", "d", "e"] }));
+    expect(out.stop_sequences).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("tolerates a bare string", () => {
+    const out = T(FORMATS.OPENAI, FORMATS.CLAUDE, openaiBody({ stop: "STOP" }));
+    expect(out.stop_sequences).toEqual(["STOP"]);
+  });
+});
+
 describe("issue #18: stop_sequences survive the claude → openai hop", () => {
   it("maps Anthropic stop_sequences to OpenAI stop (stage 1's halt on </block>)", () => {
     const out = T(FORMATS.CLAUDE, FORMATS.OPENAI, {
