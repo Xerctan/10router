@@ -1,5 +1,5 @@
 {
-  "help.text": "Usage: {bin} [options]\n\nOptions:\n  -p, --port <port>   Port to run the server (default: {port})\n  -H, --host <host>   Host to bind (default: {host})\n  -n, --no-browser    Don't open browser automatically\n  -l, --log           Show server logs (default: hidden)\n  -t, --tray          Run in system tray mode (background)\n  --skip-update       Skip auto-update check\n  -h, --help          Show this help message\n  -v, --version       Show version\n\nCommands:\n  xai video --prompt \"...\" --output video.mp4\n                      Generate a Grok Imagine video via the running gateway\n                      (see: {bin} xai video --help)",
+  "help.text": "Usage: {bin} [options]\n\nOptions:\n  -p, --port <port>   Port to run the server (default: {port})\n  -H, --host <host>   Host to bind (default: {host})\n  -n, --no-browser    Don't open browser automatically\n  -l, --log           Show server logs (default: hidden)\n  -t, --tray          Run in system tray mode (background)\n  --no-tray           Don't create a tray icon (keep serving)\n  --skip-update       Skip auto-update check\n  -h, --help          Show this help message\n  -v, --version       Show version\n\nCommands:\n  xai video --prompt \"...\" --output video.mp4\n                      Generate a Grok Imagine video via the running gateway\n                      (see: {bin} xai video --help)",
 
   "error.standaloneMissing": "Error: Standalone build not found.",
   "error.standaloneHint": "Please run 'npm run build:cli' first.",
@@ -32,6 +32,8 @@
   "launcher.staleServerKilled": "\n🔁 A server from a different build is still running (running v{running}; disk has v{disk}) — stopping it so the new build can take the port.",
   "launcher.staleServerNoPid": "\n⚠️ A server from a different build (v{running}) is holding the port, but there is no PID file to stop it safely — starting anyway. If startup fails, quit the other instance and retry.",
 
+  "launcher.trayUnavailable": "Tray icon unavailable ({error}). The server keeps running without it.",
+  "launcher.traySkipped": "Tray icon disabled. The server keeps running in the background.",
   "menu.interfaceTitle": "Choose Interface (v{version})",
   "menu.serverSubtitle": "🚀 Server: {url}",
   "menu.updateTo": "Update to v{latest} (current: v{current})",

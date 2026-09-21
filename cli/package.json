@@ -45,6 +45,15 @@
     "api"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/techysy/10router.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/techysy/10router#readme",
+  "bugs": {
+    "url": "https://github.com/techysy/10router/issues"
+  },
   "devDependencies": {
     "esbuild": "^0.25.12",
     "nodemon": "^3.1.14"

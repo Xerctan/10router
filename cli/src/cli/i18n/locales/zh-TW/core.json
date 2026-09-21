@@ -1,5 +1,5 @@
 {
-  "help.text": "用法: {bin} [選項]\n\n選項:\n  -p, --port <連接埠>   服務執行連接埠(預設: {port})\n  -H, --host <主機>     綁定位址(預設: {host})\n  -n, --no-browser      不自動開啟瀏覽器\n  -l, --log             顯示服務日誌(預設隱藏)\n  -t, --tray            以系統列模式執行(背景)\n  --skip-update         略過自動更新檢查\n  -h, --help            顯示本說明\n  -v, --version         顯示版本\n\n命令:\n  xai video --prompt \"...\" --output video.mp4\n                      透過執行中的閘道產生 Grok Imagine 影片\n                      (見: {bin} xai video --help)",
+  "help.text": "用法: {bin} [選項]\n\n選項:\n  -p, --port <連接埠>   服務執行連接埠(預設: {port})\n  -H, --host <主機>     綁定位址(預設: {host})\n  -n, --no-browser      不自動開啟瀏覽器\n  -l, --log             顯示服務日誌(預設隱藏)\n  -t, --tray            以系統列模式執行(背景)\n  --no-tray             不建立托盤圖示(服務照常執行)\n  --skip-update         略過自動更新檢查\n  -h, --help            顯示本說明\n  -v, --version         顯示版本\n\n命令:\n  xai video --prompt \"...\" --output video.mp4\n                      透過執行中的閘道產生 Grok Imagine 影片\n                      (見: {bin} xai video --help)",
 
   "error.standaloneMissing": "錯誤: 未找到 standalone 建置產物。",
   "error.standaloneHint": "請先執行 'npm run build:cli'。",
@@ -32,6 +32,8 @@
   "launcher.staleServerKilled": "\n🔁 偵測到舊建置的服務行程仍在執行（執行 v{running}，磁碟已是 v{disk}）——正在停止它，讓新建置接管連接埠。",
   "launcher.staleServerNoPid": "\n⚠️ 一個不同建置的服務行程（v{running}）占用連接埠，但沒有 PID 檔案可安全停止——仍繼續啟動。若啟動失敗，請結束另一個實例後重試。",
 
+  "launcher.trayUnavailable": "托盤圖示無法使用({error})，服務繼續在背景下執行。",
+  "launcher.traySkipped": "已停用托盤圖示，服務繼續在背景下執行。",
   "menu.interfaceTitle": "選擇介面 (v{version})",
   "menu.serverSubtitle": "🚀 服務位址: {url}",
   "menu.updateTo": "更新至 v{latest}(目前 v{current})",

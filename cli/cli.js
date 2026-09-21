@@ -134,6 +134,7 @@ let noBrowser = false;
 let skipUpdate = false;
 let showLog = false;
 let trayMode = false;
+let noTray = false;
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--port" || args[i] === "-p") {
@@ -151,6 +152,8 @@ for (let i = 0; i < args.length; i++) {
   } else if (args[i] === "--tray" || args[i] === "-t") {
     trayMode = true;
     process.env.TRAY_MODE = "1";
+  } else if (args[i] === "--no-tray") {
+    noTray = true;
   } else if (args[i] === "--help" || args[i] === "-h") {
     console.log(t("help.text", { bin: BIN_NAME, port: DEFAULT_PORT, host: DEFAULT_HOST }));
     process.exit(0);
@@ -696,7 +699,13 @@ function startServer(updatePromise) {
     cleanup();
     setTimeout(() => process.exit(0), 100);
   });
+  // A closing terminal sends SIGHUP. With no TTY (nohup / systemd / a detached
+  // launcher) that signal means "the terminal went away", not "shut down", and
+  // taking the gateway down with it is the opposite of what was asked for — so
+  // ignore it, exactly as tray mode already does below.
+  const ignoreSighup = !process.stdout.isTTY;
   process.on("SIGHUP", () => {
+    if (ignoreSighup) return;
     if (isShuttingDown) return;
     isShuttingDown = true;
     cleanup();
@@ -705,6 +714,9 @@ function startServer(updatePromise) {
 
   // Initialize tray icon (runs alongside TUI)
   const initTrayIcon = () => {
+    // --no-tray: a supervisor (systemd / nohup / a container) or a user who just
+    // wants the gateway. Tray *mode* still applies; there is simply no icon.
+    if (noTray) return false;
     try {
       const { initTray } = require("./src/cli/tray/tray");
       initTray({
@@ -717,8 +729,16 @@ function startServer(updatePromise) {
         },
         onOpenDashboard: () => openBrowser(url)
       });
+      return true;
     } catch (err) {
-      // Tray not available - continue without it
+      // Tray not available (headless host, no systray backend, missing optional
+      // dependency) - keep serving, but say so rather than failing silently.
+      console.warn(
+        t("launcher.trayUnavailable", {
+          error: (err && err.message) || String(err),
+        })
+      );
+      return false;
     }
   };
 
@@ -732,9 +752,13 @@ function startServer(updatePromise) {
     console.log(t("launcher.serverLine", { url: `http://${displayHost}:${port}` }));
 
     waitServerReady(port).then(() => {
-      initTrayIcon();
-      console.log(t("launcher.trayReady"));
-      console.log(t("launcher.trayReadyHint"));
+      if (initTrayIcon()) {
+        console.log(t("launcher.trayReady"));
+        console.log(t("launcher.trayReadyHint"));
+      } else {
+        // No icon exists, so don't claim the app is sitting in the tray.
+        console.log(t("launcher.traySkipped"));
+      }
     });
 
     return;

@@ -96,10 +96,43 @@ That's it! Start coding with FREE AI models.
 10router --port 8080        # Custom port
 10router --no-browser       # Don't open browser
 10router --skip-update      # Skip auto-update check
+10router --tray             # Run in the system tray
+10router --no-tray          # Serve without a tray icon (headless)
 10router --help             # Show all options
 ```
 
 **Dashboard**: `http://localhost:20128/dashboard`
+
+### Running headless (nohup / systemd)
+
+With no terminal attached, `10router` ignores `SIGHUP`: closing the terminal or
+logging out no longer takes the gateway down, so a background start survives the
+shell that launched it. Add `--no-tray` when there is no desktop to draw an icon
+on (a server, a container, a systemd unit) so the launcher does not spend startup
+on a tray it cannot create; `--no-browser` skips the browser it also cannot open:
+
+```bash
+# keep serving after the shell exits
+nohup 10router --no-tray --no-browser >~/.10router/10router.log 2>&1 &
+```
+
+```ini
+# ~/.config/systemd/user/10router.service
+[Unit]
+Description=10Router gateway
+After=network-online.target
+
+[Service]
+ExecStart=%h/.local/share/npm/bin/10router --no-tray --no-browser
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+```bash
+systemctl --user enable --now 10router
+```
 
 ---
 
