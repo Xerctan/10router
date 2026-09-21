@@ -1905,7 +1905,7 @@ export default function ProfilePage() {
                     <select
                       value={String(settings.autoCompactRatio ?? 0.9)}
                       onChange={(e) => changeAutoCompactRatio(e.target.value)}
-                      className="rounded border border-border bg-background px-2 py-1 text-xs text-text"
+                      className="rounded border border-border bg-surface px-2 py-1 text-xs text-text"
                     >
                       <option value="0.8">80%</option>
                       <option value="0.9">90%</option>

@@ -1799,5 +1799,12 @@
   "Trigger threshold": "触发阈值",
   "Installed version ${disk} differs from the running build ${current}.": "已安装版本 ${disk} 与运行中的构建 ${current} 不一致。",
   "Quit and reopen 10router, then refresh this page.": "请退出并重新运行 10router，然后刷新本页。",
-  "Bonus Pack (unitemized)": "赠送包（未明细）"
+  "Bonus Pack (unitemized)": "赠送包（未明细）",
+  "Model limits": "模型限制",
+  "Overridden": "已覆盖",
+  "Built-in": "内置",
+  "Not set": "未设置",
+  "Restore built-in": "恢复内置值",
+  "Enter a whole number greater than 0": "请输入大于 0 的整数",
+  "Max output is larger than the context window": "最大输出大于上下文窗口"
 }

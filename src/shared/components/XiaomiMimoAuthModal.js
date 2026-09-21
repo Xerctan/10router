@@ -282,7 +282,7 @@ export default function XiaomiMimoAuthModal({ isOpen, onSuccess, onClose }) {
           onChange={(e) => setAuthCode(e.target.value)}
           placeholder={translate("Paste the authorization code shown in the browser")}
           rows={3}
-          className="w-full px-3 py-2 text-sm font-mono border border-border rounded-lg bg-background focus:outline-none focus:border-primary resize-none"
+          className="w-full px-3 py-2 text-sm font-mono border border-border rounded-lg bg-surface focus:outline-none focus:border-primary resize-none"
         />
         <p className="text-xs text-text-muted mt-1">
           {translate("The code is a long string (100+ characters) — copy it whole, using the Copy button on the sign-in page.")}

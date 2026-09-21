@@ -129,5 +129,16 @@ export function useModelCaps() {
     [byFull, byId, overrides],
   );
 
-  return { getCaps, overrides, refresh };
+  // The same resolution WITHOUT the user overrides, so the caps editor can show
+  // what a pin is replacing ("built-in 256000") instead of guessing.
+  const getBaseCaps = useCallback(
+    (key) => resolveCaps(byFull, byId, {}, key),
+    [byFull, byId],
+  );
+
+  return { getCaps, getBaseCaps, overrides, refresh };
 }
+
+// Exported for tests: the override-vs-base resolution is the only piece of this
+// hook with logic in it, and `getBaseCaps` is literally `resolveCaps(…, {}, key)`.
+export { resolveCaps };

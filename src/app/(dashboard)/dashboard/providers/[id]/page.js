@@ -64,7 +64,7 @@ export default function ProviderDetailPage() {
   const params = useParams();
   const router = useRouter();
   const providerId = params.id;
-  const { getCaps, overrides, refresh } = useModelCaps();
+  const { getCaps, getBaseCaps, overrides, refresh } = useModelCaps();
   const notify = useNotificationStore();
   const [connections, setConnections] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1601,6 +1601,7 @@ export default function ProviderDetailPage() {
             isCustom
             isFree={false}
             caps={getCaps(`${providerId}/${model.id}`)}
+            baseCaps={getBaseCaps(`${providerId}/${model.id}`)}
             onSaveCaps={(caps) => handleSaveModelCaps(model.id, caps)}
             capsPinned={isCapsPinned(model.id)}
             thinkingSuffix={resolveThinkingSuffix(model.id)}
@@ -1629,6 +1630,7 @@ export default function ProviderDetailPage() {
               isFree={model.isFree}
               onDisable={() => handleDisableModel(model.id)}
               caps={getCaps(`${providerId}/${model.id}`)}
+              baseCaps={getBaseCaps(`${providerId}/${model.id}`)}
               onSaveCaps={(caps) => handleSaveModelCaps(model.id, caps)}
               capsPinned={isCapsPinned(model.id)}
               thinkingSuffix={resolveThinkingSuffix(model.id)}
@@ -1743,6 +1745,7 @@ export default function ProviderDetailPage() {
                   isCustom={false}
                   isFree={false}
                   caps={getCaps(`${providerId}/${model.id}`)}
+                  baseCaps={getBaseCaps(`${providerId}/${model.id}`)}
                   onSaveCaps={(caps) => handleSaveModelCaps(model.id, caps)}
                   capsPinned={isCapsPinned(model.id)}
                 />
@@ -1760,6 +1763,7 @@ export default function ProviderDetailPage() {
                   onEnable={() => handleEnableModel(model.id)}
                   isFree={model.isFree}
                   caps={getCaps(`${providerId}/${model.id}`)}
+                  baseCaps={getBaseCaps(`${providerId}/${model.id}`)}
                   onSaveCaps={(caps) => handleSaveModelCaps(model.id, caps)}
                   capsPinned={isCapsPinned(model.id)}
                   thinkingSuffix={resolveThinkingSuffix(model.id)}
@@ -2035,7 +2039,7 @@ export default function ProviderDetailPage() {
                       value={providerStickyLimit}
                       onChange={(e) => handleStickyLimitChange(e.target.value)}
                       placeholder="1"
-                      className="w-14 px-2 py-1 text-xs border border-border rounded-md bg-background focus:outline-none focus:border-primary"
+                      className="w-14 px-2 py-1 text-xs border border-border rounded-md bg-surface focus:outline-none focus:border-primary"
                     />
                   </div>
                 )}
@@ -2234,7 +2238,7 @@ export default function ProviderDetailPage() {
                 value={thinkingMode}
                 onChange={(e) => handleThinkingModeChange(e.target.value)}
                 title="Appends (level) suffix to copied model names"
-                className="rounded-md border border-border bg-background px-2 py-1 text-xs focus:border-primary focus:outline-none"
+                className="rounded-md border border-border bg-surface px-2 py-1 text-xs focus:border-primary focus:outline-none"
               >
                 {providerThinkingLevels.map((opt) => (
                   <option key={opt} value={opt}>{`Thinking: ${opt.charAt(0).toUpperCase() + opt.slice(1)}`}</option>

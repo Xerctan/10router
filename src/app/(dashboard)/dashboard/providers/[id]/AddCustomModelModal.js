@@ -78,7 +78,7 @@ export default function AddCustomModelModal({ isOpen, providerAlias, providerDis
               onChange={(e) => { setModelId(e.target.value); setTestStatus(null); setTestError(""); }}
               onKeyDown={handleKeyDown}
               placeholder="e.g. claude-opus-4-5"
-              className="flex-1 px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
+              className="flex-1 px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:border-primary"
               autoFocus
             />
             <Button
@@ -121,7 +121,7 @@ export default function AddCustomModelModal({ isOpen, providerAlias, providerDis
               value={contextWindow}
               onChange={(e) => setContextWindow(e.target.value)}
               placeholder="e.g. 200000"
-              className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:border-primary"
             />
           </div>
           <div>
@@ -133,7 +133,7 @@ export default function AddCustomModelModal({ isOpen, providerAlias, providerDis
               value={maxOutput}
               onChange={(e) => setMaxOutput(e.target.value)}
               placeholder="e.g. 8192"
-              className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:border-primary"
             />
           </div>
         </div>
