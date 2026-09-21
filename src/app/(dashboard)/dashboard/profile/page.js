@@ -984,6 +984,9 @@ export default function ProfilePage() {
                 onChange={handleUsageImportFile}
               />
             </div>
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              {translate("The backup file contains provider credentials in readable form — store it like a password.")}
+            </p>
             {dbStatus.message && (
               <p className={`text-sm ${dbStatus.type === "error" ? "text-red-500" : "text-green-600 dark:text-green-400"}`}>
                 {dbStatus.message}

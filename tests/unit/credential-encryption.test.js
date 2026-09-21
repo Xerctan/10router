@@ -249,6 +249,76 @@ describe("connections repo round-trip", () => {
   });
 });
 
+describe("backup export / import keep working (existing users)", () => {
+  // exportDb/importDb move whole tables and so bypass the repo — they are the
+  // paths an existing user actually hits (Download backup / Import backup).
+  // Export must stay restorable elsewhere, which means readable credentials in
+  // the file; import must not put them back unencrypted.
+  it("exports readable credentials and imports them encrypted", async () => {
+    const { getAdapter } = await import("@/lib/db/driver.js");
+    const { createProviderConnection, getProviderConnectionById } = await import("@/lib/db/repos/connectionsRepo.js");
+    const { exportDb, importDb } = await import("@/lib/db/index.js");
+    const db = await getAdapter();
+
+    await createProviderConnection({
+      provider: "qoder-cn",
+      authType: "oauth",
+      email: "backup@example.com",
+      accessToken: "BACKUP-TOKEN",
+      refreshToken: "BACKUP-REFRESH",
+      providerSpecificData: { mimoPassToken: "BACKUP-PASS" },
+    });
+
+    const payload = await exportDb();
+    const exported = payload.providerConnections.find((c) => c.email === "backup@example.com");
+    expect(exported).toBeTruthy();
+    // The backup is portable: real values, no ciphertext.
+    expect(exported.accessToken).toBe("BACKUP-TOKEN");
+    expect(exported.providerSpecificData.mimoPassToken).toBe("BACKUP-PASS");
+    expect(JSON.stringify(payload.providerConnections)).not.toContain("enc:v1:");
+
+    // Wipe and restore it the way the dashboard does.
+    db.run(`DELETE FROM providerConnections`);
+    await importDb(payload);
+
+    // Restored rows are encrypted again, and readable through the repo.
+    const raw = db.get(`SELECT id, data FROM providerConnections WHERE email = ?`, ["backup@example.com"]);
+    expect(raw.data).toContain("enc:v1:");
+    expect(raw.data).not.toContain("BACKUP-TOKEN");
+    const conn = await getProviderConnectionById(raw.id);
+    expect(conn.accessToken).toBe("BACKUP-TOKEN");
+    expect(conn.providerSpecificData.mimoPassToken).toBe("BACKUP-PASS");
+  });
+
+  it("importing an older plaintext backup does not leave credentials in the clear", async () => {
+    const { getAdapter } = await import("@/lib/db/driver.js");
+    const { importDb } = await import("@/lib/db/index.js");
+    const db = await getAdapter();
+
+    // Shape of a backup taken by a pre-encryption release.
+    await importDb({
+      settings: {},
+      providerConnections: [
+        {
+          id: "legacy-backup",
+          provider: "stepfun-cn",
+          authType: "apikey",
+          name: "key",
+          priority: 1,
+          isActive: true,
+          apiKey: "OLD-BACKUP-PLAINTEXT-KEY",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    });
+
+    const raw = db.get(`SELECT data FROM providerConnections WHERE id = 'legacy-backup'`);
+    expect(raw.data).not.toContain("OLD-BACKUP-PLAINTEXT-KEY");
+    expect(raw.data).toContain("enc:v1:");
+  });
+});
+
 describe("003-encrypt-credentials migration", () => {
   it("encrypts existing plaintext rows once and is idempotent", async () => {
     // 1st boot: schema at the pre-encryption version, holding a plaintext row.
