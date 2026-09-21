@@ -1806,5 +1806,6 @@
   "Not set": "未设置",
   "Restore built-in": "恢复内置值",
   "Enter a whole number greater than 0": "请输入大于 0 的整数",
-  "Max output is larger than the context window": "最大输出大于上下文窗口"
+  "Max output is larger than the context window": "最大输出大于上下文窗口",
+  "No claimable activity available for this account": "该账号当前无可领取的活动"
 }

@@ -194,13 +194,34 @@ export async function checkinOneQoder(conn, deps = {}) {
     );
 
     if (claimable.length === 0) {
-      const alreadyCount = campaigns.filter((c) => c.claimStatus === "CLAIMED").length;
+      // Two different truths used to collapse into one result, and the dashboard
+      // rendered both as "today's credits are already claimed":
+      //
+      //   - the account has no CLAIM_BENEFIT campaign at all. The intl qoder.sh
+      //     deployment currently returns only the season promo, whose actionType
+      //     is VIEW_DETAILS, for every account we have seen — so there is nothing
+      //     to claim, and never was today;
+      //   - a credits campaign exists and is already CLAIMED.
+      //
+      // The first is a normal "nothing on offer here" state, not a claim that
+      // happened, so it gets its own status instead of borrowing the success one.
+      const creditCampaigns = campaigns.filter((c) => c.actionType === "CLAIM_BENEFIT");
+      if (creditCampaigns.length === 0) {
+        return {
+          connectionId: conn.id,
+          account: conn.name || conn.email || conn.id,
+          provider: conn.provider,
+          status: "no-activity",
+          message: "当前无可领取的活动",
+          claimedAmount: 0,
+        };
+      }
       return {
         connectionId: conn.id,
         account: conn.name || conn.email || conn.id,
         provider: conn.provider,
         status: "already",
-        message: alreadyCount > 0 ? "今日已领或无待领活动" : "当前无活动权益",
+        message: "今日已领或无待领活动",
         claimedAmount: 0,
       };
     }
@@ -310,6 +331,12 @@ export async function runQoderCheckinTick(deps = {}) {
       } else if (outcome.status === "already") {
         memo[conn.id] = today;
         log.debug("QODER_CHECKIN", `${accountLabel(conn)}：${outcome.message || "今日已领或无待领活动"}`);
+      } else if (outcome.status === "no-activity") {
+        // Deliberately NOT memoized: nothing was confirmed, and the campaign can
+        // still appear later in the day (the daily window opens at 10:00 UTC+8),
+        // so the next tick should look again. A debug line, not a warning — for a
+        // deployment that has no such campaign this is the normal outcome.
+        log.debug("QODER_CHECKIN", `${accountLabel(conn)}：${outcome.message || "当前无可领取的活动"}`);
       } else {
         log.warn("QODER_CHECKIN", `${accountLabel(conn)} 领取失败：${outcome.error || outcome.status}`);
       }
@@ -328,9 +355,10 @@ export async function runQoderCheckinTick(deps = {}) {
   // One consolidated summary replaces the old firehose of per-event JSON lines.
   const claimed = results.filter((r) => r.status === "checked-in");
   const failed = results.filter((r) => r.status === "failed");
-  const already = results.length - claimed.length - failed.length;
+  const none = results.filter((r) => r.status === "no-activity");
+  const already = results.length - claimed.length - failed.length - none.length;
   const totalCredits = claimed.reduce((a, r) => a + (r.claimedAmount || 0), 0);
-  const summary = `领取汇总：成功 ${claimed.length}（+${totalCredits} Credits）、已领 ${already}、失败 ${failed.length}`;
+  const summary = `领取汇总：成功 ${claimed.length}（+${totalCredits} Credits）、已领 ${already}、无活动 ${none.length}、失败 ${failed.length}`;
   if (claimed.length > 0 || failed.length > 0) {
     log.info("QODER_CHECKIN", summary);
   } else {

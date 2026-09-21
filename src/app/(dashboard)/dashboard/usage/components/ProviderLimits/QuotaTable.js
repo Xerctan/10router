@@ -178,9 +178,11 @@ export default function QuotaTable({
           const resetDisplay = formatResetTimeDisplay(quota.resetAt);
           // recurring defaults true: a missing flag means the quota
           // refreshes at resetAt. Bonus/one-shot packs set recurring:false
-          // and their resetAt is a hard expiry, so word it as "expires".
+          // and their resetAt is a hard expiry, so the countdown IS the
+          // expiry — prefixing it with "expires in" only ate width in the
+          // compact card view (the absolute date stays on the cell's title).
           const recurring = quota.recurring !== false;
-          const countdownLabel = recurring ? `in ${countdown}` : `expires in ${countdown}`;
+          const countdownLabel = recurring ? `in ${countdown}` : countdown;
 
           return (
             <div

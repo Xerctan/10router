@@ -283,6 +283,10 @@ export default function ProviderDetailPage() {
       }
       const checkedInList = list.filter((r) => r.status === "checked-in");
       const alreadyList = list.filter((r) => r.status === "already");
+      // Accounts the deployment offers no claim campaign for at all (intl Qoder
+      // currently returns only a "view details" promo). These are NOT failures
+      // and NOT an "already claimed" — saying either read as a lie.
+      const noneList = list.filter((r) => r.status === "no-activity");
       const failedList = list.filter((r) => r.status === "failed");
 
       const totalCredits = checkedInList.reduce((acc, cur) => acc + (cur.claimedAmount || 0), 0);
@@ -291,12 +295,18 @@ export default function ProviderDetailPage() {
         notify.success(
           `${translate("Claim successful")}: +${totalCredits} Credits (${checkedInList.length} ${translate("accounts")})`
         );
-      } else if (failedList.length === 0) {
-        notify.info(translate("Daily credits already claimed for today"));
-      } else {
+      } else if (failedList.length > 0) {
         notify.error(
           `${translate("Claim failed")}: ${failedList.map(f => f.error).join(", ")}`
         );
+      } else if (noneList.length > 0) {
+        // Friendly, informational: nothing is broken and there is nothing to do.
+        const suffix = alreadyList.length > 0
+          ? ` / ${translate("Daily credits already claimed for today")} (${alreadyList.length} ${translate("accounts")})`
+          : ` (${noneList.length} ${translate("accounts")})`;
+        notify.info(translate("No claimable activity available for this account") + suffix);
+      } else {
+        notify.info(translate("Daily credits already claimed for today"));
       }
     } catch (e) {
       notify.error(translate("Claim failed") + ": " + e.message);

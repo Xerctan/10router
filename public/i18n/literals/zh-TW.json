@@ -626,5 +626,6 @@
   "Not set": "未設定",
   "Restore built-in": "還原內建值",
   "Enter a whole number greater than 0": "請輸入大於 0 的整數",
-  "Max output is larger than the context window": "最大輸出大於上下文視窗"
+  "Max output is larger than the context window": "最大輸出大於上下文視窗",
+  "No claimable activity available for this account": "該帳號目前無可領取的活動"
 }

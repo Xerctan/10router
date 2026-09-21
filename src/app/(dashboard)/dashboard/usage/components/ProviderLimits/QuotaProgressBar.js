@@ -125,7 +125,11 @@ export default function QuotaProgressBar({
         {countdown !== "-" && (
           <div className="flex items-center gap-1">
             <span>•</span>
-            <span className="font-medium">{translate(resetWord)} in {countdown}</span>
+            {/* One-shot packs: the countdown IS the expiry, so it carries no
+                "Expires in" prefix; the absolute date still renders below. */}
+            <span className="font-medium">
+              {recurring ? `${translate(resetWord)} in ${countdown}` : countdown}
+            </span>
           </div>
         )}
       </div>
