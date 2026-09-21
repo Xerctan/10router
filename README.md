@@ -142,6 +142,11 @@ PORT=20128 HOSTNAME=0.0.0.0 npm run start
 - API endpoint: `http://localhost:20128/v1`
 - 初始密码: `123456`（登录后请修改）
 
+### ⚙️ 数据目录与驱动诊断
+
+- **`DATA_DIR`** 指定数据目录（默认 Windows `%APPDATA%\10router`，其余平台 `~/.10router`）：数据库、日志与运行时依赖（如 better-sqlite3 副本）都在这里。
+- **`GET /api/health`** 额外返回 `driver`（当前生效的 SQLite 驱动）与 `lastDriverError`（某个后备驱动被跳过的原因，例如全局 node_modules 里存在损坏的 better-sqlite3 副本）。两者只读取已初始化的状态，**不会**为此触发数据库初始化。
+
 ## 🔌 用量同步插件（10router-sync）
 
 10Router 附带一个**用量同步插件**（`zcode-plugin/`，插件名 `10router-sync`），把本机 AI 编码工具的调用用量一键导入 10Router 统计——幂等可重复执行，自动防双重计数。
