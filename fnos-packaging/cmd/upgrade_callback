@@ -40,7 +40,7 @@ fi
 # 确保初始密码不是开发占位值 change-me（修正 server 内 .env / .env.example）
 # 不再换成 123456：公开口令 + 0.0.0.0 监听 = 局域网内任何人一步拿到管理员权限和全部
 # 上游凭据（issue #9）。改成随机值写入 .env，并把密码记录到安装日志（只提示这一次，
-# 登录后请在 Web UI「设置 -> 个人资料」修改）。
+# 登录后请在 Web UI「设置」页修改）。
 gen_initial_password() {
     if command -v openssl >/dev/null 2>&1; then
         openssl rand -base64 12 2>/dev/null | tr -d '/+=' | cut -c1-16

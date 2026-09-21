@@ -488,7 +488,6 @@
   "Security required: Enable \"Require login\" and set a custom password before activating the tunnel.": "安全要求：啟用隧道前，請先開啟「需要登錄」並設定自訂密碼。",
   "Require API key is disabled — your endpoint is publicly accessible without authentication.": "「需要 API 金鑰」已關閉——您的端點無需任何驗證即可被公開存取。",
   "Require login is disabled — anyone can access your dashboard via tunnel.": "「需要登錄」已關閉——任何人都可透過隧道存取您的儀表板。",
-  "No dashboard password is set — set one in Profile settings.": "尚未設定儀表板密碼 —— 請在「個人資料」中設定。",
   "Change password": "變更密碼",
   "Connected but not reachable yet.": "已連線，但尚不可達。",
   "Creating tunnel...": "正在建立隧道...",
@@ -631,7 +630,6 @@
   "Beta toggles for provider transfer and daily credit check-ins": "提供商傳輸與每日積分簽到的內測開關",
   "No dashboard password is set yet": "尚未設定儀表板密碼",
 
-  "Only this machine can open the dashboard until one is set. Set it from Settings → Profile, and LAN access turns back on.": "在設定密碼前，只有本機可以開啟儀表板。請在「設定 → 個人資料」中設定，之後區域網路存取會自動恢復。",
   "Open dashboard": "開啟儀表板",
   "Dashboard: local access only": "儀表板僅本機存取",
   "Refuse every non-local request to the dashboard and its management APIs. The LLM API (/v1) is unaffected — it uses its own API keys. Takes effect immediately; you will lose remote access to this dashboard until you turn it off from the machine itself.": "拒絕所有非本機來源對儀表板及其管理介面的請求。LLM 介面（/v1）不受影響，它使用自己的 API 金鑰。立即生效；關閉前你將無法從其它裝置存取本儀表板（需在本機操作）。",
@@ -650,9 +648,11 @@
   "This machine only": "僅本機",
   "Anyone who can reach the port": "任何能存取該連接埠的人",
 
-  "Log-in check is off: anyone who can reach this port can manage every provider and credential. Turn it back on in Settings → Profile.": "登入檢查已關閉：任何能存取該連接埠的人都能管理全部供應商與憑證。請在「設定 → 個人資料」中重新開啟。",
   "Unknown": "未知",
   "Anyone who can reach the port and knows the password": "任何能存取該連接埠且知道密碼的人",
-  "No password is set yet, so the dashboard opens on this machine only. Set one in Settings → Profile to reach it from other devices. The gateway API (/v1) is unaffected.": "尚未設定密碼：儀表板目前只能在本機開啟。請在「設定 → 個人資料」設定一組密碼，即可從其它裝置存取；閘道介面（/v1）不受影響。",
-  "Remote access to the dashboard stays disabled until a password is set. Set the first password on the machine running 10Router (open http://127.0.0.1:20128 there), or start it with the INITIAL_PASSWORD environment variable.": "在設定密碼之前，儀表板的遠端存取維持關閉。請在執行 10Router 的機器上設定第一個密碼（在該機開啟 http://127.0.0.1:20128），或以 INITIAL_PASSWORD 環境變數啟動。"
+  "Remote access to the dashboard stays disabled until a password is set. Set the first password on the machine running 10Router (open http://127.0.0.1:20128 there), or start it with the INITIAL_PASSWORD environment variable.": "在設定密碼之前，儀表板的遠端存取維持關閉。請在執行 10Router 的機器上設定第一個密碼（在該機開啟 http://127.0.0.1:20128），或以 INITIAL_PASSWORD 環境變數啟動。",
+  "No password is set yet, so the dashboard opens on this machine only. Set a password on the Settings page to reach it from other devices. The gateway API (/v1) is unaffected.": "尚未設定密碼：儀表板目前只能在本機開啟。請在「設定」頁設定一組密碼，即可從其它裝置存取；閘道介面（/v1）不受影響。",
+  "Log-in check is off: anyone who can reach this port can manage every provider and credential. Turn it on again on the Settings page.": "登入檢查已關閉：任何能存取該連接埠的人都能管理全部供應商與憑證。請在「設定」頁重新開啟。",
+  "Only this machine can open the dashboard until one is set. Set a password on the Settings page and LAN access turns back on.": "在設定密碼前，只有本機可以開啟儀表板。請在「設定」頁設定密碼，之後區域網路存取會自動恢復。",
+  "No dashboard password is set — set one on the Settings page.": "尚未設定儀表板密碼 —— 請在「設定」頁設定。"
 }

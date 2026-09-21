@@ -981,7 +981,7 @@ export default function APIPageClient({ machineId }) {
                 message={
                   !requireLogin
                     ? translate("Require login is disabled — anyone can access your dashboard via tunnel.")
-                    : translate("No dashboard password is set — set one in Profile settings.")
+                    : translate("No dashboard password is set — set one on the Settings page.")
                 }
                 action={{
                   label: !requireLogin ? translate("Enable") : translate("Change password"),

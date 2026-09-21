@@ -131,12 +131,12 @@ export default function SecurityCard({ settings, patch }) {
             />
             {noPassword && !loginOff && (
               <p className="text-xs text-red-600 dark:text-red-400 pt-2">
-                {translate("No password is set yet, so the dashboard opens on this machine only. Set one in Settings → Profile to reach it from other devices. The gateway API (/v1) is unaffected.")}
+                {translate("No password is set yet, so the dashboard opens on this machine only. Set a password on the Settings page to reach it from other devices. The gateway API (/v1) is unaffected.")}
               </p>
             )}
             {loginOff && (
               <p className="text-xs text-red-600 dark:text-red-400 pt-2">
-                {translate("Log-in check is off: anyone who can reach this port can manage every provider and credential. Turn it back on in Settings → Profile.")}
+                {translate("Log-in check is off: anyone who can reach this port can manage every provider and credential. Turn it on again on the Settings page.")}
               </p>
             )}          </div>
         )}

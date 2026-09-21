@@ -238,7 +238,7 @@ export async function proxy(request) {
     const settings = await loadSettings();
     if (settings?.dashboardLocalOnly === true && !isLocalRequest(request)) {
       return NextResponse.json(
-        { error: "The dashboard is set to local-only access (Settings → Security). Turn it off from the machine running 10Router to manage it remotely." },
+        { error: "The dashboard is set to local-only access (Experimental → Security). Turn it off from the machine running 10Router to manage it remotely." },
         { status: 403 },
       );
     }

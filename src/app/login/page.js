@@ -74,8 +74,8 @@ export default function LoginPage() {
             <div className="flex flex-col gap-3">
               <p className="text-sm font-medium">No dashboard password is set yet</p>
               <p className="text-xs text-text-muted">
-                Only this machine can open the dashboard until one is set. Set it from Settings →
-                Profile, and LAN access turns back on.
+                Only this machine can open the dashboard until one is set. Set a password on the
+                Settings page and LAN access turns back on.
               </p>
               <Button
                 type="button"

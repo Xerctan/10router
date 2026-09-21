@@ -192,6 +192,44 @@ describe("the 'set a password' advice leads somewhere", () => {
   });
 });
 
+describe("guidance points at labels that actually exist in the UI", () => {
+  // /dashboard/profile is labelled "Settings" in the sidebar (the page has no
+  // "Profile" heading), and the Security card lives under "Experimental".
+  // Telling the operator to open "Settings → Profile" sends them looking for a
+  // page that is not in the navigation at all.
+  const files = [
+    "src/app/(dashboard)/dashboard/experimental/SecurityCard.js",
+    "src/app/login/page.js",
+    "src/app/(dashboard)/dashboard/endpoint/EndpointPageClient.js",
+  ];
+
+  it("never invents a 'Profile' destination", () => {
+    for (const f of files) {
+      const code = readSource(f);
+      expect(code).not.toContain("Settings → Profile");
+      expect(code).not.toContain("Profile settings");
+    }
+  });
+
+  it("names the Settings page, which is what the sidebar shows", () => {
+    expect(readSource("src/app/(dashboard)/dashboard/experimental/SecurityCard.js")).toContain("Settings page");
+    expect(readSource("src/app/login/page.js")).toContain("Settings page");
+    expect(readSource("src/app/(dashboard)/dashboard/endpoint/EndpointPageClient.js")).toContain("Settings page");
+  });
+
+  it("sends the local-only refusal to where the switch really is", () => {
+    expect(readSource("src/dashboardGuard.js")).toContain("Experimental → Security");
+  });
+
+  it("the sidebar still labels those two pages the same way", () => {
+    const sidebar = readSource("src/shared/components/Sidebar.js");
+    expect(sidebar).toContain('href="/dashboard/profile"');
+    expect(sidebar).toContain(">Settings</span>");
+    expect(sidebar).toContain('href="/dashboard/experimental"');
+    expect(sidebar).toContain(">Experimental</span>");
+  });
+});
+
 describe("the security card read-out does not contradict itself", () => {
   const card = readSource("src/app/(dashboard)/dashboard/experimental/SecurityCard.js");
 

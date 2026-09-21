@@ -66,7 +66,7 @@ start() {
     if [ ! -f "${SRC_DIR}/.env" ]; then
         # 首次安装: 生成随机初始密码 —— 不再写死 123456。0.0.0.0 监听 + 公开口令 =
         # 局域网内任何人一步拿到管理员权限和全部上游凭据 (issue #9)。密码只打印这一次，
-        # 登录后请在 Web UI「设置 -> 个人资料」改掉。
+        # 登录后请在 Web UI「设置」页改掉。
         GEN_PW="$("${NODE_BIN}" -e 'process.stdout.write(require("crypto").randomBytes(12).toString("base64url"))' 2>/dev/null || true)"
         if [ -z "${GEN_PW}" ]; then
             GEN_PW="$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')"

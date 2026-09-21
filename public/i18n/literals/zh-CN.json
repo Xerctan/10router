@@ -1654,7 +1654,6 @@
   "Security required: Enable \"Require login\" and set a custom password before activating the tunnel.": "安全要求：启用隧道前，请先开启「需要登录」并设置自定义密码。",
   "Require API key is disabled — your endpoint is publicly accessible without authentication.": "「需要 API 密钥」已关闭——您的端点无需任何鉴权即可被公开访问。",
   "Require login is disabled — anyone can access your dashboard via tunnel.": "「需要登录」已关闭——任何人都可通过隧道访问您的仪表盘。",
-  "No dashboard password is set — set one in Profile settings.": "尚未设置仪表盘密码 —— 请在「个人资料」中设置。",
   "Change password": "更改密码",
   "Connected but not reachable yet.": "已连接，但尚不可达。",
   "Creating tunnel...": "正在创建隧道...",
@@ -1810,7 +1809,6 @@
   "Beta toggles for provider transfer and daily credit check-ins": "提供商传输与每日积分签到的内测开关",
   "No dashboard password is set yet": "尚未设置仪表盘密码",
 
-  "Only this machine can open the dashboard until one is set. Set it from Settings → Profile, and LAN access turns back on.": "在设置密码前，只有本机可以打开仪表盘。请在「设置 → 个人资料」中设置，随后局域网访问会自动恢复。",
   "Open dashboard": "打开仪表盘",
   "Dashboard: local access only": "仪表盘仅本机访问",
   "Refuse every non-local request to the dashboard and its management APIs. The LLM API (/v1) is unaffected — it uses its own API keys. Takes effect immediately; you will lose remote access to this dashboard until you turn it off from the machine itself.": "拒绝所有非本机来源对仪表盘及其管理接口的请求。LLM 接口（/v1）不受影响，它使用自己的 API 密钥。立即生效；关闭前你将无法从其它设备访问本仪表盘（需在本机操作）。",
@@ -1829,8 +1827,10 @@
   "This machine only": "仅本机",
   "Anyone who can reach the port": "任何能访问该端口的人",
 
-  "Log-in check is off: anyone who can reach this port can manage every provider and credential. Turn it back on in Settings → Profile.": "登录校验已关闭：任何能访问该端口的人都能管理全部供应商与凭据。请在「设置 → 个人资料」中重新开启。",
   "Anyone who can reach the port and knows the password": "任何能访问该端口且知道密码的人",
-  "No password is set yet, so the dashboard opens on this machine only. Set one in Settings → Profile to reach it from other devices. The gateway API (/v1) is unaffected.": "尚未设置密码：仪表盘目前只能在本机打开。请在「设置 → 个人资料」设置一个密码，即可从其它设备访问；网关接口（/v1）不受影响。",
-  "Remote access to the dashboard stays disabled until a password is set. Set the first password on the machine running 10Router (open http://127.0.0.1:20128 there), or start it with the INITIAL_PASSWORD environment variable.": "在设置密码之前，仪表盘的远程访问保持关闭。请在运行 10Router 的机器上设置首个密码（在那里打开 http://127.0.0.1:20128），或使用 INITIAL_PASSWORD 环境变量启动。"
+  "Remote access to the dashboard stays disabled until a password is set. Set the first password on the machine running 10Router (open http://127.0.0.1:20128 there), or start it with the INITIAL_PASSWORD environment variable.": "在设置密码之前，仪表盘的远程访问保持关闭。请在运行 10Router 的机器上设置首个密码（在那里打开 http://127.0.0.1:20128），或使用 INITIAL_PASSWORD 环境变量启动。",
+  "No password is set yet, so the dashboard opens on this machine only. Set a password on the Settings page to reach it from other devices. The gateway API (/v1) is unaffected.": "尚未设置密码：仪表盘目前只能在本机打开。请在「设置」页设置一个密码，即可从其它设备访问；网关接口（/v1）不受影响。",
+  "Log-in check is off: anyone who can reach this port can manage every provider and credential. Turn it on again on the Settings page.": "登录校验已关闭：任何能访问该端口的人都能管理全部供应商与凭据。请在「设置」页重新开启。",
+  "Only this machine can open the dashboard until one is set. Set a password on the Settings page and LAN access turns back on.": "在设置密码前，只有本机可以打开仪表盘。请在「设置」页设置密码，随后局域网访问会自动恢复。",
+  "No dashboard password is set — set one on the Settings page.": "尚未设置仪表盘密码 —— 请在「设置」页设置。"
 }
