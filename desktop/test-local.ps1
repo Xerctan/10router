@@ -5,7 +5,7 @@
 #   .\test-local.ps1                            # 就地替换(默认,最稳,~2 分钟)
 #   .\test-local.ps1 -Mode hot                  # 只同步 .next-cli-build + public 后重启(应用侧改动,不重打电子包)
 #   .\test-local.ps1 -Mode install              # 真跑一遍安装器(静默 /S,~4 分钟)
-#   .\test-local.ps1 -Version 1.1.4             # 指定测试号(默认 = 最新 tag 补丁位 +1,再挂 -test.<unix 秒>)
+#   .\test-local.ps1 -Version 1.1.4             # 指定测试号(默认 = 最新 tag 补丁位 +1,再接递增轮次 -test.N)
 #   .\test-local.ps1 -SkipAppBuild              # 复用已有 cli/app(源码没变时省一次 Next build)
 #   .\test-local.ps1 -Marker "payload_too_short"  # 额外断言装好的产物里含该字面量
 #
@@ -58,21 +58,38 @@ function Stop-Router([int]$TimeoutSec = 20) {
 }
 
 # ---------- 0) 推导测试号(必须严格大于最新 git tag,否则 test-version 会拒绝) ----------
-# 默认号**每轮都不同**。只按 tag 推导会得到常量(最新 tag 不动就永远是 1.1.4-test.1),
-# 于是一轮轮热替换的不同产物共用一个版本号 —— 就是 1.0.8「一个号三份产物」那个坑。
-# unix 秒后缀保证唯一,仍是 `-test.*` 预发布号:排在同核心的正式号**之前**,
-# 所以装了这个号的实例不会被 updater 当成「已升级到 1.1.4」。
-# 想让界面直接显示工作树版本(如 1.1.4)时,显式传 -Version。
+# 默认号 = 最新 tag 的补丁位 +1,再接一个**递增的测试轮次** `-test.N`:第一次 1、第二次 2……
+# 左上角版本号因此一眼就能看出「这是第几轮」,而不只是一串没人看得懂的字符。
+#
+# 轮次存在 desktop/.test-round(未跟踪)。**别改成时间戳/随机数**:那样号虽然也唯一,
+# 但看了一串 unix 秒根本不知道跑到第几轮了。
+#
+# 仍是 `-test.*` 预发布号:预发布排在同核心的正式号**之前**,所以装了测试号的实例
+# 不会被 updater 当成「已升级到 1.1.4」。想让界面直接显示工作树版本(如 1.1.4)时,显式传 -Version。
+$round = 0
 if ($Version -eq "") {
     Push-Location $RepoDir
     try { $tag = (git describe --tags --abbrev=0 --match 'v*').Trim() } finally { Pop-Location }
     if ($tag -notmatch '^v(\d+)\.(\d+)\.(\d+)$') {
         Die "最新 tag '$tag' 不是 vX.Y.Z 形态,请用 -Version 显式指定测试号"
     }
-    $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-    $Version = "$($Matches[1]).$($Matches[2]).$([int]$Matches[3] + 1)-test.$stamp"
+    # **立刻**把 $Matches 取出来存好:$Matches 是自动变量,之后任何一次 -match 都会覆盖它。
+    # (第一版把取组留到最后,而中间那个校验计数器内容的 -match 已经把 $Matches 清空,
+    #  于是号变成了 "..1-test.2"。tag 匹配之后不许再出现 -match。)
+    $vMajor = $Matches[1]
+    $vMinor = $Matches[2]
+    $vPatch = [int]$Matches[3] + 1
+    # 计数器只在**本轮跑通之后**才落盘(见 step 7 之后):失败的一轮不该白吃一个号
+    $roundFile = Join-Path $DesktopDir ".test-round"
+    if (Test-Path $roundFile) {
+        # 文件缺失/内容不是数字就当 0 —— 宁可回到第 1 轮,也不让脚本在这里挂掉
+        $prev = Get-Content $roundFile -Raw -ErrorAction SilentlyContinue
+        if ($prev -and $prev.Trim() -match '^\d+$') { $round = [int]$prev.Trim() }
+    }
+    $round++
+    $Version = "$vMajor.$vMinor.$vPatch-test.$round"
 }
-Step 0 "测试号 $Version  模式 $Mode  $(if ($SkipAppBuild) { '(复用 cli/app)' })"
+Step 0 "测试号 $Version  模式 $Mode  $(if ($round -gt 0) { "(第 $round 轮)" })  $(if ($SkipAppBuild) { '(复用 cli/app)' })"
 
 # ---------- 1) 停掉旧实例(不先停:文件被占用 / 端口被旧 sidecar 占着) ----------
 Step 1 "停掉旧实例"
@@ -248,6 +265,12 @@ try {
                Select-String -Pattern $Marker -SimpleMatch -List | Select-Object -First 1
         if (-not $hit) { Die "产物里找不到标记 '$Marker'(代码没进去?注意产物目录是 .next-cli-build)" }
         Ok "标记命中: $($hit.Path)"
+    }
+
+    # 本轮所有校验都过了,才把轮次记下 —— 失败的一轮不消耗号
+    if ($round -gt 0) {
+        Set-Content -Path (Join-Path $DesktopDir ".test-round") -Value $round -Encoding ascii -NoNewline
+        Ok "测试轮次记为第 $round 轮"
     }
 }
 finally {

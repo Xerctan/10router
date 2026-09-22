@@ -94,6 +94,9 @@ graphify-out/*
 /desktop/node_modules/
 /desktop/dist/
 
+# desktop/test-local.ps1 自己维护的本地测试轮次计数器(见该脚本 step 0)
+/desktop/.test-round
+
 # fnOS fpk packaging artifacts (built on the NAS build dir; a local run must not
 # dirty the workspace with a 76MB server dump or release-named fpk binaries)
 /fnos-packaging/app/server/
