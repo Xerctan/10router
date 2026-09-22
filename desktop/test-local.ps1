@@ -4,7 +4,7 @@
 #   cd desktop
 #   .\test-local.ps1                            # 就地替换(默认,最快,~2 分钟)
 #   .\test-local.ps1 -Mode install              # 真跑一遍安装器(静默 /S,~4 分钟)
-#   .\test-local.ps1 -Version 1.1.2-test.1      # 指定测试号(默认 = 最新 tag 补丁位 +1 再挂 -test.1)
+#   .\test-local.ps1 -Version 1.1.4             # 指定测试号(默认 = 最新 tag 补丁位 +1,再挂 -test.<unix 秒>)
 #   .\test-local.ps1 -SkipAppBuild              # 复用已有 cli/app(源码没变时省一次 Next build)
 #   .\test-local.ps1 -Marker "payload_too_short"  # 额外断言装好的产物里含该字面量
 #
@@ -49,13 +49,19 @@ function Stop-Router([int]$TimeoutSec = 20) {
 }
 
 # ---------- 0) 推导测试号(必须严格大于最新 git tag,否则 test-version 会拒绝) ----------
+# 默认号**每轮都不同**。只按 tag 推导会得到常量(最新 tag 不动就永远是 1.1.4-test.1),
+# 于是一轮轮热替换的不同产物共用一个版本号 —— 就是 1.0.8「一个号三份产物」那个坑。
+# unix 秒后缀保证唯一,仍是 `-test.*` 预发布号:排在同核心的正式号**之前**,
+# 所以装了这个号的实例不会被 updater 当成「已升级到 1.1.4」。
+# 想让界面直接显示工作树版本(如 1.1.4)时,显式传 -Version。
 if ($Version -eq "") {
     Push-Location $RepoDir
     try { $tag = (git describe --tags --abbrev=0 --match 'v*').Trim() } finally { Pop-Location }
     if ($tag -notmatch '^v(\d+)\.(\d+)\.(\d+)$') {
         Die "最新 tag '$tag' 不是 vX.Y.Z 形态,请用 -Version 显式指定测试号"
     }
-    $Version = "$($Matches[1]).$($Matches[2]).$([int]$Matches[3] + 1)-test.1"
+    $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $Version = "$($Matches[1]).$($Matches[2]).$([int]$Matches[3] + 1)-test.$stamp"
 }
 Step 0 "测试号 $Version  模式 $Mode  $(if ($SkipAppBuild) { '(复用 cli/app)' })"
 
