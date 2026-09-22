@@ -13,6 +13,7 @@ vi.mock("../../open-sse/shared/mimoAccount.js", () => ({
 import { XiaomiMimoExecutor, __test__ } from "../../open-sse/executors/xiaomi-mimo.js";
 import { getExecutor } from "../../open-sse/executors/index.js";
 import registry from "../../open-sse/providers/registry/xiaomi-mimo.js";
+import desktop from "../../open-sse/providers/registry/mimo-desktop.js";
 import { resolveProviderAlias } from "../../open-sse/services/model.js";
 
 const { bareModel, COOKIE_KEY } = __test__;
@@ -167,17 +168,16 @@ describe("xiaomi-mimo registry (dual auth)", () => {
     for (const alias of [registry.alias, ...registry.aliases]) {
       expect(resolveProviderAlias(alias)).toBe("xiaomi-mimo");
     }
-    expect(registry.aliases).toContain("mimo-desktop");
-    expect(registry.aliases).toContain("xmd");
+    // `mimo-desktop` and `xmd` moved to the Desktop card in the 2026-09-22 split
+    // (see the "mimo-desktop registry" block below). They must NOT still answer
+    // for this provider, or the two cards would share one alias and
+    // ALIAS_TO_PROVIDER_ID order would decide the winner.
+    expect(registry.aliases).not.toContain("mimo-desktop");
+    expect(registry.aliases).not.toContain("xmd");
   });
 
-  it("pins the Desktop-exclusive models to the openai transport", () => {
-    const preview = registry.models.filter((m) => /preview/.test(m.id));
-    expect(preview.map((m) => m.id).sort()).toEqual(["mimo-x-flash-preview", "mimo-x-pro-preview"]);
-    for (const m of preview) {
-      expect(m.supportedFormats).toEqual(["openai"]);
-      expect(m.upstreamModelId).toBe(`xiaomi/${m.id}`);
-    }
+  it("leaves the Desktop-exclusive previews to the Desktop card", () => {
+    expect(registry.models.filter((m) => /preview/.test(m.id))).toEqual([]);
   });
 
   it("enables usage for both auth modes", () => {
@@ -187,5 +187,39 @@ describe("xiaomi-mimo registry (dual auth)", () => {
   it("keeps the api-key signup links", () => {
     expect(registry.display.notice.apiKeyUrl).toContain("api-keys");
     expect(registry.display.notice.signupUrl).toContain("desktop");
+  });
+});
+
+describe("mimo-desktop registry (account session)", () => {
+  it("keeps the same connect surface as the base card", () => {
+    expect(desktop.category).toBe("oauth");
+    expect(desktop.authModes).toEqual(["oauth", "apikey"]);
+    expect(desktop.hasOAuth).toBe(true);
+    expect(desktop.oauth.custom).toBe(true);
+    expect(desktop.oauth.callbackParam).toBe("u");
+  });
+
+  it("resolves every declared alias to the Desktop card, not the base card", () => {
+    for (const alias of [desktop.alias, ...desktop.aliases]) {
+      expect(resolveProviderAlias(alias)).toBe("mimo-desktop");
+    }
+    expect(resolveProviderAlias("mimo")).toBe("xiaomi-mimo");
+  });
+
+  it("pins the Desktop-exclusive models to the openai transport", () => {
+    const preview = desktop.models.filter((m) => /preview/.test(m.id));
+    expect(preview.map((m) => m.id).sort()).toEqual(["mimo-x-flash-preview", "mimo-x-pro-preview"]);
+    for (const m of preview) {
+      expect(m.supportedFormats).toEqual(["openai"]);
+      expect(m.upstreamModelId).toBe(`xiaomi/${m.id}`);
+      expect(m.requiresSession).toBe(true);
+    }
+  });
+
+  it("wires the same executor as the base card so stored combos keep routing", () => {
+    // The session path is keyed on the MODEL id, so an old
+    // `xiaomi-mimo/mimo-x-pro-preview` combo and a new
+    // `mimo-desktop/mimo-x-pro-preview` one both reach the account-service route.
+    expect(getExecutor("mimo-desktop")).toBeInstanceOf(XiaomiMimoExecutor);
   });
 });

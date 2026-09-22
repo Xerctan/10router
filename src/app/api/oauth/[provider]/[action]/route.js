@@ -87,6 +87,14 @@ async function completeXaiManualCode(code, state) {
  * Handles: authorize, exchange, device-code, poll
  */
 
+// The Xiaomi MiMo cards share this one custom ECDH flow: `xiaomi-mimo` (cloud
+// models) and `mimo-desktop` (account-session models, split out 2026-09-22). The
+// flow is addressed by provider id in the URL, so both ids must take the SAME
+// branches — while connections are created under whichever card the caller used,
+// never a hardcoded id, or the two cards would end up sharing one row.
+const XIAOMI_MIMO_PROVIDERS = new Set(["xiaomi-mimo", "mimo-desktop"]);
+const isXiaomiMimo = (p) => XIAOMI_MIMO_PROVIDERS.has(p);
+
 // GET /api/oauth/[provider]/authorize - Generate auth URL
 // GET /api/oauth/[provider]/device-code - Request device code (for device_code flow)
 export async function GET(request, { params }) {
@@ -97,7 +105,7 @@ export async function GET(request, { params }) {
     if (action === "authorize") {
       // Xiaomi MiMo: custom ECDH flow. Start the local callback proxy, mint an
       // X25519 keypair and register it against the state the client generated.
-      if (provider === "xiaomi-mimo") {
+      if (isXiaomiMimo(provider)) {
         const state = searchParams.get("state");
         if (!state) {
           return NextResponse.json({ error: "Missing state" }, { status: 400 });
@@ -185,7 +193,7 @@ export async function GET(request, { params }) {
       else if (provider === "zed") session = getZedSessionStatus(state);
       else if (provider === "xai") session = getXaiSessionStatus(state);
       else if (provider === "codex") session = getCodexSessionStatus(state);
-      else if (provider === "xiaomi-mimo") {
+      else if (isXiaomiMimo(provider)) {
         const xm = getXiaomiMimoSessionStatus(state);
         if (!xm) return NextResponse.json({ status: "unknown" });
         if (xm.status === "done" && xm.result) {
@@ -221,7 +229,7 @@ export async function GET(request, { params }) {
       else if (provider === "zed") stopZedProxy();
       else if (provider === "xai") stopXaiProxy();
       else if (provider === "codex") stopCodexProxy();
-      else if (provider === "xiaomi-mimo") stopXiaomiMimoProxy();
+      else if (isXiaomiMimo(provider)) stopXiaomiMimoProxy();
       else return NextResponse.json({ error: "Proxy only supported for codex/xai/trae/windsurf/zed" }, { status: 400 });
       return NextResponse.json({ success: true });
     }
@@ -320,8 +328,8 @@ export async function POST(request, { params }) {
       // our localhost redirect, so the user has to paste it back. That code is the very
       // same ECDH+AES-GCM payload the callback carries, so it goes through the same
       // decrypt-and-store path (see completeXiaomiMimoFlow).
-      if (provider !== "xiaomi-mimo") {
-        return NextResponse.json({ error: "submit-code only supported for xiaomi-mimo" }, { status: 400 });
+      if (!isXiaomiMimo(provider)) {
+        return NextResponse.json({ error: "submit-code only supported for the Xiaomi MiMo cards" }, { status: 400 });
       }
 
       const outcome = await completeXiaomiMimoFlow(body?.code);
@@ -359,7 +367,7 @@ export async function POST(request, { params }) {
       const { code, redirectUri, codeVerifier, state, meta } = body;
 
       // Xiaomi MiMo: the decrypted session already holds the sk- key server-side.
-      if (provider === "xiaomi-mimo") {
+      if (isXiaomiMimo(provider)) {
         if (!state) return NextResponse.json({ error: "Missing state" }, { status: 400 });
         const session = getXiaomiMimoSessionStatus(state);
         if (!session || session.status !== "done" || !session.result?.accessToken) {
@@ -399,7 +407,7 @@ export async function POST(request, { params }) {
           const { getProviderConnections, updateProviderConnection } = await import("@/models");
           const { findXiaomiConnection } = await import("@/lib/oauth/xiaomiIdentity.js");
           const existing = findXiaomiConnection(
-            await getProviderConnections({ provider: "xiaomi-mimo" }),
+            await getProviderConnections({ provider }),
             {
               uid,
               key: session.result.accessToken,
@@ -425,7 +433,7 @@ export async function POST(request, { params }) {
                 resetErrorState: true,
               })
             : await createProviderConnection({
-                provider: "xiaomi-mimo",
+                provider,
                 authType: "api_key",
                 accessToken: session.result.accessToken,
                 refreshToken: null,

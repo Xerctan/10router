@@ -77,9 +77,14 @@ describe("issue 13: mimo desktop session error", () => {
     }
   });
 
-  it("registry: both preview models are flagged requiresSession for the dashboard badge", async () => {
-    const { default: registry } = await import("../../open-sse/providers/registry/xiaomi-mimo.js");
-    const flagged = registry.models.filter((m) => m.requiresSession === true).map((m) => m.id);
+  it("registry: both preview models are flagged requiresSession on the Desktop card", async () => {
+    // They moved to registry/mimo-desktop.js in the 2026-09-22 three-card split;
+    // the dashboard badge has to follow them, and the base card must not advertise
+    // them any more (that would put a desktop-only model behind a cloud key).
+    const { default: desktop } = await import("../../open-sse/providers/registry/mimo-desktop.js");
+    const flagged = desktop.models.filter((m) => m.requiresSession === true).map((m) => m.id);
     expect(flagged.sort()).toEqual(["mimo-x-flash-preview", "mimo-x-pro-preview"]);
+    const { default: base } = await import("../../open-sse/providers/registry/xiaomi-mimo.js");
+    expect(base.models.filter((m) => m.requiresSession === true)).toEqual([]);
   });
 });

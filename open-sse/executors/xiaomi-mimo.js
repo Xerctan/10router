@@ -46,8 +46,12 @@ function injectThinkingDirective(messages, directive) {
 }
 
 export class XiaomiMimoExecutor extends DefaultExecutor {
-  constructor() {
-    super("xiaomi-mimo");
+  // Provider id is a parameter because two registry cards share this executor:
+  // `xiaomi-mimo` (cloud models) and `mimo-desktop` (account-session models).
+  // The session path itself is keyed on the MODEL id downstream, so a stored
+  // `xiaomi-mimo/mimo-x-pro-preview` combo resolves correctly through either id.
+  constructor(provider = "xiaomi-mimo") {
+    super(provider);
   }
 
   static isPreviewModel(model) {

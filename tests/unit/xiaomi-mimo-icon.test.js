@@ -9,11 +9,11 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
 const iconFile = path.join(root, "public", "providers", "xiaomi-mimo.png");
 
 /**
- * 设计 A：小米 Desktop 折进既有 xiaomi-mimo provider，**不**新建
- * `xiaomi-desktop` provider。因此图标槽位只有 `public/providers/xiaomi-mimo.png`
- * ——上游 #3921 拆分版往 `public/providers/xiaomi-desktop.png` 放的那张图，
- * 在合并版里没有任何代码路径会解析到（ProviderIcon → /providers/{id}.png，
- * id 是规范 provider id）。这个文件就是那条结论的守卫。
+ * 三卡拆分（2026-09-22）：MiMo Desktop 有了自己的 `mimo-desktop` provider，
+ * 但**没有**新建 `xiaomi-desktop`——上游 #3921 拆分版用的那个 id 在本仓库里依然
+ * 没有任何代码路径会解析到。桌面卡与主卡共用同一张 mark：
+ * `public/providers/xiaomi-mimo.png` 经 ICON_ALIASES 复用，不新增资产。
+ * 这个文件就是「不新增加载不到 / 难分辨的图标槽位」那条结论的守卫。
  */
 describe("xiaomi-mimo provider icon", () => {
   it("resolves to the canonical provider id, not the Desktop split id", () => {
@@ -45,10 +45,15 @@ describe("xiaomi-mimo provider icon", () => {
   });
 
   it("stays reachable through every registered alias", () => {
-    for (const alias of ["mimo", "mimo-desktop", "xmd", "xiaomi-mimo"]) {
-      const canonical = resolveProviderAlias(alias);
-      expect(canonical).toBe("xiaomi-mimo");
-      expect(getProviderIconSrc(canonical)).toBe("/providers/xiaomi-mimo.png");
+    // 主卡别名
+    for (const alias of ["mimo", "xiaomi-mimo"]) {
+      expect(resolveProviderAlias(alias)).toBe("xiaomi-mimo");
+      expect(getProviderIconSrc("xiaomi-mimo")).toBe("/providers/xiaomi-mimo.png");
+    }
+    // 桌面卡别名——同一张 mark，经 ICON_ALIASES 复用，所以无需第二份资产
+    for (const alias of ["mimo-desktop", "xmd"]) {
+      expect(resolveProviderAlias(alias)).toBe("mimo-desktop");
+      expect(getProviderIconSrc("mimo-desktop")).toBe("/providers/xiaomi-mimo.png");
     }
   });
 });

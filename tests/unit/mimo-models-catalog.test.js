@@ -88,14 +88,21 @@ describe("MiMo catalog wiring (source scan)", () => {
 });
 
 describe("xiaomi-mimo registry integrity", () => {
-  const registry = readFileSync(
-    path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."), "open-sse/providers/registry/xiaomi-mimo.js"),
-    "utf8"
+  const registryDir = path.join(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."),
+    "open-sse/providers/registry"
   );
+  const registry = readFileSync(path.join(registryDir, "xiaomi-mimo.js"), "utf8");
+  const desktopRegistry = readFileSync(path.join(registryDir, "mimo-desktop.js"), "utf8");
 
-  it("keeps the two fixed client X previews and the delisted V2 pair", () => {
-    expect(registry).toMatch(/"mimo-x-pro-preview"/);
-    expect(registry).toMatch(/"mimo-x-flash-preview"/);
+  it("keeps the two fixed client X previews on the Desktop card, not the base card", () => {
+    // The 2026-09-22 three-card split moved the account-session models into
+    // registry/mimo-desktop.js. Both directions matter: the Desktop card must list
+    // them, and the base card must not (a cloud key cannot reach them).
+    expect(desktopRegistry).toMatch(/"mimo-x-pro-preview"/);
+    expect(desktopRegistry).toMatch(/"mimo-x-flash-preview"/);
+    expect(registry).not.toMatch(/\{\s*id:\s*"mimo-x-pro-preview"/);
+    expect(registry).not.toMatch(/\{\s*id:\s*"mimo-x-flash-preview"/);
     expect(registry).not.toMatch(/"mimo-v2-omni"/);
     expect(registry).not.toMatch(/"mimo-v2-flash"/);
   });

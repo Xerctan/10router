@@ -106,7 +106,9 @@ describe("xiaomi-mimo wiring in the generic oauth route", () => {
   });
 
   it("stops the proxy on stop-proxy", () => {
-    expect(src()).toContain('else if (provider === "xiaomi-mimo") stopXiaomiMimoProxy();');
+    // Both Xiaomi cards share this flow, so the branch tests family membership
+    // rather than one literal id.
+    expect(src()).toContain("else if (isXiaomiMimo(provider)) stopXiaomiMimoProxy();");
   });
 
   it("accepts a pasted authorization code and reports the session it opened", () => {
@@ -119,14 +121,14 @@ describe("xiaomi-mimo wiring in the generic oauth route", () => {
     expect(src()).not.toMatch(/accessToken: outcome\.result\.accessToken/);
   });
 
-  it("serves submit-code for xiaomi-mimo only", () => {
+  it("serves submit-code for the Xiaomi cards only", () => {
     const source = src();
     const branch = source.slice(
       source.indexOf('if (action === "submit-code")'),
       source.indexOf('if (action === "exchange")'),
     );
-    expect(branch).toContain('if (provider !== "xiaomi-mimo")');
-    expect(branch).toContain('status: 400');
+    expect(branch).toContain("if (!isXiaomiMimo(provider))");
+    expect(branch).toContain("status: 400");
   });
 
   it("keeps the submit-code messages translatable", () => {
@@ -162,11 +164,14 @@ describe("xiaomi-mimo dashboard wiring", () => {
 
   it("has the modal read credentials locally and fall back to browser sign-in", () => {
     const modal = read("src/shared/components/XiaomiMimoAuthModal.js");
+    // The two static endpoints (local-credential read + import) stay on the
+    // xiaomi-mimo dir for BOTH cards — the target card travels in the body.
     expect(modal).toContain("/api/oauth/xiaomi-mimo/auto-import");
     expect(modal).toContain("/api/oauth/xiaomi-mimo/api-key");
+    // The browser flow is addressed by provider id so it can serve either card.
     expect(modal).toContain("/authorize?state=");
     expect(modal).toContain("/poll-status?state=");
-    expect(modal).toContain("/api/oauth/xiaomi-mimo/exchange");
+    expect(modal).toContain("`/api/oauth/${providerId}/exchange`");
   });
 
   it("tells the user the credentials come from the local Desktop profile", () => {
@@ -179,7 +184,7 @@ describe("xiaomi-mimo dashboard wiring", () => {
     const modal = read("src/shared/components/XiaomiMimoAuthModal.js");
     // The platform may show a code instead of calling our localhost redirect, so
     // "Check Again" on its own would dead-end the user on that page.
-    expect(modal).toContain("/api/oauth/xiaomi-mimo/submit-code");
+    expect(modal).toContain("`/api/oauth/${providerId}/submit-code`");
     expect(modal).toContain("Submit Code");
     expect(modal).toContain("Check Again");
     expect(modal).toContain("<textarea");
@@ -228,5 +233,34 @@ describe("xiaomi-mimo dashboard wiring", () => {
 
   it("does not forward the passToken from the modal", () => {
     expect(read("src/shared/components/XiaomiMimoAuthModal.js")).not.toContain("mimoPassToken");
+  });
+});
+
+describe("MiMo three-card split", () => {
+  it("routes both Xiaomi cards to the dedicated modal, passing the card id", () => {
+    const page = read("src/app/(dashboard)/dashboard/providers/[id]/page.js");
+    expect(page).toContain('providerId === "xiaomi-mimo" || providerId === "mimo-desktop"');
+    expect(page).toContain("provider={providerId}");
+  });
+
+  it("creates the connection under the card the modal was opened for", () => {
+    const modal = read("src/shared/components/XiaomiMimoAuthModal.js");
+    expect(modal).toContain('const providerId = provider === "mimo-desktop" ? "mimo-desktop" : "xiaomi-mimo"');
+    expect(modal).toContain("provider: providerId,");
+    // The import route is told which card to store under, and falls back to the
+    // base card rather than inventing an id.
+    expect(read("src/app/api/oauth/xiaomi-mimo/api-key/route.js")).toContain(
+      'requestedProvider === "mimo-desktop" ? "mimo-desktop" : "xiaomi-mimo"',
+    );
+  });
+
+  it("shares one ECDH flow across both cards without hardcoding a provider id", () => {
+    const src = read("src/app/api/oauth/[provider]/[action]/route.js");
+    expect(src).toContain('const XIAOMI_MIMO_PROVIDERS = new Set(["xiaomi-mimo", "mimo-desktop"])');
+    // No branch may still pin the literal id...
+    expect(src).not.toContain('if (provider === "xiaomi-mimo")');
+    // ...and connection writes must use the addressed card, not a literal.
+    expect(src).not.toContain('provider: "xiaomi-mimo",');
+    expect(src).toContain("await getProviderConnections({ provider })");
   });
 });

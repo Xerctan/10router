@@ -15,7 +15,13 @@ import { createProviderConnection } from "@/models";
  */
 export async function POST(request) {
   try {
-    const { apiKey, uid, baseUrl, mimoPassToken, mimoUserId, mimoCUserId, sessionOnly } = await request.json();
+    const { apiKey, uid, baseUrl, mimoPassToken, mimoUserId, mimoCUserId, sessionOnly, provider: requestedProvider } = await request.json();
+
+    // Which Xiaomi card this import targets. Both cards share this endpoint
+    // (`xiaomi-mimo` = cloud models, `mimo-desktop` = account-session models, split
+    // 2026-09-22), so the row must be created under the card the user opened.
+    // Anything unrecognised falls back to the base card rather than inventing an id.
+    const targetProvider = requestedProvider === "mimo-desktop" ? "mimo-desktop" : "xiaomi-mimo";
 
     // Session-only mode: the user signed in through MiMo Desktop (QR scan) and
     // holds an account session but no sk- API key. The session alone unlocks the
@@ -96,7 +102,7 @@ export async function POST(request) {
     // route had its own list and they disagreed, so the same account could end
     // up with two rows depending on which flow ran last.
     const { findXiaomiConnection } = await import("@/lib/oauth/xiaomiIdentity.js");
-    const existing = findXiaomiConnection(await getProviderConnections(), {
+    const existing = findXiaomiConnection(await getProviderConnections({ provider: targetProvider }), {
       uid,
       key: key || null,
       mimoUserId: session.userId || null,
@@ -143,7 +149,7 @@ export async function POST(request) {
     }
 
     const connection = await createProviderConnection({
-      provider: "xiaomi-mimo",
+      provider: targetProvider,
       authType: "api_key",
       accessToken,
       refreshToken: null,

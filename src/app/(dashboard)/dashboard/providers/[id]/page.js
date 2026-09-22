@@ -126,9 +126,10 @@ export default function ProviderDetailPage() {
   const AG_RISK_STORAGE_KEY = "ag_risk_confirmed";
 
   const openOAuthConnection = () => {
-    // Xiaomi MiMo supports both auth modes and has its own local-credential flow,
-    // so it gets a dedicated modal instead of the generic PKCE one.
-    if (providerId === "xiaomi-mimo") {
+    // Both Xiaomi MiMo cards support the same connect surface and share a local-credential
+    // flow, so they get this dedicated modal instead of the generic PKCE one. The modal is
+    // told which card it was opened for and creates the connection under that id.
+    if (providerId === "xiaomi-mimo" || providerId === "mimo-desktop") {
       setShowXiaomiMimoModal(true);
       return;
     }
@@ -2365,8 +2366,9 @@ export default function ProviderDetailPage() {
           onClose={() => setShowOAuthModal(false)}
         />
       )}
-      {providerId === "xiaomi-mimo" && (
+      {(providerId === "xiaomi-mimo" || providerId === "mimo-desktop") && (
         <XiaomiMimoAuthModal
+          provider={providerId}
           isOpen={showXiaomiMimoModal}
           onSuccess={handleOAuthSuccess}
           onClose={() => setShowXiaomiMimoModal(false)}

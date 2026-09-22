@@ -18,7 +18,11 @@ import { uuid } from "@/shared/utils/uuid";
  *     never sent to the browser) which unlocks the Desktop-exclusive Preview models.
  * When neither is present we fall back to the browser ECDH sign-in flow.
  */
-export default function XiaomiMimoAuthModal({ isOpen, onSuccess, onClose }) {
+export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClose }) {
+  // Which Xiaomi card this modal was opened for: `xiaomi-mimo` (cloud models) or
+  // `mimo-desktop` (account-session models). Every endpoint below is addressed by
+  // provider id, so the connection lands under the card the user actually opened.
+  const providerId = provider === "mimo-desktop" ? "mimo-desktop" : "xiaomi-mimo";
   const [phase, setPhase] = useState("detecting"); // detecting | found | not-found | importing
   const [detectResult, setDetectResult] = useState(null);
   const [desktopLocked, setDesktopLocked] = useState(false);
@@ -42,7 +46,7 @@ export default function XiaomiMimoAuthModal({ isOpen, onSuccess, onClose }) {
     setAuthCode("");
     setDesktopLocked(false);
 
-    const res = await fetch("/api/oauth/xiaomi-mimo/auto-import");
+    const res = await fetch(`/api/oauth/xiaomi-mimo/auto-import`);
     const data = await res.json();
     // `found` includes session-only (Desktop QR login without auth.json).
     if (data.found) {
@@ -74,7 +78,7 @@ export default function XiaomiMimoAuthModal({ isOpen, onSuccess, onClose }) {
       setDesktopLocked(false);
 
       try {
-        const res = await fetch("/api/oauth/xiaomi-mimo/auto-import");
+        const res = await fetch(`/api/oauth/xiaomi-mimo/auto-import`);
         const data = await res.json();
         if (cancelled) return;
 
@@ -111,7 +115,7 @@ export default function XiaomiMimoAuthModal({ isOpen, onSuccess, onClose }) {
     if (!isOpen || phase !== "not-found") return;
     const t = setInterval(async () => {
       try {
-        const res = await fetch("/api/oauth/xiaomi-mimo/auto-import");
+        const res = await fetch(`/api/oauth/xiaomi-mimo/auto-import`);
         const data = await res.json();
         if (data.found) detect();
       } catch { /* transient — keep the current screen */ }
@@ -131,7 +135,7 @@ export default function XiaomiMimoAuthModal({ isOpen, onSuccess, onClose }) {
     setError(null);
 
     try {
-      const res = await fetch("/api/oauth/xiaomi-mimo/api-key", {
+      const res = await fetch(`/api/oauth/xiaomi-mimo/api-key`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -139,6 +143,7 @@ export default function XiaomiMimoAuthModal({ isOpen, onSuccess, onClose }) {
           uid: detectResult.uid,
           baseUrl: detectResult.baseUrl,
           sessionOnly,
+          provider: providerId,
         }),
       });
       const data = await res.json();
@@ -164,7 +169,7 @@ export default function XiaomiMimoAuthModal({ isOpen, onSuccess, onClose }) {
       // runs in the browser: `crypto.randomUUID` does not exist in an insecure
       // context (plain http:// on a LAN address), so use the safe helper.
       const state = uuid();
-      const res = await fetch(`/api/oauth/xiaomi-mimo/authorize?state=${state}`);
+      const res = await fetch(`/api/oauth/${providerId}/authorize?state=${state}`);
       const data = await res.json();
       if (data.authorizeUrl) {
         setOauthUrl(data.authorizeUrl);
@@ -182,7 +187,7 @@ export default function XiaomiMimoAuthModal({ isOpen, onSuccess, onClose }) {
   // Finish a completed session: the server applies the sk- key and creates the
   // connection, so the credential itself never passes through the browser.
   const finishExchange = async (state) => {
-    const exRes = await fetch("/api/oauth/xiaomi-mimo/exchange", {
+    const exRes = await fetch(`/api/oauth/${providerId}/exchange`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ state }),
@@ -208,7 +213,7 @@ export default function XiaomiMimoAuthModal({ isOpen, onSuccess, onClose }) {
     setSubmittingCode(true);
     setError(null);
     try {
-      const res = await fetch("/api/oauth/xiaomi-mimo/submit-code", {
+      const res = await fetch(`/api/oauth/${providerId}/submit-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
@@ -230,7 +235,7 @@ export default function XiaomiMimoAuthModal({ isOpen, onSuccess, onClose }) {
     if (!oauthState) return;
     setError(null);
     try {
-      const res = await fetch(`/api/oauth/xiaomi-mimo/poll-status?state=${oauthState}`);
+      const res = await fetch(`/api/oauth/${providerId}/poll-status?state=${oauthState}`);
       const data = await res.json();
 
       if (data.status === "done" && data.result) {
@@ -479,6 +484,7 @@ export default function XiaomiMimoAuthModal({ isOpen, onSuccess, onClose }) {
 }
 
 XiaomiMimoAuthModal.propTypes = {
+  provider: PropTypes.string,
   isOpen: PropTypes.bool.isRequired,
   onSuccess: PropTypes.func,
   onClose: PropTypes.func.isRequired,

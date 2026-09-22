@@ -55,6 +55,10 @@ const executors = {
   commandcode: new CommandCodeExecutor(),
   "xiaomi-tokenplan": new XiaomiTokenplanExecutor(),
   "xiaomi-mimo": new XiaomiMimoExecutor(),
+  // Same executor, different card: the Desktop-exclusive Preview models are keyed
+  // on the model id, so old `xiaomi-mimo/mimo-x-*` combos and new
+  // `mimo-desktop/mimo-x-*` ones both land on the account-service route.
+  "mimo-desktop": new XiaomiMimoExecutor("mimo-desktop"),
   "mimo-free": new MimoFreeExecutor(),
   mmf: new MimoFreeExecutor(), // Alias for mimo-free
   "codebuddy-cn": new CodeBuddyExecutor(),

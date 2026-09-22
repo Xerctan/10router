@@ -61,7 +61,11 @@ describe("disabled models — one canonical key per provider", () => {
     const all = await repo.getDisabledModels();
     // Every published name (id, uiAlias, aliases[]) answers with the same list.
     expect(all[MIXED]).toEqual(all[storageName(MIXED)]);
-    expect(all["mimo-desktop"]).toEqual(all[storageName(MIXED)]);
+    // `mimo-desktop` used to be an alias of this provider and answered with the
+    // same row. Since the 2026-09-22 three-card split it is a provider of its own
+    // (registry/mimo-desktop.js) with its own disabled list, so the equivalence is
+    // intentionally gone — assert the split rather than the old coupling.
+    expect(all["mimo-desktop"]).not.toEqual(all[storageName(MIXED)]);
     expect(await repo.getDisabledByProvider(MIXED)).toEqual(
       await repo.getDisabledByProvider(storageName(MIXED)),
     );

@@ -2,9 +2,10 @@ import { CLAUDE_API_HEADERS } from "../shared.js";
 
 // Dual auth (same pattern as kimi):
 //   - API key (sk-...)      → cloud API on api.xiaomimimo.com
-//   - Desktop account/OAuth → same cloud host, plus the Desktop-exclusive Preview
-//     models served by the account-service route on mimo-server-cn.xiaomimimo.com
-//     (authorized by a Xiaomi account session cookie, not the key).
+//   - Xiaomi account sign-in → same cloud host.
+// The Desktop-exclusive Preview models used to live here; they moved to the
+// `mimo-desktop` card, which owns the account-session surface. This card keeps
+// the browser sign-in + sk- key flow for the cloud models.
 // Endpoint is picked per model in the executor, same as opencode-go's /responses split.
 export default {
   id: "xiaomi-mimo",
@@ -17,8 +18,6 @@ export default {
   alias: "xiaomi-mimo",
   aliases: [
     "mimo",
-    "mimo-desktop",
-    "xmd",
   ],
   uiAlias: "mimo",
   display: {
@@ -55,14 +54,12 @@ export default {
     },
   ],
   models: [
-    // Desktop-exclusive — served by the account-service route, which only accepts
-    // OpenAI format, so supportedFormats pins them to the openai transport.
-    // NOTE: 客户端测试专属模型 —— 不在任何公开目录（models.dev / 桌面版自带快照）里，
-    // 程序本体也不含，账号服务端侧下发，属正常；来源 = 上游 PR #3921。
-    // requiresSession 标记「只认 MiMo Desktop 账号 Cookie」的两个模型，dashboard
-    // 模型行据此渲染「需桌面版登录」提示（schema 对模型字段无白名单，额外键安全）。
-    { id: "mimo-x-pro-preview", name: "MiMo-X-Pro-Preview", upstreamModelId: "xiaomi/mimo-x-pro-preview", supportedFormats: ["openai"], requiresSession: true },
-    { id: "mimo-x-flash-preview", name: "MiMo-X-Flash-Preview", upstreamModelId: "xiaomi/mimo-x-flash-preview", supportedFormats: ["openai"], requiresSession: true },
+    // The Desktop-exclusive Preview models moved to the `mimo-desktop` card
+    // (registry/mimo-desktop.js), which owns the account-session surface. They
+    // are intentionally NOT listed here any more — but combos that still say
+    // `xiaomi-mimo/mimo-x-pro-preview` keep working: the executor chooses its
+    // session path from the MODEL id (XiaomiMimoExecutor.isPreviewModel), not the
+    // provider, and the registry is not a request gate.
     // Cloud API models (api.xiaomimimo.com/v1), aligned 2026-09-22 with the
     // platform model list (mimo.mi.com/docs, page updated 2026-09-21):
     //   • V2.6 generation added — pro and flash. Both 1M context / 128K max
