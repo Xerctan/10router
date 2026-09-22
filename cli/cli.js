@@ -106,8 +106,9 @@ try { ensureSqliteRuntime({ silent: true }); } catch {}
 try { ensureTrayRuntime({ silent: true }); } catch {}
 
 // Configuration constants
-// Two different names, identical until the npm package was renamed to
-// 10router-cli: APP_NAME is what you install, BIN_NAME is what you then type.
+// Two different names, identical until the npm package was renamed — first to
+// 10router-cli, now @techysy/10router — while the bin stayed `10router`:
+// APP_NAME is what you install, BIN_NAME is what you then type.
 const APP_NAME = pkg.name;
 const BIN_NAME = Object.keys(pkg.bin ?? {})[0] ?? pkg.name;
 const INSTALL_CMD_LATEST = `npm i -g ${APP_NAME}@latest --prefer-online`;

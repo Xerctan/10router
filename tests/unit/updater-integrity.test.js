@@ -6,6 +6,11 @@
 // whatever `latest` resolved to at install time. Two consequences worth a test
 // each: one env var could redirect the install to any npm package, and a
 // successful install was reported as success without ever asking what landed.
+//
+// The same reasoning covers every install command we hand a user, not just the
+// one the updater runs: the bare name `10router` on npm belongs to an unrelated
+// fork, so a command printed with the bare name sends users to a stranger's
+// package. The landing page's copy-to-clipboard button did exactly that.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,6 +23,14 @@ const updater = read("src/lib/updater/updater.js");
 const spawner = read("src/lib/appUpdater.js");
 const route = read("src/app/api/version/update/route.js");
 const config = read("src/shared/constants/config.js");
+const landing = read("src/app/landing/components/GetStarted.js");
+
+// The one source of truth for the published name. Tests below compare user-facing
+// commands against this rather than repeating the literal, so a rename in config.js
+// breaks these assertions instead of silently diverging from them.
+const PKG = config.match(/npmPackageName:\s*"([^"]+)"/)?.[1];
+if (!PKG) throw new Error("could not read npmPackageName from src/shared/constants/config.js");
+expect(PKG).toBe("@techysy/10router");
 
 describe("selector: the package name cannot be redirected", () => {
   it("the updater has one hardcoded package and refuses anything else", () => {
@@ -97,5 +110,41 @@ describe("trigger: the route resolves the version itself", () => {
 
   it("tells the user which version is being installed", () => {
     expect(route).toContain("Updater started for ${targetVersion}");
+  });
+});
+
+describe("landing page: the command users copy is the scoped package", () => {
+  // The copy button and the text next to it must agree, and both must name the
+  // scoped package. `npx 10router` resolves to an unrelated fork's CLI (and runs
+  // its postinstall), which is the exact failure config.js warns about.
+  it("copies and displays the scoped name", () => {
+    expect(landing).toContain(`handleCopy("npx ${PKG}")`);
+    expect(landing).toContain(`<span className="text-white">npx ${PKG}</span>`);
+  });
+
+  it("never names the bare package in an install command", () => {
+    expect(landing).not.toMatch(/npx 10router(?![-\w/])/);
+    expect(landing).not.toMatch(/npm (i|install) -g 10router(?![-\w/])/);
+  });
+
+  it("the relaunch command and the stale-comment trap both use the scoped name", () => {
+    expect(spawner).toContain("args: [UPDATER_CONFIG.npmPackageName]");
+    // Comments naming the bare package are how the landing page bug went unnoticed.
+    expect(spawner).not.toMatch(/npx 10router(?![-\w/])/);
+  });
+});
+
+describe("locale files: no dead keys for install commands", () => {
+  // Command strings are identity-translated by definition (translating a shell
+  // command would break it), so a key for one can only ever go stale. Both of
+  // these outlived their source strings once; keep them out.
+  const LOCALES = ["fa", "km", "th", "zh-CN"];
+  const DEAD = ["npm install -g 10router", "npx 10router"];
+
+  it.each(LOCALES)("%s carries no orphaned install-command key", (locale) => {
+    const dict = JSON.parse(read(`public/i18n/literals/${locale}.json`));
+    for (const key of DEAD) {
+      expect(Object.prototype.hasOwnProperty.call(dict, key), key).toBe(false);
+    }
   });
 });
