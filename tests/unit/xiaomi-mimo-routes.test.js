@@ -263,4 +263,18 @@ describe("MiMo three-card split", () => {
     expect(src).not.toContain('provider: "xiaomi-mimo",');
     expect(src).toContain("await getProviderConnections({ provider })");
   });
+
+  it("never runs the Desktop credential import for the cloud card", () => {
+    // `xiaomi-mimo` bills the cloud API, so the Desktop branch's screens ("quit
+    // MiMo Desktop", the credential-store lock notice, "or sign in via browser")
+    // have no business appearing on it. Its phase is DERIVED to "cloud", which
+    // also means a stale `phase` left over from the other card cannot leak through.
+    const modal = read("src/shared/components/XiaomiMimoAuthModal.js");
+    expect(modal).toContain('const effectivePhase = isDesktopCard ? phase : "cloud"');
+    expect(modal).toContain('if (!isDesktopCard) return;');
+    // Every screen must switch on the derived phase; a raw `{phase === ` would
+    // let the Desktop screens render on the cloud card again.
+    expect(modal).toContain("{effectivePhase === \"cloud\"");
+    expect(modal).not.toContain("{phase === ");
+  });
 });

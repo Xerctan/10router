@@ -23,7 +23,17 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
   // `mimo-desktop` (account-session models). Every endpoint below is addressed by
   // provider id, so the connection lands under the card the user actually opened.
   const providerId = provider === "mimo-desktop" ? "mimo-desktop" : "xiaomi-mimo";
+  // The Desktop card is the only one that reads the local Desktop profile. The
+  // cloud card bills the API, so its modal goes straight to browser authorization
+  // (or the separate Add API Key dialog). Running the Desktop import there used to
+  // show "quit MiMo Desktop"/credential-lock text on a card that has nothing to do
+  // with the Desktop app.
+  const isDesktopCard = providerId === "mimo-desktop";
   const [phase, setPhase] = useState("detecting"); // detecting | found | not-found | importing
+  // The cloud card has exactly one screen, so its phase is DERIVED rather than
+  // stored: a stored value could survive a card switch and leak the Desktop UI
+  // ("quit MiMo Desktop" and the credential-lock notice) onto a cloud card.
+  const effectivePhase = isDesktopCard ? phase : "cloud";
   const [detectResult, setDetectResult] = useState(null);
   const [desktopLocked, setDesktopLocked] = useState(false);
   const [error, setError] = useState(null);
@@ -64,6 +74,9 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
   // Auto-detect local credentials when modal opens
   useEffect(() => {
     if (!isOpen) return;
+    // Cloud card: never touch the Desktop profile. `effectivePhase` is already
+    // "cloud", so nothing to transition to — just skip the import machinery.
+    if (!isDesktopCard) return;
     let cancelled = false;
 
     (async () => {
@@ -104,7 +117,7 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
     })();
 
     return () => { cancelled = true; };
-  }, [isOpen]);
+  }, [isOpen, isDesktopCard]);
 
   // Quiet re-check: the user may sign into MiMo Desktop WHILE this modal sits
   // on the "not found" screen — the original detect only ran once on open, so
@@ -112,7 +125,7 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
   // spinner flicker) and flip via the full detect() only when credentials
   // actually appeared.
   useEffect(() => {
-    if (!isOpen || phase !== "not-found") return;
+    if (!isOpen || !isDesktopCard || phase !== "not-found") return;
     const t = setInterval(async () => {
       try {
         const res = await fetch(`/api/oauth/xiaomi-mimo/auto-import`);
@@ -121,7 +134,7 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
       } catch { /* transient — keep the current screen */ }
     }, 4000);
     return () => clearInterval(t);
-  }, [isOpen, phase]);
+  }, [isOpen, phase, isDesktopCard]);
 
   // Import the auto-detected credentials. Session-only (no auth.json sk- key but
   // a readable Desktop account session) is a first-class path: the session alone
@@ -322,8 +335,41 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
   return (
     <Modal isOpen={isOpen} title={translate("Connect Xiaomi MiMo")} onClose={onClose}>
       <div className="flex flex-col gap-4">
+        {/* Cloud card (`xiaomi-mimo`): browser authorization only. The Desktop
+            session import belongs to the MiMo Desktop card, so none of the
+            credential-lock / "quit the desktop app" guidance applies here. */}
+        {effectivePhase === "cloud" && (
+          <>
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex gap-2 items-start">
+                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">info</span>
+                <div className="text-sm text-blue-800 dark:text-blue-200">
+                  <p className="font-medium">{translate("Cloud models — sign in with the browser")}</p>
+                  <p className="mt-1 opacity-80">
+                    {translate("This card bills the cloud API, so it uses the browser authorization or an sk- API key. Desktop credits belong to the MiMo Desktop card.")}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">
+                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              </div>
+            )}
+
+            {!oauthUrl ? (
+              <Button onClick={handleStartOAuth} fullWidth>
+                {translate("Sign in via Browser")}
+              </Button>
+            ) : (
+              renderBrowserAuth()
+            )}
+          </>
+        )}
+
         {/* Detecting */}
-        {phase === "detecting" && (
+        {effectivePhase === "detecting" && (
           <div className="text-center py-6">
             <div className="size-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
               <span className="material-symbols-outlined text-3xl text-primary animate-spin">
@@ -338,7 +384,7 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
         )}
 
         {/* Found — one-click import */}
-        {phase === "found" && detectResult && (
+        {effectivePhase === "found" && detectResult && (
           <>
             <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-800">
               <div className="flex gap-2">
@@ -355,7 +401,7 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
                   </p>
                   <p className="mt-1 opacity-80">
                     {detectResult.sessionOnly
-                      ? translate("Signed in via Desktop — Preview models (MiMo-X-Pro/Flash) will be available. Cloud models need an sk- API key.")
+                      ? translate("Signed in via Desktop — the Desktop models will be available. Cloud models need an sk- API key.")
                       : detectResult.hasDesktopSession
                         ? translate("Desktop account session detected — Preview models will be available.")
                         : detectResult.desktopLocked
@@ -413,7 +459,7 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
         )}
 
         {/* Importing */}
-        {phase === "importing" && (
+        {effectivePhase === "importing" && (
           <div className="text-center py-6">
             <div className="size-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
               <span className="material-symbols-outlined text-3xl text-primary animate-spin">
@@ -425,7 +471,7 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
         )}
 
         {/* Not found — offer OAuth fallback */}
-        {phase === "not-found" && (
+        {effectivePhase === "not-found" && (
           <>
             <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800">
               <div className="flex gap-2 items-start">
