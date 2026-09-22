@@ -8,7 +8,11 @@ const { execSync } = require("child_process");
 const cliDir = path.resolve(__dirname, "..");
 const appDir = path.resolve(cliDir, "..");
 const rootDir = path.resolve(appDir, "..");
-const cliAppDir = process.env.NINEROUTER_CLI_APP_DIR || path.join(cliDir, "app");
+// TENROUTER_* is the current name; NINEROUTER_* stays as a fallback so an
+// operator's existing build wrapper keeps working across the rename.
+const cliAppDir = process.env.TENROUTER_CLI_APP_DIR
+  || process.env.NINEROUTER_CLI_APP_DIR
+  || path.join(cliDir, "app");
 // Build-time HOME must stay OUTSIDE the repo: the Next build initializes the
 // app (jwt-secret / machine-id / data.sqlite) in APPDATA, and output tracing
 // would copy anything inside the tracing root into the standalone bundle —
