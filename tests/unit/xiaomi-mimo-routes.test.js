@@ -266,8 +266,8 @@ describe("MiMo three-card split", () => {
 
   it("never runs the Desktop credential import for the cloud card", () => {
     // `xiaomi-mimo` bills the cloud API, so the Desktop branch's screens ("quit
-    // MiMo Desktop", the credential-store lock notice, "or sign in via browser")
-    // have no business appearing on it. Its phase is DERIVED to "cloud", which
+    // MiMo Desktop" and the credential-lock notice) have no business appearing on
+    // it. Its phase is DERIVED to "cloud", which
     // also means a stale `phase` left over from the other card cannot leak through.
     const modal = read("src/shared/components/XiaomiMimoAuthModal.js");
     expect(modal).toContain('const effectivePhase = isDesktopCard ? phase : "cloud"');
@@ -276,5 +276,31 @@ describe("MiMo three-card split", () => {
     // let the Desktop screens render on the cloud card again.
     expect(modal).toContain("{effectivePhase === \"cloud\"");
     expect(modal).not.toContain("{phase === ");
+  });
+
+  it("offers no browser authorization on the Desktop card", () => {
+    // The Desktop card's models are reachable only through the account session: an
+    // sk- key never reaches its account-service route, and the browser sign-in is
+    // the CLOUD card's path. The detecting/found/not-found screens render for the
+    // Desktop card only, so no browser affordance may live in them.
+    const modal = read("src/shared/components/XiaomiMimoAuthModal.js");
+    const foundAt = modal.indexOf('{effectivePhase === "found"');
+    const cloudAt = modal.indexOf('{effectivePhase === "cloud"');
+    expect(foundAt).toBeGreaterThan(-1);
+    expect(cloudAt).toBeGreaterThan(-1);
+    expect(cloudAt).toBeLessThan(foundAt); // cloud screen is defined first
+
+    // The browser-auth block still exists — the cloud screen needs it...
+    expect(modal).toContain("renderBrowserAuth");
+
+    // ...but every affordance is gone from the Desktop-only screens.
+    const desktopScreens = modal.slice(foundAt);
+    expect(desktopScreens).not.toContain("Add Browser Authorization");
+    expect(desktopScreens).not.toContain("Sign in via Browser");
+    expect(desktopScreens).not.toContain("handleStartOAuth");
+    // Same for the copy that used to point at the browser flow: it must send the
+    // user to the sibling card instead.
+    expect(desktopScreens).not.toContain("Or sign in via browser below.");
+    expect(desktopScreens).not.toContain("Preview models");
   });
 });

@@ -264,9 +264,8 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
   };
 
   // Browser-authorization block: the code-entry UI used after "Sign in via
-  // Browser" starts a flow. Rendered in BOTH the not-found path and from the
-  // session-only card's "Add Browser Authorization" button (which previously
-  // opened the browser but had nowhere to paste the code).
+  // Browser" starts a flow. The CLOUD card only — the Desktop card has no browser
+  // path at all, since its models are reachable only through the account session.
   const renderBrowserAuth = () => (
     <div className="flex flex-col gap-2">
       <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
@@ -400,13 +399,11 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
                     {detectResult.source?.split(/[\\/]/).pop()}
                   </p>
                   <p className="mt-1 opacity-80">
-                    {detectResult.sessionOnly
-                      ? translate("Signed in via Desktop — the Desktop models will be available. Cloud models need an sk- API key.")
-                      : detectResult.hasDesktopSession
-                        ? translate("Desktop account session detected — Preview models will be available.")
-                        : detectResult.desktopLocked
-                          ? translate("Desktop is running and is holding its credential store — quit it to unlock the Preview models (the API key alone covers the cloud models).")
-                          : translate("No Desktop account session found — the API key alone is enough for the cloud models.")}
+                    {detectResult.hasDesktopSession
+                      ? translate("Desktop account session detected — the Desktop models will be available.")
+                      : detectResult.desktopLocked
+                        ? translate("Desktop is running and is holding its credential store — quit it to unlock the Desktop models.")
+                        : translate("No desktop account session found — sign in to MiMo Desktop, then retry.")}
                   </p>
                 </div>
               </div>
@@ -418,9 +415,9 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
               </div>
             )}
 
-            {/* Session-only rows unlock Preview models but NOT the metered /
-                subscription-plan models — guide the user to add the same
-                account's browser authorization so one row covers both. */}
+            {/* This card's models are reachable only through the Desktop account
+                session, so point at the sibling card rather than offering a
+                browser sign-in that would not unlock anything here. */}
             {detectResult.sessionOnly && (
               <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
                 <div className="flex gap-2 items-start">
@@ -428,7 +425,7 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
                   <div className="text-sm text-blue-800 dark:text-blue-200">
                     <p className="font-medium">{translate("Want the metered models too?")}</p>
                     <p className="mt-1 opacity-80">
-                      {translate("The desktop session covers the Preview models only. Authorize the same account in the browser once to add an API key for the metered and subscription-plan models.")}
+                      {translate("This card covers the Desktop models. The metered and subscription-plan models are on the MiMo card — open that card there.")}
                     </p>
                   </div>
                 </div>
@@ -441,20 +438,13 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
                   ? translate("Connect with Desktop Session")
                   : translate("Connect with Local Credentials")}
               </Button>
-              {detectResult.sessionOnly && !oauthUrl ? (
-                <Button onClick={handleStartOAuth} variant="secondary" fullWidth>
-                  {translate("Add Browser Authorization")}
-                </Button>
-              ) : (
-                <Button onClick={onClose} variant="ghost" fullWidth>
-                  {translate("Cancel")}
-                </Button>
-              )}
+              {/* Deliberately no browser-authorization button here: browser
+                  sign-in and the sk- key both belong to the MiMo card, and an
+                  sk- key cannot reach this card's account-service route. */}
+              <Button onClick={onClose} variant="ghost" fullWidth>
+                {translate("Cancel")}
+              </Button>
             </div>
-
-            {/* Browser flow started from the session-only card: the code entry
-                must be reachable here too, not only in the not-found path. */}
-            {detectResult.sessionOnly && oauthUrl && renderBrowserAuth()}
           </>
         )}
 
@@ -496,32 +486,20 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
                       <pre className="mt-1 whitespace-pre-wrap break-all text-[10px]">{errorDetails}</pre>
                     </details>
                   )}
-                  <p className="mt-2 opacity-80">{translate("Or sign in via browser below.")}</p>
+                  <p className="mt-2 opacity-80">{translate("Make sure MiMo Desktop is signed in on this machine.")}</p>
                 </div>
               </div>
             </div>
 
-            {!oauthUrl ? (
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => { detect().catch(() => setPhase("not-found")); }}
-                  variant="outline"
-                  fullWidth
-                >
-                  {translate("Retry Local Detect")}
-                </Button>
-                <Button onClick={handleStartOAuth} fullWidth>
-                  {translate("Sign in via Browser")}
-                </Button>
-              </div>
-            ) : (
-              <>
-                {renderBrowserAuth()}
-                <Button onClick={onClose} variant="ghost" fullWidth>
-                  {translate("Cancel")}
-                </Button>
-              </>
-            )}
+            {/* Retry is the only move here — this card has no browser fallback
+                (that path belongs to the MiMo card). */}
+            <Button
+              onClick={() => { detect().catch(() => setPhase("not-found")); }}
+              variant="outline"
+              fullWidth
+            >
+              {translate("Retry Local Detect")}
+            </Button>
           </>
         )}
       </div>
