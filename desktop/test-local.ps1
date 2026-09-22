@@ -2,11 +2,20 @@
 #
 # 用法:
 #   cd desktop
-#   .\test-local.ps1                            # 就地替换(默认,最快,~2 分钟)
+#   .\test-local.ps1                            # 就地替换(默认,最稳,~2 分钟)
+#   .\test-local.ps1 -Mode hot                  # 只同步 .next-cli-build + public 后重启(应用侧改动,不重打电子包)
 #   .\test-local.ps1 -Mode install              # 真跑一遍安装器(静默 /S,~4 分钟)
 #   .\test-local.ps1 -Version 1.1.4             # 指定测试号(默认 = 最新 tag 补丁位 +1,再挂 -test.<unix 秒>)
 #   .\test-local.ps1 -SkipAppBuild              # 复用已有 cli/app(源码没变时省一次 Next build)
 #   .\test-local.ps1 -Marker "payload_too_short"  # 额外断言装好的产物里含该字面量
+#
+# 模式怎么选(别一上来就 replace):
+#   改 src/**、open-sse/**、public/**  → -Mode hot 就够(应用侧全部在 resources\app,且
+#                                        .next-cli-build / public 是**真实目录**,不在 app.asar 里)
+#   改 desktop/** 主进程、或改了依赖   → -Mode replace(hot 不会更新 app.asar / node_modules)
+#   public/** 单改且不在乎版本号       → 连脚本都不用:cp 进安装目录 + 刷新页面(静态文件按请求读盘)
+#   注意:界面版本号是构建期从 package.json **烘焙**进 bundle 的(src/shared/constants/config.js
+#   里是静态 json import),所以只要想让界面显示新号,就躲不开一次 Next build。
 #
 # 三条**踩过的坑**,别简化掉(细节见 docs/zh-CN/local-build-and-verify.md):
 # 1. 启动必须 Start-Process。`cmd /c start "" "路径"` 会被 Git Bash 吃掉空标题,
@@ -17,7 +26,7 @@
 
 param(
     [string]$Version = "",
-    [ValidateSet("replace", "install")][string]$Mode = "replace",
+    [ValidateSet("replace", "install", "hot")][string]$Mode = "replace",
     [switch]$SkipAppBuild,
     [switch]$NoRevert,
     [string]$Marker = ""
@@ -142,7 +151,7 @@ try {
         }
         Remove-Item $oldApp, $oldAsar -Recurse -Force -ErrorAction SilentlyContinue
         Ok "app + app.asar 已换(保留安装器的 elevate.exe)"
-    } else {
+    } elseif ($Mode -eq "install") {
         Step 4 "electron-builder --win nsis --x64(只打安装包一档)"
         Push-Location $DesktopDir
         try {
@@ -158,6 +167,36 @@ try {
         $p = Start-Process -FilePath $setup.FullName -ArgumentList "/S" -Wait -PassThru
         if ($p.ExitCode -ne 0) { Die "安装器退出码 $($p.ExitCode)" }
         Ok "安装完成(静默模式不会自动拉起应用)"
+    } elseif ($Mode -eq "hot") {
+        # ---------- 4) 不重打包 ----------
+        # 桌壳(resources\app.asar)和 Electron 主进程没改时, 重打一遍电子包是纯浪费: 应用侧
+        # 代码全在 resources\app 下, 且 .next-cli-build / public 是**真实目录**(不在 asar 里),
+        # 所以只同步这两个子树 + 重启就够。改 desktop\ 主进程或依赖时必须回到 replace/install。
+        Step 4 "跳过 electron-builder(热替换不重打桌面包)"
+        Ok "沿用已安装的 resources\app.asar"
+
+        # ---------- 5) 只同步构建子树(先校验产物, 再碰线上安装) ----------
+        Step 5 "同步 .next-cli-build + public -> 已安装目录"
+        $liveApp = Join-Path $Inst "resources\app"
+        if (-not (Test-Path $liveApp)) { Die "未找到已安装的 10Router:$Inst(先跑一次 -Mode install)" }
+        foreach ($f in @("package.json", "custom-server.js", ".next-cli-build", "public")) {
+            if (-not (Test-Path (Join-Path $AppDir $f))) { Die "构建产物不完整:cli\app 下缺 $f" }
+        }
+        Stop-Router
+        foreach ($sub in @(".next-cli-build", "public")) {
+            # /MIR 让安装目录**等于**本轮构建 —— 用 /E 会把上一轮的旧 chunk 留在那里。
+            # 两个目录都是纯构建产物, 应用不往里写运行时数据(那些走 DATA_DIR)。
+            robocopy (Join-Path $AppDir $sub) (Join-Path $liveApp $sub) /MIR /NFL /NDL /NJH /NJS /R:2 /W:1 | Out-Null
+            # robocopy 拿 0-7 当成功, >=8 才是真失败 —— 别拿 -ne 0 判
+            if ($LASTEXITCODE -ge 8) { Die "同步 $sub 失败(robocopy 退出码 $LASTEXITCODE)" }
+            Ok "$sub 已同步"
+        }
+        # 版本号: step 7 按安装目录的 package.json 校验, 且它正是被烘焙进 bundle 的那份
+        Copy-Item (Join-Path $AppDir "package.json") (Join-Path $liveApp "package.json") -Force -ErrorAction Stop
+        Copy-Item (Join-Path $AppDir "custom-server.js") (Join-Path $liveApp "custom-server.js") -Force -ErrorAction Stop
+        Ok "package.json + custom-server.js 已同步"
+    } else {
+        Die "未知模式 $Mode"
     }
     $sw.Stop()
     Ok "打包+部署耗时 $([int]$sw.Elapsed.TotalSeconds) 秒"
