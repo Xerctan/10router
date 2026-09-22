@@ -23,9 +23,6 @@ const ICON_ALIASES = {
   "sf": "stepfun",
   "step-plan-cn": "stepfun",
   "step-plan": "stepfun",
-  // MiMo Desktop shares the base Xiaomi MiMo mark — no separate asset to ship.
-  "mimo-desktop": "xiaomi-mimo",
-  "xmd": "xiaomi-mimo",
 };
 
 // Providers whose asset ships as SVG (everything else is .png).
