@@ -132,6 +132,33 @@ export const MODEL_PRICING = {
   // === Grok ===
   "grok-code-fast-1":             { input: 0.50,  output: 2.00,  cached: 0.25,  reasoning: 3.00,   cache_creation: 0.50  },
 
+  // === Xiaomi MiMo ===
+  // Official price page (mimo.mi.com/static/docs/price/pay-as-you-go.md, fetched
+  // 2026-09-22), overseas table — this file is $/1M tokens, and the page's
+  // domestic table is RMB, so the USD column is the one that belongs here.
+  // First-party ids are bare (`mimo-v2.6-pro`) on both xiaomi-mimo and
+  // xiaomi-tokenplan, so one canonical entry prices both cards; resellers that
+  // prefix their ids (`xiaomi/mimo-…`) keep their own PROVIDER_PRICING rows.
+  // Until now no first-party MiMo model had any price at all — getPricingForModel
+  // returned null for mimo-v2.5-pro too — so usage against these cards reported
+  // no cost. The retiring V2.5 pair is deliberately NOT backfilled: the page
+  // prices v2.5-pro with v2.6-pro and v2.5 with v2.6-flash, but adding them now
+  // would start reporting costs for historical usage that never showed one.
+  // reasoning == output: upstream bills thinking tokens as output
+  // (max_completion_tokens covers thinking + answer together).
+  //
+  // These are pay-as-you-go rates. They also resolve for xiaomi-tokenplan (same
+  // bare ids), but Token Plan is a flat Credits subscription — $6/$16/$50/$100
+  // per month for Lite/Standard/Pro/Max — so a cost shown against a tp-
+  // connection is a pay-as-you-go equivalent, not what that user was charged.
+  "mimo-v2.6-pro":                { input: 0.435, output: 0.87,  cached: 0.0036, reasoning: 0.87  },
+  "mimo-v2.6-flash":              { input: 0.14,  output: 0.28,  cached: 0.0028, reasoning: 0.28  },
+  // 定制服务 upstream (contact sales), so no registry lists it; carried here
+  // because the page publishes its price and a passthrough request would
+  // otherwise report none. Real-time rates — Batch API is exactly half of these,
+  // and ultraspeed does not support Batch at all.
+  "mimo-v2.6-pro-ultraspeed":     { input: 4.35,  output: 8.70,  cached: 0.036,  reasoning: 8.70  },
+
   // === OpenRouter fallback ===
   "auto":                         { input: 2.00,  output: 8.00,  cached: 1.00,  reasoning: 12.00,  cache_creation: 2.00  },
 

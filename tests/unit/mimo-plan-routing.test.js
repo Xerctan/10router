@@ -2,8 +2,15 @@
 //
 // Evidence base: MiMo Desktop's app.asar. The desktop decides plan vs billing by
 // the OAuth payload's returned `url` (auth.json metadata.base_url containing
-// "token-plan"), and its bundled per-region catalogs list the exact model set
-// token-plan-{cn,sgp,ams} serve (three regions, identical 7 models, no omni).
+// "token-plan"), and its bundled per-region catalogs listed the exact model set
+// token-plan-{cn,sgp,ams} served (three regions, identical sets, no omni).
+//
+// The catalog assertions below track the 2026-09-22 V2.6 cutover, whose evidence
+// is the platform model list (mimo.mi.com/docs, page updated 2026-09-21) plus the
+// Token Plan price page, which states that "all plans support the latest flagship
+// models mimo-v2.6-pro, mimo-v2.6-flash" — so the plan clusters serve the same ids
+// as billing. Routing/probe assertions are catalog-independent and still
+// asar-derived.
 //
 // Offline by construction: global.fetch stubbed, temp DATA_DIR DB, no real keys,
 // no cookie-store reads.
@@ -53,9 +60,23 @@ describe("xiaomi-tokenplan registry (desktop-catalog alignment)", () => {
   });
 
   it("keeps the models every plan region serves", () => {
-    for (const id of ["mimo-v2.5-pro", "mimo-v2.5", "mimo-v2-pro", "mimo-v2-tts", "mimo-v2.5-tts"]) {
+    for (const id of ["mimo-v2.6-pro", "mimo-v2.6-pro-claude", "mimo-v2.6-flash", "mimo-v2.5-tts"]) {
       expect(ids, id).toContain(id);
     }
+  });
+
+  it("drops the V2.5 chat line and the legacy V2 entries", () => {
+    // The platform retires mimo-v2.5 / mimo-v2.5-pro at 2026-10-21 10:00 CST;
+    // mimo-v2-pro and mimo-v2-tts no longer appear in its list at all. Leaving
+    // the catalog is safe for existing combos — the registry is not a request
+    // gate — which the "non-default speech models survive parsing" case below
+    // still exercises with mimo-v2-tts.
+    for (const id of ["mimo-v2.5-pro", "mimo-v2.5", "mimo-v2-pro", "mimo-v2-tts"]) {
+      expect(ids, id).not.toContain(id);
+    }
+    // The speech family is still V2.5 upstream, so it must survive the cutover.
+    expect(ids).toContain("mimo-v2.5-tts-voiceclone");
+    expect(ids).toContain("mimo-v2.5-tts-voicedesign");
   });
 
   it("marks every speech model kind:'tts' and no chat model carries a kind", () => {
@@ -92,19 +113,19 @@ describe("xiaomi-mimo executor honors the sign-in returned cluster", () => {
   const creds = (baseUrl, rt) => ({ providerSpecificData: baseUrl ? { baseUrl } : {}, runtimeTransport: rt });
 
   it("billing (default) base reproduces the registry transports byte-for-byte", () => {
-    expect(executor.buildUrl("mimo-v2.5-pro", true, 0, creds(BILLING, PLAN_OPENAI_RT))).toBe(`${BILLING}/chat/completions`);
-    expect(executor.buildUrl("mimo-v2.5-pro", true, 0, creds(BILLING, PLAN_CLAUDE_RT))).toBe("https://api.xiaomimimo.com/anthropic/v1/messages");
+    expect(executor.buildUrl("mimo-v2.6-pro", true, 0, creds(BILLING, PLAN_OPENAI_RT))).toBe(`${BILLING}/chat/completions`);
+    expect(executor.buildUrl("mimo-v2.6-pro", true, 0, creds(BILLING, PLAN_CLAUDE_RT))).toBe("https://api.xiaomimimo.com/anthropic/v1/messages");
   });
 
   it("a token-plan baseUrl routes chat AND anthropic traffic to that cluster", () => {
     const plan = "https://token-plan-sgp.xiaomimimo.com/v1";
-    expect(executor.buildUrl("mimo-v2.5-pro", false, 0, creds(plan, PLAN_OPENAI_RT))).toBe(`${plan}/chat/completions`);
-    expect(executor.buildUrl("mimo-v2.5-pro", false, 0, creds(plan, PLAN_CLAUDE_RT))).toBe("https://token-plan-sgp.xiaomimimo.com/anthropic/v1/messages");
+    expect(executor.buildUrl("mimo-v2.6-pro", false, 0, creds(plan, PLAN_OPENAI_RT))).toBe(`${plan}/chat/completions`);
+    expect(executor.buildUrl("mimo-v2.6-pro", false, 0, creds(plan, PLAN_CLAUDE_RT))).toBe("https://token-plan-sgp.xiaomimimo.com/anthropic/v1/messages");
   });
 
   it("missing or malformed stored base keeps the registry transport", () => {
-    expect(executor.buildUrl("mimo-v2.5", true, 0, creds(undefined, PLAN_OPENAI_RT))).toBe(`${BILLING}/chat/completions`);
-    expect(executor.buildUrl("mimo-v2.5", true, 0, creds("garbage", PLAN_OPENAI_RT))).toBe(`${BILLING}/chat/completions`);
+    expect(executor.buildUrl("mimo-v2.6-flash", true, 0, creds(undefined, PLAN_OPENAI_RT))).toBe(`${BILLING}/chat/completions`);
+    expect(executor.buildUrl("mimo-v2.6-flash", true, 0, creds("garbage", PLAN_OPENAI_RT))).toBe(`${BILLING}/chat/completions`);
   });
 
   it("preview models stay on the account-service route regardless of baseUrl (regression)", () => {

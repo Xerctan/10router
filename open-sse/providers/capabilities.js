@@ -131,6 +131,16 @@ export const MODEL_CAPABILITIES = {
   "qwen3.8-flash":  { vision: true, videoInput: true, reasoning: true, thinkingFormat: "qwen", contextWindow: 1000000, maxOutput: 131072 }, // alibaba：text+image+video
   "mimo-v2-pro":    { contextWindow: 1048576, maxOutput: 131072 }, // xiaomi：纯文本；`*mimo*` 既误标 vision 又把窗口写成 262144
   "mimo-v2.5-pro":  { contextWindow: 1048576, maxOutput: 131072 }, // xiaomi：纯文本；`*mimo*v2.5*` 误标 vision+audioInput+videoInput（同族非 pro 才是多模态）
+  // V2.6（mimo.mi.com 模型列表，页面更新 2026-09-21）：pro 与 flash **都**标「全模态理解」
+  // ——与纯文本的 v2.5-pro 不同；窗口 1M、最大输出 128K。必须显式列出：两者都不匹配
+  // `*mimo*v2.5*`，只会落到最泛的 `*mimo*`，那条兜底把窗口写成 262144 且只给 vision，
+  // headroom/上下文压缩就会按真实窗口的 1/4 计算。未标 pdf：官方只列图片/音频/视频理解。
+  // 也**未**标 reasoning：上游用非标准的 `thinking:{type:"enabled"|"disabled"}`（文档明说
+  // 「不是标准 OpenAI 参数」），本仓库没有 thinkingFormat 能发出这个形状，而 `"openai"` 会发
+  // `reasoning_effort`——小米文档未收录，贸然发送有 400 风险。深度思考上游默认开启，故当前
+  // 表现为「有思考、无档位控制」；要补档位需新增 mimo 专用 thinkingFormat（见提交说明）。
+  "mimo-v2.6-pro":   { vision: true, audioInput: true, videoInput: true, contextWindow: 1048576, maxOutput: 131072 },
+  "mimo-v2.6-flash": { vision: true, audioInput: true, videoInput: true, contextWindow: 1048576, maxOutput: 131072 },
   "mimo-v2-omni":   { vision: true, audioInput: true, videoInput: true, pdf: true, contextWindow: 262144, maxOutput: 131072 }, // xiaomi：text+image+audio+video+pdf
   "hy3":            { reasoning: true, thinkingFormat: "hunyuan", contextWindow: 256000, maxOutput: 128000 }, // tencent-tokenhub；`hy3*` 的 262144/262144（输出=窗口）无来源
   "hy3-preview":    { reasoning: true, thinkingFormat: "hunyuan", contextWindow: 256000, maxOutput: 64000 }, // tencent-tokenhub：预览版输出（64000）比正式版（128000）更小

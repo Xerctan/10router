@@ -99,6 +99,20 @@ describe("xiaomi-mimo registry integrity", () => {
     expect(registry).not.toMatch(/"mimo-v2-omni"/);
     expect(registry).not.toMatch(/"mimo-v2-flash"/);
   });
+
+  it("carries the V2.6 chat line and no longer offers the retiring V2.5 pair", () => {
+    // Platform model list, page updated 2026-09-21: V2.6 pro + flash are the
+    // current text-generation models; mimo-v2.5 / mimo-v2.5-pro retire at
+    // 2026-10-21 10:00 CST. The quotes matter — the deletion rationale in the
+    // registry comment names the retired ids in prose, and only a live entry is
+    // quoted as an id.
+    expect(registry).toMatch(/\{\s*id:\s*"mimo-v2\.6-pro"/);
+    expect(registry).toMatch(/\{\s*id:\s*"mimo-v2\.6-flash"/);
+    expect(registry).not.toMatch(/\{\s*id:\s*"mimo-v2\.5-pro"/);
+    expect(registry).not.toMatch(/\{\s*id:\s*"mimo-v2\.5"/);
+    // ultraspeed is 定制服务 upstream — not callable with a normal key.
+    expect(registry).not.toMatch(/\{\s*id:\s*"mimo-v2\.6-pro-ultraspeed"/);
+  });
 });
 
 describe("MiMo catalog kind tagging (2026-09-19 user report)", () => {
@@ -138,7 +152,7 @@ describe("MiMo catalog kind tagging (2026-09-19 user report)", () => {
     // The deletion note may mention the name in prose; assert no live entry.
     expect(registry).not.toMatch(/\{\s*id:\s*"mimo-v2\.5-pro-ultraspeed"/);
     // the chat line + tts media entry remain
-    expect(registry).toMatch(/"mimo-v2.5-pro"/);
+    expect(registry).toMatch(/"mimo-v2.6-pro"/);
     expect(registry).toMatch(/"mimo-v2.5-tts".*kind:\s*"tts"/);
   });
 });

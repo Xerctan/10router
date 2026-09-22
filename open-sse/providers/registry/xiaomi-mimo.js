@@ -63,14 +63,25 @@ export default {
     // 模型行据此渲染「需桌面版登录」提示（schema 对模型字段无白名单，额外键安全）。
     { id: "mimo-x-pro-preview", name: "MiMo-X-Pro-Preview", upstreamModelId: "xiaomi/mimo-x-pro-preview", supportedFormats: ["openai"], requiresSession: true },
     { id: "mimo-x-flash-preview", name: "MiMo-X-Flash-Preview", upstreamModelId: "xiaomi/mimo-x-flash-preview", supportedFormats: ["openai"], requiresSession: true },
-    // Cloud API models (api.xiaomimimo.com/v1) — live /v1/models verified
-    // 2026-09-19: the V2 generation (mimo-v2-omni, mimo-v2-flash) and the
-    // no-longer-sold mimo-v2.5-pro-ultraspeed are removed; the plain
-    // text/chat line stays here, the -tts family belongs to the TTS media
-    // provider surface (serviceKinds includes "tts"; the media page lists
-    // exactly the kind:"tts" entries below).
-    { id: "mimo-v2.5-pro", name: "MiMo V2.5 Pro" },
-    { id: "mimo-v2.5", name: "MiMo V2.5" },
+    // Cloud API models (api.xiaomimimo.com/v1), aligned 2026-09-22 with the
+    // platform model list (mimo.mi.com/docs, page updated 2026-09-21):
+    //   • V2.6 generation added — pro and flash. Both 1M context / 128K max
+    //     output, full-modal understanding, RPM 100 / TPM 10M.
+    //   • mimo-v2.5 and mimo-v2.5-pro dropped — the platform retires them at
+    //     2026-10-21 10:00 CST. Dropping an id here only removes it from the
+    //     picker: the registry is not a request gate (isValidModel has no
+    //     callers and getModelUpstreamId falls through to the raw id), so a
+    //     combo already pointing at mimo-v2.5-pro keeps routing until upstream
+    //     actually cuts over.
+    //   • mimo-v2.6-pro-ultraspeed deliberately NOT listed — the platform marks
+    //     it 定制服务 (contact sales), so it is not callable with a normal key.
+    // Earlier removals still stand: the V2 generation (mimo-v2-omni,
+    // mimo-v2-flash) and the no-longer-sold mimo-v2.5-pro-ultraspeed.
+    // The -tts family belongs to the TTS media provider surface (serviceKinds
+    // includes "tts"; the media page lists exactly the kind:"tts" entries below)
+    // and is still the V2.5 generation upstream, so it stays as-is.
+    { id: "mimo-v2.6-pro", name: "MiMo V2.6 Pro" },
+    { id: "mimo-v2.6-flash", name: "MiMo V2.6 Flash" },
     { id: "mimo-v2.5-tts", name: "MiMo V2.5 TTS", kind: "tts" },
   ],
   ttsConfig: {

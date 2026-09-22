@@ -54,21 +54,34 @@ export default {
       auth: { combined: true, header: "x-api-key", scheme: "raw" },
     },
   ],
-  // Aligned 2026-09 with MiMo Desktop's bundled plan catalogs: all three regions
-  // (token-plan-cn / -sgp / -ams) serve the IDENTICAL set below. mimo-v2-omni was
-  // never in any plan catalog (billing-only, since deprecated) — calling it here
-  // 404s, which is how this list earned the "too old" reputation.
+  // Aligned 2026-09-22 with the platform model list (mimo.mi.com/docs, page
+  // updated 2026-09-21). Before that this mirrored MiMo Desktop's bundled plan
+  // catalogs, where all three regions (token-plan-cn / -sgp / -ams) served the
+  // IDENTICAL set. mimo-v2-omni was never in any plan catalog (billing-only,
+  // since deprecated) — calling it here 404s, which is how this list earned the
+  // "too old" reputation.
+  //
+  // V2.6 replaces the V2.5 chat line, which the platform retires 2026-10-21
+  // 10:00 CST. As on the base card, dropping an id only removes it from the
+  // picker — the registry is not a request gate — so an existing combo keeps
+  // routing until upstream cuts over. The legacy mimo-v2-pro and mimo-v2-tts
+  // entries go too: neither appears in the platform list any more. The TTS
+  // family is still V2.5 upstream and stays.
+  //
+  // Verified for this cluster, not assumed: the Token Plan price page
+  // (mimo.mi.com/static/docs/price/token-plan.md) states under Core Strengths
+  // that "all plans support the latest flagship models mimo-v2.6-pro,
+  // mimo-v2.6-flash, as well as ASR and TTS models" — all plans covering both
+  // the individual and team editions — and the site's own V2.6 announcement
+  // adds that 团队版 TokenPlan and the Batch API now carry V2.6. So the
+  // token-plan-{region} hosts serve the same ids as the billing host.
   models: [
-    { id: "mimo-v2.5-pro", name: "MiMo V2.5 Pro" },
-    { id: "mimo-v2.5-pro-claude", name: "MiMo V2.5 Pro (Claude Native)", targetFormat: "claude", upstreamModelId: "mimo-v2.5-pro" },
-    { id: "mimo-v2.5", name: "MiMo V2.5" },
-    // Listed `status: "deprecated"` in every Desktop region catalog — still served,
-    // kept callable, but renamed so nobody picks it as a new default.
-    { id: "mimo-v2-pro", name: "MiMo V2 Pro (legacy)" },
+    { id: "mimo-v2.6-pro", name: "MiMo V2.6 Pro" },
+    { id: "mimo-v2.6-pro-claude", name: "MiMo V2.6 Pro (Claude Native)", targetFormat: "claude", upstreamModelId: "mimo-v2.6-pro" },
+    { id: "mimo-v2.6-flash", name: "MiMo V2.6 Flash" },
     { id: "mimo-v2.5-tts", name: "MiMo V2.5 TTS", kind: "tts" },
     { id: "mimo-v2.5-tts-voiceclone", name: "MiMo V2.5 TTS Voice Clone", kind: "tts" },
     { id: "mimo-v2.5-tts-voicedesign", name: "MiMo V2.5 TTS Voice Design", kind: "tts" },
-    { id: "mimo-v2-tts", name: "MiMo V2 TTS", kind: "tts" },
   ],
   // Same speech protocol as the base provider (shared adapter); only the cluster
   // URL differs and the adapter resolves it per connection/region.
