@@ -14,6 +14,15 @@ import { getMimoAccountUsage } from "../../shared/mimoAccount.js";
 
 const USAGE_URL = "https://aistudio.xiaomimimo.com/open-apis/v1/user/usage";
 
+// A Desktop-card connection stores this placeholder where an API-key connection
+// stores an sk- key (see /api/oauth/xiaomi-mimo/api-key). Sending it as a Bearer
+// token authenticates nobody, so the handler treats it as "no key" and says what is
+// actually true. Kept as ONE fixed sentence: the dashboard translates a quota
+// message by exact text match, so it must not interpolate.
+const SESSION_TOKEN_PREFIX = "mimo-desktop-session";
+const NO_DESKTOP_SESSION_MESSAGE =
+  "MiMo Desktop is not signed in on this machine — sign in to it to read the weekly quota.";
+
 /**
  * @param {string|null|undefined} accessToken - sk- API key
  * @param {object|null} providerSpecificData - may contain mimoPassToken, uid, etc.
@@ -31,7 +40,13 @@ export async function getXiaomiMimoUsage(accessToken = null, providerSpecificDat
   // Fallback: no account session available (Desktop never logged in, or its cookie
   // store is locked). The sk- key cannot read the quota, so surface a clear message.
   const key = accessToken || providerSpecificData?.apiKey;
-  if (!key || typeof key !== "string" || !key.trim()) {
+  const trimmedKey = typeof key === "string" ? key.trim() : "";
+  if (trimmedKey.startsWith(SESSION_TOKEN_PREFIX)) {
+    // Desktop card: there is no sk- key on this card to fall back to — saying
+    // "add credentials" would send the user to a key path the card no longer has.
+    return { plan: "Xiaomi MiMo Desktop", message: NO_DESKTOP_SESSION_MESSAGE };
+  }
+  if (!trimmedKey) {
     return { message: "Xiaomi MiMo Desktop not connected. Add credentials to view usage." };
   }
 
@@ -41,7 +56,7 @@ export async function getXiaomiMimoUsage(accessToken = null, providerSpecificDat
       {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${key.trim()}`,
+          Authorization: `Bearer ${trimmedKey}`,
           "X-Mimo-Source": "mimocode-cli",
           Accept: "application/json",
         },

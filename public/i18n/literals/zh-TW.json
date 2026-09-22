@@ -251,6 +251,7 @@
   "No quota data available": "無可用配額資料",
   "MiniMax API key invalid or inactive. Use an active Token/Coding Plan key.": "MiniMax API 金鑰無效或未啟用。請使用有效的 Token/Coding Plan 金鑰。",
   "Xiaomi MiMo Desktop not connected. Add credentials to view usage.": "小米 MiMo 桌面版未連線。請新增憑證以查看用量。",
+  "MiMo Desktop is not signed in on this machine — sign in to it to read the weekly quota.": "本機未登入 MiMo 桌面版 —— 請登入後再讀取每週額度。",
   "Weekly quota requires Xiaomi account session. API key alone is insufficient.": "每週配額需要小米帳號工作階段。僅憑 API 金鑰無法獲取。",
   "Usage endpoint returned unexpected response.": "用量端點傳回非預期回應。",
   "Usage data missing percent field.": "用量資料缺少百分比欄位。",
