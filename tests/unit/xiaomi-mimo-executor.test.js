@@ -210,10 +210,18 @@ describe("xiaomi-mimo registry (dual auth)", () => {
 describe("mimo-desktop registry (account session)", () => {
   it("keeps the same connect surface as the base card", () => {
     expect(desktop.category).toBe("oauth");
-    expect(desktop.authModes).toEqual(["oauth", "apikey"]);
     expect(desktop.hasOAuth).toBe(true);
     expect(desktop.oauth.custom).toBe(true);
     expect(desktop.oauth.callbackParam).toBe("u");
+  });
+
+  it("offers no API-key path — the Desktop credential is the account session", () => {
+    // `oauth` only, deliberately unlike the base card. An sk- key entered here would
+    // never be used: the executor refuses anything arriving without the Desktop
+    // cookie (MIMO_DESKTOP_SESSION_REQUIRED). Leaving "apikey" in authModes rendered
+    // an "API Key" button whose connections were dead on arrival.
+    expect(desktop.authModes).toEqual(["oauth"]);
+    expect(desktop.authModes).not.toContain("apikey");
   });
 
   it("resolves every declared alias to the Desktop card, not the base card", () => {

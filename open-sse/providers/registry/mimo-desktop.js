@@ -17,7 +17,8 @@ import { CLAUDE_API_HEADERS } from "../shared.js";
 //
 // Connection shape: connecting with no sk- key stores the placeholder accessToken
 // `mimo-desktop-session[-<uid>]`, which the dashboard reads as "session account,
-// no key" (see the api-key route and ConnectionRow).
+// no key" (see the api-key route and ConnectionRow). That is the ONLY connect path
+// this card has: no browser sign-in, no sk- key (see authModes below).
 //
 // The executor picks its session path from the PROVIDER id, not the model id, so
 // the two ids mapped to it in executors/index.js stay honest: `mimo-desktop`
@@ -48,10 +49,14 @@ export default {
     },
   },
   category: "oauth",
-  // Same connect surface as the base card so the existing MiMo flow can create a
-  // connection for THIS provider id; the account session above is what actually
-  // authorizes the models.
-  authModes: ["oauth", "apikey"],
+  // `oauth` ONLY. This card's credential IS the account session, so both the
+  // browser sign-in and the sk- API key belong to the base card. An sk- key entered
+  // here could never be used: the executor refuses any request that arrives without
+  // the Desktop cookie (MIMO_DESKTOP_SESSION_REQUIRED, see executors/xiaomi-mimo.js).
+  // Keeping "apikey" only rendered an "API Key" button whose connections were dead
+  // on arrival. The connect flow is unchanged — the shared MiMo modal targets this
+  // provider id through /api/oauth/xiaomi-mimo/api-key, which does not read authModes.
+  authModes: ["oauth"],
   hasOAuth: true,
   serviceKinds: ["llm"],
   transport: {

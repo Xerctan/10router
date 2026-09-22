@@ -2112,7 +2112,7 @@ export default function ProviderDetailPage() {
                       icon="add"
                       onClick={triggerAddConnection}
                     >
-                      {isCompatible ? "Add API Key" : (providerId === "iflow" ? "OAuth" : "Add Connection")}
+                      {isCompatible ? "Add API Key" : (providerId === "iflow" ? "OAuth" : providerId === "mimo-desktop" ? translate("Connect with Desktop Session") : "Add Connection")}
                     </Button>
                   </>
                 )}
