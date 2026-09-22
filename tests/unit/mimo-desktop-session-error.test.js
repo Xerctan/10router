@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
-import XiaomiMimoExecutor, { __test__ } from "../../open-sse/executors/xiaomi-mimo.js";
+import XiaomiMimoExecutor from "../../open-sse/executors/xiaomi-mimo.js";
 import { checkFallbackError } from "../../open-sse/services/accountFallback.js";
 
 const SESSION_MESSAGE =
@@ -34,10 +34,10 @@ describe("issue 13: mimo desktop session error", () => {
     const savedAppData = process.env.APPDATA;
     process.env.APPDATA = join(tmpdir(), `mimo-session-test-empty-${process.pid}`);
     try {
-      const executor = new XiaomiMimoExecutor();
+      const executor = new XiaomiMimoExecutor("mimo-desktop");
       await expect(
         executor.execute({
-          model: "mimo-x-flash-preview",
+          model: "mimo-v2.6-flash",
           credentials: { providerSpecificData: {} }, // no session → no cookie
           proxyOptions: null,
         }),
@@ -52,9 +52,11 @@ describe("issue 13: mimo desktop session error", () => {
     expect(SESSION_MESSAGE).not.toContain("passToken");
   });
 
-  it("non-preview models never hit the session gate (super.execute path)", () => {
-    // Bare ids map to the preview pair; a cloud model must not be gated.
-    expect(__test__.bareModel("xiaomi/mimo-v2.5-flash")).toBe("mimo-v2.5-flash");
+  it("scopes the session gate to the Desktop card, not the model id", () => {
+    // Both cards sell mimo-v2.6-flash; only the provider decides whether an
+    // account session is demanded — a model-id rule would gate the cloud card too.
+    expect(new XiaomiMimoExecutor().usesAccountSession()).toBe(false);
+    expect(new XiaomiMimoExecutor("mimo-desktop").usesAccountSession()).toBe(true);
   });
 
   it("errorConfig: matches with cooldown 0 — no lock, no (reset after 30s)", () => {
@@ -77,13 +79,12 @@ describe("issue 13: mimo desktop session error", () => {
     }
   });
 
-  it("registry: both preview models are flagged requiresSession on the Desktop card", async () => {
-    // They moved to registry/mimo-desktop.js in the 2026-09-22 three-card split;
-    // the dashboard badge has to follow them, and the base card must not advertise
-    // them any more (that would put a desktop-only model behind a cloud key).
+  it("registry: the Desktop card's models are all flagged requiresSession", async () => {
+    // The dashboard badge has to follow the account-session surface, and the base
+    // card must not advertise any of them (a cloud key cannot reach them).
     const { default: desktop } = await import("../../open-sse/providers/registry/mimo-desktop.js");
     const flagged = desktop.models.filter((m) => m.requiresSession === true).map((m) => m.id);
-    expect(flagged.sort()).toEqual(["mimo-x-flash-preview", "mimo-x-pro-preview"]);
+    expect(flagged.sort()).toEqual(["mimo-v2.6-flash", "mimo-v2.6-pro"]);
     const { default: base } = await import("../../open-sse/providers/registry/xiaomi-mimo.js");
     expect(base.models.filter((m) => m.requiresSession === true)).toEqual([]);
   });

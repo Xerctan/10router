@@ -28,7 +28,10 @@ export default {
     website: "https://xiaomimimo.com",
     notice: {
       apiKeyUrl: "https://platform.xiaomimimo.com/console/api-keys",
-      signupUrl: "https://mimo.xiaomimimo.com/desktop/invite/",
+      // Cloud card → cloud console. This used to point at the Desktop invite page,
+      // which sent anyone signing up here to the desktop app instead of the API
+      // console they actually need a billing key from.
+      signupUrl: "https://platform.xiaomimimo.com/",
     },
   },
   category: "oauth",
@@ -54,12 +57,12 @@ export default {
     },
   ],
   models: [
-    // The Desktop-exclusive Preview models moved to the `mimo-desktop` card
-    // (registry/mimo-desktop.js), which owns the account-session surface. They
-    // are intentionally NOT listed here any more — but combos that still say
-    // `xiaomi-mimo/mimo-x-pro-preview` keep working: the executor chooses its
-    // session path from the MODEL id (XiaomiMimoExecutor.isPreviewModel), not the
-    // provider, and the registry is not a request gate.
+    // The account-session models live on the `mimo-desktop` card
+    // (registry/mimo-desktop.js), which owns the Desktop cookie surface. This card
+    // advertises none of them: a cloud key cannot reach that route.
+    // Both cards now list the same V2.6 ids on purpose — the PROVIDER id is what
+    // separates "billed by the cloud API" from "spends Desktop credits", so the
+    // executor keys its session path on the provider, never on the model id.
     // Cloud API models (api.xiaomimimo.com/v1), aligned 2026-09-22 with the
     // platform model list (mimo.mi.com/docs, page updated 2026-09-21):
     //   • V2.6 generation added — pro and flash. Both 1M context / 128K max

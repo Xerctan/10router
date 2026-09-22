@@ -95,14 +95,16 @@ describe("xiaomi-mimo registry integrity", () => {
   const registry = readFileSync(path.join(registryDir, "xiaomi-mimo.js"), "utf8");
   const desktopRegistry = readFileSync(path.join(registryDir, "mimo-desktop.js"), "utf8");
 
-  it("keeps the two fixed client X previews on the Desktop card, not the base card", () => {
+  it("keeps account-session models on the Desktop card only", () => {
     // The 2026-09-22 three-card split moved the account-session models into
-    // registry/mimo-desktop.js. Both directions matter: the Desktop card must list
-    // them, and the base card must not (a cloud key cannot reach them).
-    expect(desktopRegistry).toMatch(/"mimo-x-pro-preview"/);
-    expect(desktopRegistry).toMatch(/"mimo-x-flash-preview"/);
-    expect(registry).not.toMatch(/\{\s*id:\s*"mimo-x-pro-preview"/);
-    expect(registry).not.toMatch(/\{\s*id:\s*"mimo-x-flash-preview"/);
+    // registry/mimo-desktop.js, and the retired mimo-x-*-preview pair was replaced
+    // by the Desktop plan's current list. Both directions still matter: the
+    // Desktop card lists them with requiresSession, the base card lists none.
+    expect(desktopRegistry).toMatch(/requiresSession:\s*true/);
+    expect(registry).not.toMatch(/requiresSession/);
+    // The retired previews are gone from BOTH cards, not just moved.
+    expect(registry).not.toMatch(/mimo-x-pro-preview/);
+    expect(desktopRegistry).not.toMatch(/mimo-x-pro-preview/);
     expect(registry).not.toMatch(/"mimo-v2-omni"/);
     expect(registry).not.toMatch(/"mimo-v2-flash"/);
   });

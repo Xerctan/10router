@@ -7,9 +7,9 @@ import { CLAUDE_API_HEADERS } from "../shared.js";
 // Desktop account session), and `xiaomi-tokenplan` (tp- subscription key with
 // region selection).
 //
-// What makes this card different is where the credential comes from. These two
-// Preview models are served by the account service on mimo-server-cn.xiaomimimo.com
-// and authorized by the Xiaomi ACCOUNT SESSION cookie — not by an sk- key. That
+// What makes this card different is where the credential comes from. Its models
+// are served by the account service on mimo-server-cn.xiaomimimo.com and
+// authorized by the Xiaomi ACCOUNT SESSION cookie — not by an sk- key. That
 // cookie is read on demand from MiMo Desktop's own Electron cookie store
 // (see open-sse/shared/mimoAccount.js), so the router never stores it: the
 // connection here exists to identify the account/route, and the executor swaps
@@ -19,12 +19,10 @@ import { CLAUDE_API_HEADERS } from "../shared.js";
 // `mimo-desktop-session[-<uid>]`, which the dashboard reads as "session account,
 // no key" (see the api-key route and ConnectionRow).
 //
-// Existing combos still saying `xiaomi-mimo/mimo-x-pro-preview` are NOT broken by
-// this move: the executor picks its session path from the MODEL id
-// (XiaomiMimoExecutor.isPreviewModel), not the provider id, and the registry is
-// not a request gate — so both provider ids reach the same account-service route.
-// Both ids are mapped to that executor in executors/index.js for exactly this
-// reason; do not drop one without checking stored combos.
+// The executor picks its session path from the PROVIDER id, not the model id, so
+// the two ids mapped to it in executors/index.js stay honest: `mimo-desktop`
+// spends Desktop credits through the account service while `xiaomi-mimo` bills the
+// cloud API — even though both cards list `mimo-v2.6-pro`.
 export default {
   id: "mimo-desktop",
   // Directly under the base card (20) and Token Plan (21): same vendor, same
@@ -60,9 +58,9 @@ export default {
     baseUrl: "https://api.xiaomimimo.com/v1/chat/completions",
     validateUrl: "https://api.xiaomimimo.com/v1/models",
   },
-  // The Preview path rebuilds its own URL (account-service route) in the
-  // executor, so these are only a fallback shape; they mirror the base card so a
-  // mis-routed non-preview call still lands on a valid host.
+  // The account-session path rebuilds its own URL (account-service route) in the
+  // executor, so these transports are only the declared shape; they mirror the
+  // base card so a mis-routed call still lands on a valid host.
   transports: [
     {
       format: "openai",
@@ -77,14 +75,19 @@ export default {
     },
   ],
   models: [
-    // Desktop-exclusive — served by the account-service route, which only accepts
-    // OpenAI format, so supportedFormats pins them to the openai transport.
-    // NOTE: 客户端测试专属模型 —— 不在任何公开目录（models.dev / 桌面版自带快照）里，
-    // 程序本体也不含，账号服务端侧下发，属正常；来源 = 上游 PR #3921。
+    // The Desktop plan's model list. `rateMultiplier` is the credit rate the
+    // Desktop app itself prints beside each entry (积分倍率): usage there is metered
+    // in credits, so Pro spends 1× and Flash 0.4×. ModelRow renders it as the
+    // "Credit multiplier" badge.
+    //
+    // Same ids as the base card on purpose — they are the same models, and the
+    // PROVIDER is what tells the two apart: `xiaomi-mimo/mimo-v2.6-pro` bills the
+    // cloud API, `mimo-desktop/mimo-v2.6-pro` spends Desktop credits through the
+    // account service. That route accepts only OpenAI format.
     // requiresSession marks "only accepts the MiMo Desktop account cookie"; the
     // dashboard model row renders the "desktop sign-in required" badge from it.
-    { id: "mimo-x-pro-preview", name: "MiMo-X-Pro-Preview", upstreamModelId: "xiaomi/mimo-x-pro-preview", supportedFormats: ["openai"], requiresSession: true },
-    { id: "mimo-x-flash-preview", name: "MiMo-X-Flash-Preview", upstreamModelId: "xiaomi/mimo-x-flash-preview", supportedFormats: ["openai"], requiresSession: true },
+    { id: "mimo-v2.6-pro", name: "MiMo V2.6 Pro", rateMultiplier: 1, supportedFormats: ["openai"], requiresSession: true },
+    { id: "mimo-v2.6-flash", name: "MiMo V2.6 Flash", rateMultiplier: 0.4, supportedFormats: ["openai"], requiresSession: true },
   ],
   features: {
     usage: true,

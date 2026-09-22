@@ -128,8 +128,11 @@ describe("xiaomi-mimo executor honors the sign-in returned cluster", () => {
     expect(executor.buildUrl("mimo-v2.6-flash", true, 0, creds("garbage", PLAN_OPENAI_RT))).toBe(`${BILLING}/chat/completions`);
   });
 
-  it("preview models stay on the account-service route regardless of baseUrl (regression)", () => {
-    const url = executor.buildUrl("mimo-x-flash-preview", true, 0, creds("https://token-plan-cn.xiaomimimo.com/v1", PLAN_OPENAI_RT));
+  it("the Desktop card stays on the account-service route regardless of baseUrl (regression)", () => {
+    // A stored token-plan baseUrl must not pull the account-session card onto the
+    // plan cluster: its models are served by the account service, not by the plan.
+    const desktop = new executor.constructor("mimo-desktop");
+    const url = desktop.buildUrl("mimo-v2.6-flash", true, 0, creds("https://token-plan-cn.xiaomimimo.com/v1", PLAN_OPENAI_RT));
     expect(url).toBe("https://mimo-server-cn.xiaomimimo.com/api/route/chat/completions");
   });
 });

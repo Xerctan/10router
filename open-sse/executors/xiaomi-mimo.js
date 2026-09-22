@@ -2,22 +2,20 @@ import { DefaultExecutor } from "./default.js";
 import { getMimoAccountCookie, invalidateMimoAccountCookieCache, MIMO_API_BASE, MIMO_API_UA } from "../shared/mimoAccount.js";
 import { normalizeMimoApiBase } from "../config/providers.js";
 
-// Desktop-exclusive Preview models. These are served by the account service's
-// /api/route proxy, authorized by the Xiaomi account session (NOT the sk- key).
-// See shared/mimoAccount.js for the session handshake.
-const PREVIEW_MODELS = new Set(["mimo-x-pro-preview", "mimo-x-flash-preview"]);
+// The `mimo-desktop` card's models are served by the account service's /api/route
+// proxy, authorized by the Xiaomi account session (NOT the sk- key). See
+// shared/mimoAccount.js for the session handshake.
+//
+// Keyed on the PROVIDER id, not the model id. Both cards sell the same ids
+// (mimo-v2.6-pro / -flash), so only the provider separates them; a model-id rule
+// would send the Desktop card's call to the billing API while holding a cookie,
+// and the cloud card's call through the account service.
+const ACCOUNT_SESSION_PROVIDER = "mimo-desktop";
 
 // Session cookie resolved in execute() (async) and read back by buildHeaders()
 // (sync — BaseExecutor.execute does not await it). Carried on the per-request
 // credentials object, same as runtimeTransport.
 const COOKIE_KEY = "__mimoAccountCookie";
-
-// Upstream calls may hand us either the bare id or a `provider/model` ref.
-function bareModel(model) {
-  const s = String(model || "");
-  const i = s.indexOf("/");
-  return i >= 0 ? s.slice(i + 1) : s;
-}
 
 const ULTRA_THINKING_DIRECTIVES = {
   high: "Please UltraThinking: conduct a thorough chain-of-thought analysis before taking action or answering. Systematically explore alternative approaches, verify intermediate steps, and address edge cases while strictly adhering to tool invocation schemas if calling tools.",
@@ -48,20 +46,20 @@ function injectThinkingDirective(messages, directive) {
 export class XiaomiMimoExecutor extends DefaultExecutor {
   // Provider id is a parameter because two registry cards share this executor:
   // `xiaomi-mimo` (cloud models) and `mimo-desktop` (account-session models).
-  // The session path itself is keyed on the MODEL id downstream, so a stored
-  // `xiaomi-mimo/mimo-x-pro-preview` combo resolves correctly through either id.
   constructor(provider = "xiaomi-mimo") {
     super(provider);
   }
 
-  static isPreviewModel(model) {
-    return PREVIEW_MODELS.has(bareModel(model));
+  /** True for the card whose models spend Desktop credits via the account service. */
+  usesAccountSession() {
+    return this.provider === ACCOUNT_SESSION_PROVIDER;
   }
 
   buildUrl(model, stream, urlIndex = 0, credentials = null) {
-    // Preview models live on the account-service route, which is not one of the
-    // declared transports — resolve it before the default runtimeTransport path.
-    if (XiaomiMimoExecutor.isPreviewModel(model)) {
+    // The account-session card's models live on the account-service route, which
+    // is not one of the declared transports — resolve it before the default
+    // runtimeTransport path.
+    if (this.usesAccountSession()) {
       return `${MIMO_API_BASE}/api/route/chat/completions`;
     }
     // The endpoint the platform handed back at sign-in (stored as psd.baseUrl —
@@ -84,8 +82,8 @@ export class XiaomiMimoExecutor extends DefaultExecutor {
   }
 
   buildHeaders(credentials, stream = true, url, model) {
-    if (XiaomiMimoExecutor.isPreviewModel(model) && credentials?.[COOKIE_KEY]) {
-      // Preview models authenticate with the account-session cookie, not the key.
+    if (this.usesAccountSession() && credentials?.[COOKIE_KEY]) {
+      // Account-session models authenticate with the cookie, not the key.
       return {
         "Content-Type": "application/json",
         Accept: stream ? "text/event-stream" : "application/json",
@@ -97,15 +95,15 @@ export class XiaomiMimoExecutor extends DefaultExecutor {
   }
 
   transformRequest(model, body, stream, credentials) {
-    // super runs stripUnsupportedParams, which flattens Preview content-part
-    // arrays (see the xiaomi-mimo rule in translator/concerns/paramSupport.js).
+    // super runs stripUnsupportedParams, which flattens content-part arrays for
+    // the account-session card (see the rule in translator/concerns/paramSupport.js).
     const out = super.transformRequest(model, body, stream, credentials);
 
-    // Preview models: bridge thinking effort (from Claude Code /effort or OpenAI
-    // reasoning_effort) via system prompt directives and dynamic max_tokens budgets.
-    // super.transformRequest can return undefined when no body was provided —
-    // skip the bridge rather than crash on a non-object.
-    if (XiaomiMimoExecutor.isPreviewModel(model) && out && typeof out === "object") {
+    // Account-session models: bridge thinking effort (from Claude Code /effort or
+    // OpenAI reasoning_effort) via system prompt directives and dynamic max_tokens
+    // budgets. super.transformRequest can return undefined when no body was
+    // provided — skip the bridge rather than crash on a non-object.
+    if (this.usesAccountSession() && out && typeof out === "object") {
       const rawEffort = out.reasoning_effort || body?.reasoning_effort || body?.output_config?.effort;
       const effort = typeof rawEffort === "string" ? rawEffort.toLowerCase() : null;
 
@@ -133,7 +131,7 @@ export class XiaomiMimoExecutor extends DefaultExecutor {
 
   async execute(args) {
     const { model, credentials, proxyOptions = null } = args;
-    if (!XiaomiMimoExecutor.isPreviewModel(model)) return super.execute(args);
+    if (!this.usesAccountSession()) return super.execute(args);
 
     const cookie = await getMimoAccountCookie(credentials?.providerSpecificData, proxyOptions);
     if (!cookie) {
@@ -165,6 +163,6 @@ export class XiaomiMimoExecutor extends DefaultExecutor {
   }
 }
 
-export const __test__ = { PREVIEW_MODELS, bareModel, COOKIE_KEY };
+export const __test__ = { ACCOUNT_SESSION_PROVIDER, COOKIE_KEY };
 
 export default XiaomiMimoExecutor;
