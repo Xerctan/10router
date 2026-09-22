@@ -47,20 +47,30 @@ npm run test-version -- --revert         # 测完回退（只在「改动全是�
 
 > **想省事就用一键脚本**：`cd desktop; .\test-local.ps1` —— 它把下面 2.1~2.5 整套串成一条命令：
 > 退托盘 → 盖测试号 → 构建 `cli/app` → 打包 → 替换/安装 → 启动 → 验证 → **自动回退版本号**（中途失败也会回退）。
-> 常用开关：`-Mode hot`（详见下）、`-Mode install`（真跑安装器）、`-SkipAppBuild`（复用已有 `cli/app`）、
-> `-Marker "<字面量>"`（顺带断言产物里含该标记）、`-Version X.Y.Z-test.N`（指定测试号）。
+> 常用开关：`-Mode ui` / `-Mode hot`（详见下表）、`-Mode install`（真跑安装器）、
+> `-SkipAppBuild`（复用已有 `cli/app`）、`-Marker "<字面量>"`（顺带断言产物里含该标记）、
+> `-Version X.Y.Z-test.N`（指定测试号）。
 >
-> **选路：别一上来就 replace。** 应用侧代码（`src/**`、`open-sse/**`、`public/**`）全部落在
-> `resources\app` 下，而 `.next-cli-build` / `public` 是**真实目录**（不在 `app.asar` 里），
-> 所以 `-Mode hot` 只镜像这两个子树 + 重启，跳掉 electron-builder 与 59M 整目录交换
-> （实测 135s vs 189s，且逐文件哈希与 `cli/app` 完全一致）。
-> - `-Mode hot` —— 应用侧改动，桌面壳没动。**最常用**
-> - `-Mode replace` —— 改了 `desktop/**` 主进程或依赖；`hot` 不会更新 `app.asar` / `node_modules`
-> - 只改 `public/**` 且不在乎版本号 —— 连脚本都不用：拷进安装目录 + 刷新页面（静态文件按请求读盘）
+> **选路：别一上来就 replace。**
 >
-> 注意：界面版本号是**构建期**从 `package.json` 烘焙进 bundle 的
-> （`src/shared/constants/config.js` 里是静态 json import）。所以只要想让界面显示新号，
-> 就躲不开一次 Next build —— 省掉的只能是重新打包与整目录交换。
+> | 改了什么 | 用什么 | 实际成本 |
+> |---|---|---|
+> | 只 `public/**`（图标、i18n 词条） | `-Mode ui` —— **不构建、不重启**，拷完刷新页面 | **1 秒** |
+> | `src/**`、`open-sse/**` | `-Mode hot` —— 构建 + 只镜像 `.next-cli-build`/`public` + 重启 | ~135s |
+> | `desktop/**` 主进程、依赖 | `-Mode replace` —— `hot`/`ui` 不动 `app.asar` / `node_modules` | ~189s |
+> | 想真跑一遍安装器 | `-Mode install` | ~4 分钟 |
+>
+> `hot` 能省掉 electron-builder 与 59M 整目录交换：应用侧代码全在 `resources\app` 下，
+> 而 `.next-cli-build` / `public` 是**真实目录**（不在 `app.asar` 里）；实测逐文件哈希与 `cli/app` 一致。
+> `ui` 能不重启：`public/**` 是**按请求读盘**的静态文件 —— 实测拷完不重启，
+> `/i18n/literals/*.json` 立刻返回新词条，而且 5 个进程 PID 一个都没变。
+> 但它只对**已在编译代码里引用过的路径**有效：**新增** provider/alias 不行，
+> 那张 alias→图标 映射是编译进 chunk 的，必须构建 + 重启。
+>
+> **为什么不由脚本自动判断「该刷新还是该重启」**：界面版本号是**构建期**从 `package.json`
+> 烘焙进 bundle 的（`src/shared/constants/config.js` 里是静态 json import）。想要左上角那个号变，
+> 就必然产生新 chunk、必然要重启 —— 判断取决于「你想不想要新号」，没有自动化空间。
+> 真正只刷新就生效的只有 `public/**` 这一类，也就是 `-Mode ui`。
 > 默认测试号 = 最新 tag 的**补丁位 +1** 再接一个**递增轮次** `-test.N`：第一次 `-test.1`、第二次
 > `-test.2`……**第几次测试就是第几次**，左上角一眼看出跑到第几轮（轮次记在未跟踪的
 > `desktop/.test-round`，删掉即从 1 重新数）。
@@ -288,7 +298,7 @@ INSTALL_CHANNEL=desktop DATA_DIR="/tmp/verify-data" "$INST/10Router.exe" custom-
 | `cli/scripts/build-cli.js` | 构建 `cli/app`（sidecar 代码，平台无关） |
 | `desktop/main.js` | 托盘壳：单实例锁、健康预检、spawn sidecar |
 | `desktop/build.ps1` / `build.sh` | 一键打包（构建 cli/app → npm install → electron-builder），**不含**安装与验证 |
-| `desktop/test-local.ps1` | 一键**本地测试轮**：退托盘 → 盖号 → 构建 → 替换/安装/**热替换(`-Mode hot`)** → 启动 → 验证 → 回退（§2） |
+| `desktop/test-local.ps1` | 一键**本地测试轮**：退托盘 → 盖号 → 构建 → 替换/安装/**`-Mode hot`**/**`-Mode ui`** → 启动 → 验证 → 回退（§2） |
 | `docs/zh-CN/test-report-*.md` | 事故复盘报告（一篇一文件），索引见 §5 |
 | `docs/zh-CN/fnos-hot-replace-deploy.md` | fnOS **热替换部署**（不重装 fpk）：预解包 → 原子交换 → appcenter-cli 重启 |
 | `.github/workflows/build-desktop-win.yml` | 正式 Windows 产物（tag `v*` 触发） |

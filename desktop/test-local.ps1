@@ -3,6 +3,7 @@
 # 用法:
 #   cd desktop
 #   .\test-local.ps1                            # 就地替换(默认,最稳,~2 分钟)
+#   .\test-local.ps1 -Mode ui                   # 只改过 public/** 时用:不构建、不重启,拷完刷新页面即生效
 #   .\test-local.ps1 -Mode hot                  # 只同步 .next-cli-build + public 后重启(应用侧改动,不重打电子包)
 #   .\test-local.ps1 -Mode install              # 真跑一遍安装器(静默 /S,~4 分钟)
 #   .\test-local.ps1 -Version 1.1.4             # 指定测试号(默认 = 最新 tag 补丁位 +1,再接递增轮次 -test.N)
@@ -10,12 +11,15 @@
 #   .\test-local.ps1 -Marker "payload_too_short"  # 额外断言装好的产物里含该字面量
 #
 # 模式怎么选(别一上来就 replace):
-#   改 src/**、open-sse/**、public/**  → -Mode hot 就够(应用侧全部在 resources\app,且
-#                                        .next-cli-build / public 是**真实目录**,不在 app.asar 里)
-#   改 desktop/** 主进程、或改了依赖   → -Mode replace(hot 不会更新 app.asar / node_modules)
-#   public/** 单改且不在乎版本号       → 连脚本都不用:cp 进安装目录 + 刷新页面(静态文件按请求读盘)
-#   注意:界面版本号是构建期从 package.json **烘焙**进 bundle 的(src/shared/constants/config.js
-#   里是静态 json import),所以只要想让界面显示新号,就躲不开一次 Next build。
+#   只改 public/** 且不在乎版本号 → -Mode ui   (不构建、不重启:静态文件按请求读盘,拷完刷新即可)
+#   改 src/** 或 open-sse/**     → -Mode hot  (构建 + 只同步 .next-cli-build/public + 重启)
+#   改 desktop/** 主进程或依赖   → -Mode replace(hot/ui 不会更新 app.asar / node_modules)
+#   想真跑一遍安装器            → -Mode install
+#
+# 为什么这步不由脚本自动判断「该刷新还是该重启」:界面版本号是**构建期**从 package.json
+# 烘焙进 bundle 的(src/shared/constants/config.js 里是静态 json import),所以只要你想要
+# 左上角那个号变,就必然产生新 chunk、必然要重启 —— 判断取决于「你想不想要新号」,
+# 没有自动化空间。真正只刷新就生效的只有 public/** 这一类,-Mode ui 就是它。
 #
 # 三条**踩过的坑**,别简化掉(细节见 docs/zh-CN/local-build-and-verify.md):
 # 1. 启动必须 Start-Process。`cmd /c start "" "路径"` 会被 Git Bash 吃掉空标题,
@@ -26,7 +30,7 @@
 
 param(
     [string]$Version = "",
-    [ValidateSet("replace", "install", "hot")][string]$Mode = "replace",
+    [ValidateSet("replace", "install", "hot", "ui")][string]$Mode = "replace",
     [switch]$SkipAppBuild,
     [switch]$NoRevert,
     [string]$Marker = ""
@@ -55,6 +59,28 @@ function Stop-Router([int]$TimeoutSec = 20) {
         if (-not (Get-Process 10Router -ErrorAction SilentlyContinue)) { return }
     }
     Die "10Router 进程仍在(手动退出托盘后重试)"
+}
+
+# ---------- -Mode ui:纯 public/** 热替换(不构建、不重启、不换版本号) ----------
+# public/** 是**按请求读盘**的静态文件,所以拷完在界面上刷新一下就生效,应用连退都不用退。
+# 只限 public/** —— 其余任何东西(server chunk、构建清单、烘焙进 bundle 的版本号)都得重启。
+# 从**仓库** public/ 拷(不是 cli/app/public):这一类改完通常不会再跑一次构建,
+# 构建产物里的那份可能已经是旧的。
+# 注意:已在编译代码里引用过的路径(如已有 provider 的图标 PNG、locale 词条)可以这样换;
+# **新增** provider/alias 不行 —— 那张 alias→图标 的映射是编译进 chunk 的,必须构建+重启。
+if ($Mode -eq "ui") {
+    Step 0 "模式 ui(只同步 public/**,不构建、不重启)"
+    $uiSrc = Join-Path $RepoDir "public"
+    $uiDst = Join-Path $Inst "resources\app\public"
+    if (-not (Test-Path $uiSrc)) { Die "仓库里没有 public/:$uiSrc" }
+    if (-not (Test-Path $uiDst)) { Die "未找到已安装的 10Router:$Inst(先跑一次 -Mode install)" }
+    robocopy $uiSrc $uiDst /MIR /NFL /NDL /NJH /NJS /R:2 /W:1 | Out-Null
+    # robocopy 拿 0-7 当成功,>=8 才是真失败
+    if ($LASTEXITCODE -ge 8) { Die "同步 public 失败(robocopy 退出码 $LASTEXITCODE)" }
+    Ok "public\ 已同步(应用无需重启)"
+    Write-Host ""
+    Write-Host "✅ 已生效:在界面上刷新即可(Ctrl+Shift+R 强刷)" -ForegroundColor Green
+    exit 0
 }
 
 # ---------- 0) 推导测试号(必须严格大于最新 git tag,否则 test-version 会拒绝) ----------
