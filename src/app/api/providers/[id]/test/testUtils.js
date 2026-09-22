@@ -813,7 +813,10 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
             if (!cookie) {
               return { valid: false, error: "Desktop session unavailable — sign in to MiMo Desktop once, then re-import" };
             }
-            // Minimal real call against the Desktop-exclusive Preview model.
+            // Minimal real call against the Desktop card's live model. This must
+            // name a model that exists: the retired mimo-x-*-preview pair would make
+            // every session test fail with a 404-shaped upstream error that looks
+            // like a bad cookie.
             const probe = await fetchWithConnectionProxy(
               "https://mimo-server-cn.xiaomimimo.com/api/route/chat/completions",
               {
@@ -824,12 +827,14 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
                   Accept: "text/event-stream",
                 },
                 body: JSON.stringify({
-                  model: "mimo-x-flash-preview",
+                  model: "mimo-v2.6-flash",
                   stream: true,
                   max_tokens: 8,
                   messages: [
                     { role: "system", content: "You are CodeBuddy Code." },
-                    { role: "user", content: [{ type: "text", text: "hi" }] },
+                    // Plain string: the account-service route rejects OpenAI
+                    // content-part arrays (same rule as translator/concerns/paramSupport.js).
+                    { role: "user", content: "hi" },
                   ],
                 }),
               },

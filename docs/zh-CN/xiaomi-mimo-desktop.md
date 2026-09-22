@@ -13,7 +13,7 @@ MiMo 桌面版**不是**标准 OAuth2，也不是"填个 API key 就完事"：
 | 能力 | 认证方式 | 走哪个端点 |
 |---|---|---|
 | 云端 LLM（`mimo-v2.5-pro` 等） | API key `sk-...` | `https://api.xiaomimimo.com/v1` |
-| **桌面专属 Preview**（`mimo-x-pro-preview` / `mimo-x-flash-preview`） | **小米账号会话 Cookie** | `https://mimo-server-cn.xiaomimimo.com/api/route/chat/completions` |
+| **桌面卡**（`mimo-desktop`：`mimo-v2.6-pro` / `mimo-v2.6-flash`） | **小米账号会话 Cookie** | `https://mimo-server-cn.xiaomimimo.com/api/route/chat/completions` |
 | TTS（`mimo-v2.5-tts`） | API key | 见 `ttsConfig` |
 
 两个关键结论决定了整个设计的形状：
@@ -35,21 +35,17 @@ priority: 290, category: "oauth", authModes: ["oauth", "apikey"],
 serviceKinds: ["llm", "tts"], color: "#FF6900",
 ```
 
-模型清单（8 个）：
+模型清单（云端卡 `xiaomi-mimo`）：
 
 ```
-mimo-x-pro-preview          Desktop 专属（account-service）
-mimo-x-flash-preview        Desktop 专属（account-service）
-mimo-v2.5-pro
-mimo-v2.5-pro-ultraspeed
-mimo-v2.5
-mimo-v2-omni
-mimo-v2-flash
+mimo-v2.6-pro               云端卡现有型号（1M 上下文 / 128K 输出）
+mimo-v2.6-flash             云端卡现有型号
 mimo-v2.5-tts               kind: "tts" —— 不参与文本 LLM 的默认禁用
 ```
 
-> Preview 两个 id 是**客户端测试专属**的真实模型（用户确认），因此保留并标注来源；
-> `mimo-v2.5-pro-ultraspeed` 的真实来源是 `https://mimo.mi.com/models/mimo-v2.5-pro-ultrspeed`
+桌面卡 `mimo-desktop` 现在卖的是**同名的** `mimo-v2.6-pro` / `mimo-v2.6-flash`，带
+积分倍率（1x / 0.4x），走账号会话；两卡同名靠 **provider id** 区分。旧的
+`mimo-x-pro-preview` / `mimo-x-flash-preview` 已被上游下线，两卡都不再列出。
 > （官方 URL 就是这么拼的，别"修正"它）。
 
 ## 1. 凭据路径：桌面版把登录态放在哪
@@ -252,7 +248,7 @@ uid → mimoUserId → email(`${uid}@xiaomi`) → accessToken
 | 连接持有 | 测试方式 |
 |---|---|
 | 真 `sk-` | `GET /models`（原逻辑） |
-| 仅桌面会话（占位 token / `authMethod: desktop-session`） | 向 `mimo-server-cn` 发一次**最小 Preview 请求**（`mimo-x-flash-preview`）——只有真实调用才能证明会话可用 |
+| 仅桌面会话（占位 token / `authMethod: desktop-session`） | 向 `mimo-server-cn` 发一次**最小请求**（`mimo-v2.6-flash`，content 用纯字符串）——只有真实调用才能证明会话可用 |
 | 两者都有 | 优先 `sk-`（更便宜，失败原因也更明确） |
 
 **坑**：`authType` 在仓库里存在 `api_key` / `apikey` **两种拼写**，测试分派此前只认后者，
@@ -263,12 +259,14 @@ uid → mimoUserId → email(`${uid}@xiaomi`) → accessToken
 `open-sse/executors/xiaomi-mimo.js`：
 
 ```js
-PREVIEW_MODELS = new Set(["mimo-x-pro-preview", "mimo-x-flash-preview"])
-COOKIE_KEY     = "__mimoAccountCookie"
+ACCOUNT_SESSION_PROVIDER = "mimo-desktop"
+COOKIE_KEY               = "__mimoAccountCookie"
 ```
 
-- Preview → `https://mimo-server-cn.xiaomimimo.com/api/route/chat/completions` +
+- 桌面卡（`mimo-desktop`）→ `https://mimo-server-cn.xiaomimimo.com/api/route/chat/completions` +
   `Cookie: <账号会话>`；其余 → 云端 API + `sk-`。
+- **判定键是 provider id，不是模型 id**：两卡卖同一个 `mimo-v2.6-pro`，只有 provider
+  能分出"扣云端余额"还是"扣桌面积分"。
 - **401 → 失效缓存并重试一次**（账号 Cookie 30 分钟缓存，`COOKIE_TTL_MS`）。
 
 ## 5. 自动化与"不打扰"

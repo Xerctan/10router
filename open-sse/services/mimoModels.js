@@ -5,12 +5,14 @@
 
 const MIMO_FALLBACK_ORIGIN = "https://api.xiaomimimo.com";
 
-// The two client-internal X-series previews (mimo-x-pro-preview,
-// mimo-x-flash-preview) are registry entries routed through the signed
-// in-client path (openai|skip|proxy|xiaomi-client|...); they are NOT part of
-// the public /v1/models sale list. Filter them by id prefix anyway so an
-// allow-listed upstream response can never shadow the fixed entries through
-// the import flow.
+// Ids of the client-internal X-series entries are routed through the signed
+// in-client path (openai|skip|proxy|xiaomi-client|...) and are NOT part of the
+// public /v1/models sale list, so the import flow must not let an allow-listed
+// upstream response shadow a fixed registry entry. The original
+// mimo-x-pro-preview / mimo-x-flash-preview pair is retired, but the prefix filter
+// stays defensive: it costs nothing and still catches any X-series id upstream
+// may start returning. The Desktop card's current models (mimo-v2.6-pro/-flash)
+// ARE public ids and are meant to be imported normally.
 export const MIMO_CLIENT_PREVIEW_PREFIX = "mimo-x";
 
 // Upstream /v1/models entries are bare {id, object, owned_by} — no kind
