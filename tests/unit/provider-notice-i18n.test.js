@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import commandCodeRegistry from "open-sse/providers/registry/commandcode.js";
+import mimoDesktopRegistry from "open-sse/providers/registry/mimo-desktop.js";
 
 const rootDir = resolve(__dirname, "../..");
 
@@ -51,5 +52,29 @@ describe("Provider Notice i18n", () => {
       "utf8",
     );
     expect(cardSource).toContain("{translate(noticeText)}");
+  });
+});
+
+// The Desktop card's notice shipped without translations: the English text goes
+// through translate() like every other notice, so a missing entry renders raw
+// English in a Chinese UI. Same contract as the CommandCode case above.
+describe("MiMo Desktop notice i18n", () => {
+  const noticeKey = mimoDesktopRegistry.display?.notice?.text;
+
+  it("the Desktop card has a notice that names the account-session requirement", () => {
+    expect(noticeKey).toBeTruthy();
+    expect(noticeKey).toContain("Account-session models.");
+    expect(noticeKey).toContain("No API key is needed");
+  });
+
+  it("both Chinese dictionaries carry the MiMo Desktop notice", () => {
+    for (const locale of ["zh-CN", "zh-TW"]) {
+      const dict = JSON.parse(
+        readFileSync(resolve(rootDir, `public/i18n/literals/${locale}.json`), "utf8"),
+      );
+      expect(dict[noticeKey], `${locale} notice entry`).toBeTruthy();
+      // Guard against a copy-paste placeholder: the translation has to be Chinese.
+      expect(dict[noticeKey], `${locale} notice is translated`).toMatch(/[\u4e00-\u9fff]/);
+    }
   });
 });
