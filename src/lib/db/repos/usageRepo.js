@@ -1307,12 +1307,61 @@ export async function getRecentLogs(limit = 200) {
 // saveRequestUsage, imported entries keep their original timestamp/cost and are
 // deduped by exact content signature. Only the usageHistory/usageDaily tables
 // are touched — no configuration is imported.
+/**
+ * Add `delta` cost to every aggregate bucket an existing row already feeds,
+ * mirroring aggregateEntryToDay's key shapes. Buckets are only touched when
+ * present — a patched day never fabricates counters.
+ */
+function applyDailyCostDelta(db, histRow, delta) {
+  const dateKey = getLocalDateKey(histRow.timestamp);
+  const row = db.get(`SELECT data FROM usageDaily WHERE dateKey = ?`, [dateKey]);
+  if (!row) return;
+  const day = parseJson(row.data, {});
+  if (!day || typeof day !== "object") return;
+  const model = histRow.model || "";
+  const provider = histRow.provider || "";
+  const bump = (group, key) => {
+    const bucket = group && group[key];
+    if (bucket) bucket.cost = (bucket.cost || 0) + delta;
+  };
+  day.cost = (day.cost || 0) + delta;
+  if (provider) bump(day.byProvider, provider);
+  bump(day.byModel, provider ? `${model}|${provider}` : model);
+  if (histRow.connectionId) bump(day.byAccount, histRow.connectionId);
+  bump(day.byApiKey, `${histRow.apiKeyHash || "local-no-key"}|${model}|${provider || "unknown"}`);
+  bump(day.byEndpoint, `${histRow.endpoint || "Unknown"}|${model}|${provider || "unknown"}`);
+  db.run(
+    `INSERT INTO usageDaily(dateKey, data) VALUES(?, ?) ON CONFLICT(dateKey) DO UPDATE SET data = excluded.data`,
+    [dateKey, stringifyJson(day)],
+  );
+}
+
 export async function importUsageRows(rows) {
   if (!Array.isArray(rows) || rows.length === 0) return { imported: 0, skipped: 0 };
   const db = await getAdapter();
 
+  // Imported rows only carry the cost the SOURCE instance assigned them. A
+  // client-side ledger (the zcode plugin's local DB, third-party exports) knows
+  // nothing about 10Router pricing, so every such row used to land at cost 0
+  // and the dashboard's estimated cost showed nothing forever. Estimate exactly
+  // like live writes do — same pricing table, same math — but ONLY where the
+  // source carried none; a source-computed cost is never overwritten.
+  for (const entry of rows) {
+    if (entry.cost) continue;
+    const tokens = (entry.tokens && typeof entry.tokens === "object") ? entry.tokens : {};
+    if (tokens.prompt_tokens == null && tokens.input_tokens == null && entry.promptTokens != null) {
+      tokens.prompt_tokens = entry.promptTokens;
+    }
+    if (tokens.completion_tokens == null && tokens.output_tokens == null && entry.completionTokens != null) {
+      tokens.completion_tokens = entry.completionTokens;
+    }
+    entry.tokens = tokens;
+    entry.cost = await calculateCost(entry.provider, entry.model, tokens);
+  }
+
   let imported = 0;
   let skipped = 0;
+  let costRepaired = false;
 
   db.transaction(() => {
     for (const entry of rows) {
@@ -1326,7 +1375,7 @@ export async function importUsageRows(rows) {
       // or a raw one (older exports); the identity is derived the same way either
       // way, so dedup stays consistent within the file being imported.
       const existing = db.get(
-        `SELECT id, meta FROM usageHistory
+        `SELECT id, meta, cost, timestamp, provider, model, connectionId, apiKeyHash, endpoint FROM usageHistory
          WHERE timestamp = ?
            AND COALESCE(provider, '') = COALESCE(?, '')
            AND COALESCE(model, '') = COALESCE(?, '')
@@ -1344,6 +1393,16 @@ export async function importUsageRows(rows) {
         const existingMeta = parseJson(existing.meta, {}) || {};
         if (existingMeta.imported !== true) {
           db.run(`UPDATE usageHistory SET meta = ? WHERE id = ?`, [stringifyJson({ imported: true, ...existingMeta }), existing.id]);
+        }
+        // Cost repair on re-import: rows that landed before imports estimated
+        // cost sit at 0, and plain re-syncing used to dedup-skip them forever.
+        // Re-importing the same export now fills the hole and patches that
+        // day's aggregates by the delta (the row's own buckets, never new
+        // ones) — so the plugin's normal daily sync heals historical days.
+        if (!existing.cost && entry.cost > 0) {
+          db.run(`UPDATE usageHistory SET cost = ? WHERE id = ?`, [entry.cost, existing.id]);
+          applyDailyCostDelta(db, existing, entry.cost);
+          costRepaired = true;
         }
         skipped++;
         continue;
@@ -1377,8 +1436,56 @@ export async function importUsageRows(rows) {
     }
   });
 
-  if (imported > 0) {
+  if (imported > 0 || costRepaired) {
     scheduleStatsEvent("update", 250);
   }
   return { imported, skipped };
+}
+
+/**
+ * Cost repair for usage rows that landed with a zero cost: imports made before
+ * the import path estimated anything (the sync plugin's exports never carried
+ * 10Router pricing), and rows written straight into the database by the
+ * plugin's offline `--import` — which bypasses every import function here.
+ *
+ * Only rows already stamped imported/gatewaySync with token counts are touched,
+ * and the estimate is the same single pricing source live writes use. Repaired
+ * rows drop out of the scan afterwards, so re-runs are no-ops — safe on every
+ * boot, bounded per run.
+ */
+export async function repairImportedUsageCosts({ limit = 20000 } = {}) {
+  const db = await getAdapter();
+  const candidates = db.all(
+    `SELECT id, timestamp, provider, model, connectionId, apiKeyHash, endpoint, tokens,
+            promptTokens, completionTokens
+     FROM usageHistory
+     WHERE (cost IS NULL OR cost = 0)
+       AND (meta LIKE '%"imported":true%' OR meta LIKE '%"gatewaySync":true%')
+       AND (promptTokens + completionTokens) > 0
+     ORDER BY id ASC
+     LIMIT ?`,
+    [limit],
+  );
+
+  const updates = [];
+  for (const row of candidates) {
+    const tokens = parseJson(row.tokens, {}) || {};
+    const cost = await calculateCost(row.provider, row.model, {
+      ...tokens,
+      prompt_tokens: tokens.prompt_tokens ?? tokens.input_tokens ?? row.promptTokens ?? 0,
+      completion_tokens: tokens.completion_tokens ?? tokens.output_tokens ?? row.completionTokens ?? 0,
+    });
+    if (cost > 0) updates.push({ row, cost });
+  }
+
+  if (updates.length) {
+    db.transaction(() => {
+      for (const { row, cost } of updates) {
+        db.run(`UPDATE usageHistory SET cost = ? WHERE id = ?`, [cost, row.id]);
+        applyDailyCostDelta(db, row, cost);
+      }
+    });
+    scheduleStatsEvent("update", 250);
+  }
+  return { scanned: candidates.length, repaired: updates.length };
 }

@@ -14,6 +14,7 @@ import {
   WATCHDOG_INTERVAL_MS, NETWORK_CHECK_INTERVAL_MS, VIRTUAL_IFACE_REGEX,
 } from "@/lib/tunnel";
 import { getMitmStatus, startMitm, loadEncryptedPassword, initDbHooks, restoreToolDNS, sweepStaleDnsEntries, removeAllDNSEntriesSync } from "@/mitm/manager";
+import { repairImportedUsageCosts } from "@/lib/db/repos/usageRepo.js";
 import { syncToJson as syncMitmAliasCache } from "@/lib/mitmAliasCache";
 import { killAllBridges } from "@/lib/mcp/stdioSseBridge";
 
@@ -81,6 +82,11 @@ export async function initializeApp() {
 
 async function runHeavyStartup() {
   await cleanupProviderConnections();
+  // Price zero-cost usage rows left by older imports and by the sync plugin's
+  // offline --import (which writes straight into the DB). Idempotent and
+  // bounded — repaired rows drop out of the scan, so this is a cheap no-op
+  // after the first boot.
+  await repairImportedUsageCosts().catch((e) => console.log("[InitApp] usage cost repair failed:", e.message));
   const settings = await getSettings();
 
   // Auto-resume tunnel (once per process)
