@@ -86,6 +86,28 @@ export const MODEL_PRICING = {
   "gemini-2.5-flash-lite":        { input: 0.15,  output: 1.25,  cached: 0.015, reasoning: 1.875,  cache_creation: 0.15  },
 
   // === Qwen ===
+  // Source: Alibaba Cloud Model Studio「Model inference pricing」(intl, USD/1M tokens),
+  // fetched 2026-09-24. Base-tier prices (flagship tiers have no tiering; Plus/
+  // Flash long-context tiers, where they exist, are 2-3× — same convention as the
+  // other tiered entries here). cached / cache_creation follow that doc's explicit
+  // cache: hit = 10% of input, creation = 125% of input. reasoning = thinking-mode
+  // output where the table separates it (qwen-plus legacy).
+  "qwen3.8-max":                  { input: 2.00,  output: 6.00,  cached: 0.20,  reasoning: 6.00,   cache_creation: 2.50  },
+  "qwen3.8-max-0902":             { input: 2.00,  output: 6.00,  cached: 0.20,  reasoning: 6.00,   cache_creation: 2.50  },
+  "qwen3.7-max":                  { input: 2.50,  output: 7.50,  cached: 0.25,  reasoning: 7.50,   cache_creation: 3.13  },
+  "qwen3.7-max-2026-05-20":       { input: 2.50,  output: 7.50,  cached: 0.25,  reasoning: 7.50,   cache_creation: 3.13  },
+  "qwen3.7-plus":                 { input: 0.40,  output: 1.60,  cached: 0.04,  reasoning: 1.60,   cache_creation: 0.50  },
+  "qwen3.6-plus":                 { input: 0.50,  output: 3.00,  cached: 0.05,  reasoning: 3.00,   cache_creation: 0.63  },
+  "qwen3.5-plus":                 { input: 0.40,  output: 2.40,  cached: 0.04,  reasoning: 2.40,   cache_creation: 0.50  },
+  "qwen-plus":                    { input: 0.40,  output: 1.20,  cached: 0.04,  reasoning: 4.00,   cache_creation: 0.50  },
+  "qwen3.8-flash":                { input: 0.15,  output: 0.47,  cached: 0.015, reasoning: 0.47,   cache_creation: 0.19  },
+  "qwen3.6-flash":                { input: 0.25,  output: 1.50,  cached: 0.025, reasoning: 1.50,   cache_creation: 0.31  },
+  "qwen3.5-flash":                { input: 0.10,  output: 0.40,  cached: 0.01,  reasoning: 0.40,   cache_creation: 0.13  },
+  "qwen-flash":                   { input: 0.05,  output: 0.40,  cached: 0.005, reasoning: 0.40,   cache_creation: 0.06  },
+  // 已知边界：qwen3.5-omni-plus / qwen3.8-omni-* 按模态分段计价（文本/音频/图像各异），
+  // 平铺 {input,output} 会系统性算错 → 刻意保持无价（audit-pricing 豁免表注明），
+  // 宁可 $0 + 可解释，不要一个看着可信的错数。qwen3.8-flash-next 是 opencode-go
+  // 渠道别名、无官方价目，同样豁免。
   "qwen3-coder-plus":             { input: 1.00,  output: 4.00,  cached: 0.50,  reasoning: 6.00,   cache_creation: 1.00  },
   "qwen3-coder-flash":            { input: 0.50,  output: 2.00,  cached: 0.25,  reasoning: 3.00,   cache_creation: 0.50  },
 
@@ -152,6 +174,10 @@ export const MODEL_PRICING = {
   // per month for Lite/Standard/Pro/Max — so a cost shown against a tp-
   // connection is a pay-as-you-go equivalent, not what that user was charged.
   "mimo-v2.6-pro":                { input: 0.435, output: 0.87,  cached: 0.0036, reasoning: 0.87  },
+  // Token Plan 的 Claude 原生变体：upstreamModelId 就是 mimo-v2.6-pro，费率必须相同。
+  // 显式建行与 capabilities.js 同理 —— 缺了它，该 id 既无按量估价（成本恒 $0），
+  // 也逃不开别处的通配兜底拿错价。
+  "mimo-v2.6-pro-claude":         { input: 0.435, output: 0.87,  cached: 0.0036, reasoning: 0.87  },
   "mimo-v2.6-flash":              { input: 0.14,  output: 0.28,  cached: 0.0028, reasoning: 0.28  },
   // 定制服务 upstream (contact sales). The cloud + Token Plan cards list it so a
   // contracted user gets it out of the box; a key without the contract just errors.
