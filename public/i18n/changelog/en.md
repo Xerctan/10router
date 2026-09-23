@@ -2,6 +2,37 @@
 
 User-facing highlights per release. See [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md) for the full developer log.
 
+## v1.2.0 (2026-09-24)
+
+### ✨ New
+
+- **Xiaomi MiMo splits into three cards, each owning its own account.** Cloud (`xiaomi-mimo`: browser sign-in / API key, billed at standard rates), Desktop (`mimo-desktop`: needs a session from the MiMo Desktop app signed in on this machine, and does not accept an API key), and Token Plan (`tp-` subscription keys). One card used to cover both credential kinds, so "weekly quota" and "test connection" were each judged by the looser side — the cloud card advertised a desktop-only weekly quota it cannot actually read. The cloud card now shows no weekly quota and the Desktop card owns it; connection tests probe a live model instead of a retired id that made them fail forever on the new card. Existing connections created wrong under v1.1.3 are moved back by a migration.
+- **MiMo V2.6 arrives, V2.5 retires.** The V2.6 line is in, and MiMo models now declare a **real context window** (1M / 128K output; they previously fell through to a default and were guessed). **V2.6 Pro UltraSpeed** joins the cloud and Token Plan cards — it is a custom-service model, usable straight away with a contract and an upstream error without one, rather than something you have to add by hand.
+- **Pick the model for a one-by-one connection test.** The test dropdown lets you choose a specific model (defaults to "provider default"), because some credentials only cover part of the catalogue — the Desktop session only reaches the desktop models. Qoder's tests now verify against **that account's live model list** (free), and Qoder CN no longer answers "not supported".
+- **"Hide no-quota" moves into Settings → Experimental.** The quota toolbar had run out of room; the switch now lives on the Experimental page's Providers card (it is a client-side view preference).
+
+### 🐛 Fixes
+
+- **[Important] Starting with the wrong key permanently destroyed stored credentials.** Restoring the database onto a machine without its key and starting the server once erased every stored OAuth token and API key, and putting the right key back afterwards could not recover them. Ciphertext is now preserved as-is, so the credentials come back once the key does.
+- **[Important] Some response streams were malformed.** The stop-sequence guard injected its holdover line without a separator, merging it with the terminating frame into a single event that some clients (including the official SDKs) then failed to parse. The trigger is simply text ending in a proper prefix of a stop word, regardless of upstream behaviour; the Anthropic shape also had its event-type line and content-block index fixed, and any non-text block is now dropped whole rather than left as an argument-less tool call a client might execute.
+- **[Important] A reply that only called a tool was mistaken for an empty one.** With "switch model on empty reply" enabled, a model that decided to call a tool looked like it had produced nothing, so the request fell through to the next model and **re-billed the entire input context**. Tool calls and reasoning are now recognised, and the abandoned call's usage is still recorded.
+- **SiliconFlow CN's alias was hijacked.** The short alias `sfcn` was claimed by two providers at once, sending SiliconFlow requests to StepFun. It is back with its owner, and a global alias-uniqueness check now guards the class.
+- **Two quota-page display bugs.** Under a view filter, "Showing 1-10 of 46" disagreed with the cards actually on screen (it now reports what is rendered); and clicking several "Hidden" chips in quick succession dropped most of the clicks (five clicks restored two rows) — all of them now land.
+- **"Only with balance" is reconnected to manual hiding.** The mode used to be its own separate filter, so rows it hid never appeared in the "Hidden" list and could not be restored individually. Both now share one state: rows hidden in bulk are listed and can be brought back by name.
+- **Per-key usage stats merged every key on the machine into one bucket.** The grouping key was the masked prefix, which is identical for all keys on one machine; it now groups by key digest.
+- **fnOS regenerated the bootstrap password on every upgrade.** The random password was written into a directory that an upgrade replaces, so it was recreated afterwards and anyone relying on the old one was silently locked out. It now lives in the data directory, which survives upgrades.
+- **Sessions could not really expire.** Sliding renewal only looked at the current token, so a stolen session could be extended indefinitely just by staying active. The original sign-in time is now recorded (signed, so a client cannot move it) and a session must re-authenticate after 30 days.
+- **A backup taken with the wrong key silently dropped credentials.** The download reported success while the file contained no credentials at all. It now warns, and says those credentials need the original key to be restored.
+- **/api/health no longer echoes local paths.** The endpoint is publicly reachable and used to return the raw driver-load error, absolute paths included.
+- **Key files on Windows are properly restricted.** The encryption key and the session secret only had Unix mode bits set (a no-op on Windows); they now use an ACL, like the Root CA already did.
+
+### 🔧 Other
+
+- Restored 258 UI translations that had gone dead behind a brand rename (they were silently showing English).
+- Expiry countdowns no longer collapse across days: 41 hours is no longer shown as `1d`, but as `1d 17h`.
+- An exhausted MiMo weekly quota no longer dumps the upstream's raw JSON into the connection row.
+- Installers no longer point users at an unrelated fork.
+
 ## v1.1.3 (2026-09-20)
 
 ### ✨ New

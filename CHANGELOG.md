@@ -2,6 +2,53 @@
 
 > 面向用户的精简更新见 [`public/i18n/changelog/`](https://github.com/techysy/10router/tree/main/public/i18n/changelog)（`en.md` / `zh-CN.md` / `zh-TW.md`，仪表盘「Change Log」按界面语言加载对应文件）。本文件为完整开发日志，按版本从上往下排列。
 
+## v1.2.0 (2026-09-24)
+
+> 本版主题：**供应商治理收敛 + 网关契约修复 + 一次安全审计收尾**。含两处破坏性变更（i18n 品牌重命名、MiMo Desktop 按 provider 判定），故走 minor。
+
+### ✨ 新功能
+
+- **小米 MiMo 拆成三张卡，各管各的账（破坏性：按 provider 判定）**：此前一个 `xiaomi-mimo` 卡同时承载「浏览器登录 / API Key 的云端按量」与「桌面版账号会话 + 周额度」，两类凭据共用一个 provider id，导致卡上的「测试连接」「周额度」都按最宽松的一侧判定。现拆为：
+  - **`xiaomi-mimo`（云端）**：浏览器登录 + `sk-` API Key，走 `api.xiaomimimo.com`，按正式资费计费，**不再显示周额度**（它本来就没有可读的额度接口，此前是把桌面版的额度「借」过来显示）。
+  - **`mimo-desktop`（桌面版）**：独占账号会话面。模型必须由本机已登录的 MiMo Desktop 客户端提供 cookie，**不接受 API Key**；「测试连接」改为用实时模型探测，不再用一个已下架的模型 id（那个 id 让测试对新卡永远不可达）。卡片带自己的官方图标与中文提示（此前提示是原始英文串）。
+  - **`xiaomi-tokenplan`（Token Plan）**：`tp-` 开头的套餐密钥，三区域（cn / sgp / ams）集群。
+  - **清理存量污染**：新增 DB 迁移 `005`，把 v1.1.3 时期折叠进云卡的桌面会话行移回 `mimo-desktop`（该卡已持有同账号会话时删除），否则那些连接会以 `Bearer mimo-desktop-session-…` 打云端 API 得 401 并被标「账号不可用」。写入侧（两条 OAuth 路由按卡门控 + 云卡更新剥离会话字段）、导入侧（跨机转移剥离云卡的机器会话）、读取侧（usage 对云卡短路机器会话）全部堵住。
+  - 逐个测试连接支持**选择测试模型**（下拉，默认「提供商默认」），因为有些凭据只覆盖部分模型 id——桌面版会话就是只能到桌面模型。
+- **V2.6 落地、V2.5 退役，并给 MiMo 真实上下文窗口**：接入 V2.6 全系（`mimo-v2.6-pro` / `mimo-v2.6-flash`），退役 V2.5 与 `mimo-v2-omni`（**不阻断已配置的 combo**，走原 id 透传）。此前 MiMo 模型落进兜底能力表，上下文窗口按猜的算；现显式声明 1M 窗口 / 128K 输出。Desktop 卡卖 V2.6 实线并标 credit 倍率（`1.00x` / `0.40x`）。**MiMo V2.6 Pro UltraSpeed** 加入云端与 Token Plan 卡（它是定制服务，无合约为上游报错——优于要求用户手工添加模型）。
+- **Qoder 逐个测试按别名核对**：Qoder 是聚合器，其真实推理端点是私有的 Cosy 签名协议而非 `/chat/completions`，此前「逐个测试」对 `qoder` 只验 token、对 `qoder-cn` 直接返回「不支持」。现改为用 job token 拉**该账号的实时模型目录**（不耗积分）核对所选模型的别名 key；目录拉不到时回退验 token，不把好连接误判为坏。
+- **实验性页收纳「隐藏无配额视觉开关」**：配额页工具栏此前挤满筛选按钮，且该开关是客户端视图偏好（不走服务端设置）。现移至「设置 → 实验性」的提供商卡片，位于 OAuth 导入/导出之上；该页副标题同步更新为覆盖提供商工具、每日签到与仪表盘安全。
+- **新增本地测试轮 tooling 与 CDP 无头浏览器探针**（开发者工具，非用户功能）：`desktop/test-local.ps1` 增加 `-Mode hot`（只同步 `.next-cli-build` + `public` 后重启）与 `-Mode ui`（仅 `public/**` 改动，不构建不重启）；测试版本号改为**轮次自增**而非时间戳，避免同秒撞号。新增 `scripts/browser-probe.mjs`（零依赖，Node 内置 WebSocket 讲 CDP）驱动真机 headless Chrome 执行脚本、回报结果与截图——本版两条渲染层缺陷（见下）就是它能测、而读码与单测测不到的类型。
+
+### 🐛 修复
+
+- **[数据丢失] 错误密钥启动会永久销毁凭据密文**：`decryptConnectionData` 解密失败时把字段从对象里**删掉**，只在返回值挂 `error`；而 repo 的读出口直接采用该结果，启动期 `cleanupProviderConnections` 与任何 `updateProviderConnection` 都会把这份**无密文对象**回写。场景：把 `data.sqlite` 恢复到没带 `credential-key` 的机器，起一次服务 → 所有 OAuth token / apiKey 密文被抹掉，之后补上正确密钥也救不回。现改为返回 `{ data, error, unreadable }`：不可解密的值仍从 `data` 移除（避免密文被当 Bearer 发上游），但随对象携带并在写回时原样落盘（`encryptSecret` 对 `enc:v1:` 幂等）。载体键不进 API 响应；合成的 `testStatus`/`lastError` 不再入库。
+- **[网关契约] stop 序列守卫的补发行与终止帧粘成一个 SSE event**：守卫在切断后注入的补发行**没有空行终止符**，与紧随的终止帧（或 `[DONE]`）并入同一 event，官方 SDK 的 `JSON.parse` 必失败。触发条件仅是「最后一段文本以某个 stop 的真前缀结尾」，**与上游是否合规无关**，影响所有 passthrough 流。现补发完整 event（含空行）；Anthropic 形态补 `event:` 行与**正确的 content-block index**（原写死 0，而 thinking 块占用 0），且在命中后**整块丢弃**非文本块（原只清空 payload，客户端会收到 `input:{}` 的 `tool_use` 并可能空参执行工具）。
+- **[计费] combo 空回复回退把「纯工具调用」判为空 → 误重试并重复计费**：Responses 侧不认 `function_call`、Gemini 侧不认 `functionCall`，模型一决定调工具就被判「无有效内容」，放弃并**重新计费全部输入上下文**（最多烧掉两个模型）。现三种形态均计入有效内容，并补 `delta.reasoning`（OpenRouter / xAI 拼写）。另：判 retry 后改为把上游流**读完**而非 `reader.cancel()` —— cancel 使 flush 不执行，该次 usage 实际不入库且被记成「客户端断开」。
+- **[跨供应商误路由] `sfcn` 别名被 StepFun CN 劫持**：`stepfun-cn` 与 `siliconflow-cn` 同时声明 `sfcn`，注册顺序后者覆盖，于是 v1.1.3 用户写 `sfcn/<model>` 会带着 SiliconFlow 的模型 id 打到 `api.stepfun.com`。基线快照也已被重录成这个错误映射，所以门禁是绿的。现从 `stepfun-cn` 删除该别名（保留 `sf-cn`）并重录基线；新增**全局别名唯一性测试**（别名不得双属、不得撞 provider id）——它能挡住整类「后注册的 provider 静默劫持别名」。
+- **桌面版连接「测试连接」永远失败 / 逐个测试全部 500**：`testUtils` 的分派表缺 `mimo-desktop`，落到 default 后 `testStatus` 被写成 error；且测试路由无条件 `request.json()`，**无 body 的 POST 直接抛错**，导致逐个测试对任何连接都返回 500。另修同路径一处死代码：后台过期刷新传入未定义的 `proxyOptions`，ReferenceError 被空 `catch {}` 吞掉——该刷新从未执行过。
+- **`/api/version` 阻塞 npm registry 拖慢健康探测**：GET 会 `await` npm 版本同步，冷缓存最多等 4s，而 `doctor` 与陈旧服务探测的超时是 2s，防火墙丢包环境下会误判为 RED。现改为有缓存即返回、过期则后台刷新；`currentVersion` / `diskVersion` 恒为本地读取。更新器在「npm 退出 0 但读不到版本」时如实记「无法验证」，不再打印已验证。
+- **会话绝对上限缺失（滑动续期可无限延长）**：2h 滑动窗口若只看当前 token 的 `iat`，每次续期都刷新它，被盗 cookie 只要每 <2h 访问一次就能永久续期，窗口从未真正闭合。现签发时写入已签名的 `origIat` 并跨续期原样传递，超过 30 天拒绝续期（老 token 无该声明则回退用自身 `iat`）。
+- **用量按 key 统计把同机所有 key 并成一桶**：实时路径（24h / 今日）的分组键用的是**掩码**，而掩码是 `sk-` + 机器码前 5 位 —— 同机所有 key 完全相同，于是每个账号的用量全被合并。现改用 `apiKeyHash`（sha256），与日聚合路径一致。
+- **配额页计数在有视图筛选时说谎**：摘要取的是后端分页总数，看不见客户端的视图过滤，于是「显示中 1-10 of 46」会压在被筛过的卡片网格上。现按实际渲染数量报。
+- **同一张卡内多个按钮同一 tick 连点会丢写**：隐藏/恢复的 handler 从渲染闭包读状态，同一 tick 内多个点击都按点击前的同一份快照计算，最后一次 PATCH 覆盖其余——实测点 5 个「已隐藏」标签只恢复 2 个。现走 setState 更新式写入。
+- **「只看有余额」与手动隐藏脱钩**：该开关被实现成一条独立的渲染期过滤，于是它藏掉的行**不出现在「已隐藏」列表里**、也无法按名字单独恢复，与单行隐藏按钮完全失去关联。现两者写**同一份** `quotaVisibility.hidden`，批量藏的行照样列出、照样能单独点回来。
+- **fnOS 每次升级都会把引导密码换掉**：随机口令写在 `${SRC_DIR}/.env`，而该目录正是 fpk 升级时被整体替换的应用负载目录——升级后重新生成新口令，依赖旧口令的用户被静默锁死。现三个回调脚本统一改用 `${DATA_DIR}/initial-password`（0600，跨升级保留），升级时文件已存在即跳过，保留原密码。
+- **备份导出在错钥实例上静默丢凭据**：导出的 JSON 只取解密后的 `.data`，错钥机器上导出的「备份」不含任何凭据且无任何提示。现保留密文（幂等穿过导入流程），并返回受影响行；**前端下载时据此告警**（原来一律报「下载成功」）。
+- **桌面版卡与云端卡的其余收敛**：桌面版卡仅提供账号会话（不再给 API Key 入口）、去掉浏览器授权、带上自己的官方图标，卡片提示文案补齐中文；云端卡不再假装能读桌面版应用。
+
+### 🔒 安全
+
+- **`/api/health` 不再回显本地路径**：它是公开且 CORS `*` 的（外部监控唯一能轮询的端点），却原样返回 `lastDriverError` —— 那是驱动加载失败的原始 `Error.message`，native 模块场景下常态是绝对路径（`Cannot find module 'C:\Users\…\better-sqlite3'`），等于把用户名与目录结构告诉任何调用方。现抹掉路径，保留 `doctor` 判定所需的驱动名与「是否有错」。
+- **Windows 上加密密钥与 JWT 密钥补齐 ACL 收紧**：`credential-key` / `jwt-secret` 此前只设 `mode: 0o600`（在 Windows 上是空操作），只有 Root CA 那处加了 `icacls`。现抽出共用的 `hardenOwnerOnly()`（POSIX chmod / Windows icacls），三处密钥文件统一使用。
+- **备份导出与集成的其余收尾**：会话续期保留 oidc/saml 声明；登录限流键控真实 IP 不变。
+
+### 🔧 内部与文档
+
+- **i18n 品牌重命名收尾（破坏性：仅影响词条）**：恢复 258 条**失效的翻译**（此前因品牌重命名而全部落回英文），并把 `9Router` → `10Router` 的替换推进到安全范围内。环境变量 `NINEROUTER_*` → `TENROUTER_*` 保留**同表达式回退**并有守卫测试，存量部署不受影响。
+- **landing 页不再把用户引到无关 fork 的安装包**。
+- **文档与常量归位**：`docs/zh-CN/ARCHITECTURE.md` 的 `x-9r-real-ip` 更正为 `x-10r-*`（cli-token 头代码里仍是 `x-9r-cli-token`，准确，未动）；`MAX_ENFORCED_STOP_LENGTH` 从 `utils/` 移入 `config/runtimeConfig.js`（符合 open-sse 的 config 集中约定）；`fnos-packaging/manifest` 的维护者从上游残留名 `decolua` 更正为 `techysy`（`maintainer_url` 早已指向本仓库，只有名字没跟上）。
+- 本地构建与验证手册新增「渲染类问题必须驱动真浏览器看 DOM」一节，含本版**实际付出的两个误判教训**：按图标「画的是什么」判方向而非按该排按钮的约定判；以及用顺序交互去覆盖同 tick 竞态（顺序点击会完全掩盖后者）。
+
 ## v1.1.4 (2026-09-20)
 
 ### ✨ 新功能

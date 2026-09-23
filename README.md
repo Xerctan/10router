@@ -4,7 +4,7 @@
 
 # 🚀 10Router
 
-[![10Router](https://img.shields.io/badge/10Router-v1.1.3-orange.svg)](https://github.com/techysy/10router/releases)
+[![10Router](https://img.shields.io/badge/10Router-v1.2.0-orange.svg)](https://github.com/techysy/10router/releases)
 [![Downloads](https://img.shields.io/github/downloads/techysy/10router/total?label=Downloads&color=green)](https://github.com/techysy/10router/releases)
 [![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Ftechysy%2F10router-blue?logo=docker)](https://github.com/techysy/10router/pkgs/container/10router)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -48,6 +48,7 @@
 
 | 版本 | 核心要点 |
 |------|----------|
+| **v1.2.0** | 小米 MiMo 拆三张卡（云端 / 桌面版 / Token Plan）各管各的账；V2.6 上线、V2.5 退役并声明真实上下文窗口；修复错钥启动销毁凭据密文、stop 守卫 SSE 帧边界、纯工具调用被误判为空并重复计费、`sfcn` 别名劫持；逐个测试连接可选模型；会话绝对上限与 Windows 密钥 ACL 收紧 |
 | **v1.1.3** | Qoder 国内版完整恢复与每日 Credits 自动领取；按模型钉住上下文窗口/最大输出；超长上下文服务端自动压缩；Provider 卡片拖拽排序且模型列表同步；严格端点工具 schema 降级（#27）；额度重置徽章持久显示 |
 | **v1.1.2** | 用量仪表盘（热力图 / 节点健康度 / 生涯统计）；CodeBuddy 11128 渠道级熔断；Cline/ClinePass 凭据自动刷新修复；小米 Token Plan 出口节点匹配 |
 | **v1.1.1** | 跨账号「配额包到期优先」调度；Command Code 配额追踪；全供应商 OAuth 加密导出/导入；用量国际化与官方图标补齐 |
