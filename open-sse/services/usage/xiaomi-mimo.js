@@ -1,12 +1,16 @@
 /**
  * Xiaomi MiMo usage — weekly quota from the Xiaomi account session.
  *
- * Primary path: GET {mimo-server}/api/user/usage authorized by the account-session
- * cookie (see shared/mimoAccount.js). Response: { code: 0, data: { percent (remaining
- * %), resetDate, resetAt } }.
+ * Primary path (mimo-desktop card only): GET the account service with the
+ * account-session cookie (see shared/mimoAccount.js). Response: { code: 0, data:
+ * { percent (remaining %), resetDate, resetAt } }.
  *
- * Fallback: the sk- API key cannot read the quota, so when no account session is
- * available we surface a graceful message instead of failing.
+ * The weekly allowance is a MiMo Desktop beta surface. The cloud card
+ * (xiaomi-mimo) bills through the plan / API at formal rates and owns NO quota to
+ * show, so it answers with a short "no separate quota" note — never a weekly-quota
+ * prompt (2026-09 user reports: a "每周配额需要小米账号会话…" notice is wrong
+ * regardless of whether the key can read it, and an empty quota card reads as
+ * broken).
  */
 
 import { proxyAwareFetch } from "../../utils/proxyFetch.js";
@@ -23,12 +27,38 @@ const SESSION_TOKEN_PREFIX = "mimo-desktop-session";
 const NO_DESKTOP_SESSION_MESSAGE =
   "MiMo Desktop is not signed in on this machine — sign in to it to read the weekly quota.";
 
+// The cloud card has no quota surface: it bills per use at the plan / API formal
+// rates. Say that on the usage page instead of leaving an empty quota card (2026-09
+// user report: an empty card reads as broken). This is the OPPOSITE of a weekly-quota
+// prompt — it affirms there is no quota, so it does not re-introduce the notice the
+// card was told not to show. ONE fixed sentence: the dashboard translates a quota note
+// by exact text match, so it must not interpolate (zh-CN / zh-TW in public/i18n/literals).
+const CLOUD_NO_QUOTA_MESSAGE =
+  "Billed at standard API / plan rates — no separate quota to display.";
+
 /**
  * @param {string|null|undefined} accessToken - sk- API key
  * @param {object|null} providerSpecificData - may contain mimoPassToken, uid, etc.
  * @param {object|null} proxyOptions
+ * @param {object} [options]
+ * @param {boolean} [options.allowMachineSession=true] - is this the Desktop card?
+ *   True reads this machine's MiMo Desktop cookie store for the weekly allowance.
+ *   False is the cloud card (xiaomi-mimo): it owns no quota surface at all, so the
+ *   handler short-circuits to a "no separate quota" note instead of probing
+ *   sessions or keys (reading the machine store there once made it advertise a
+ *   Desktop session, and the key probe's 401 fallback made it advertise a weekly
+ *   quota — neither is its to report; an empty card, in turn, reads as broken).
  */
-export async function getXiaomiMimoUsage(accessToken = null, providerSpecificData = null, proxyOptions = null) {
+export async function getXiaomiMimoUsage(
+  accessToken = null,
+  providerSpecificData = null,
+  proxyOptions = null,
+  { allowMachineSession = true } = {},
+) {
+  if (!allowMachineSession) {
+    return { plan: "Xiaomi MiMo", message: CLOUD_NO_QUOTA_MESSAGE };
+  }
+
   // Preferred path: the weekly quota comes from the account service session
   // (mimo-server /api/user/usage), which the sk- key cannot reach. The session is
   // derived from MiMo Desktop's persisted passToken via the SSO/sts handshake.
@@ -116,9 +146,15 @@ const TOKENPLAN_NO_QUOTA_MESSAGE =
  *      something true instead.
  */
 export async function getXiaomiTokenPlanUsage(apiKey = null, providerSpecificData = null, proxyOptions = null) {
-  const account = await getMimoAccountUsage(providerSpecificData, proxyOptions);
-  if (typeof account.percent === "number" && Number.isFinite(account.percent)) {
-    return { plan: "MiMo Token Plan", quotas: { Weekly: toWeeklyQuota(account.percent, account.resetAt, account.resetDate) } };
+  // Only a session actually stored on THIS row counts. The weekly allowance is
+  // MiMo Desktop's surface; a Token Plan key that borrows this machine's Desktop
+  // cookie store would advertise a quota the plan does not own — the same rule
+  // the cloud card enforces via allowMachineSession:false.
+  if (providerSpecificData?.mimoPassToken) {
+    const account = await getMimoAccountUsage(providerSpecificData, proxyOptions);
+    if (typeof account.percent === "number" && Number.isFinite(account.percent)) {
+      return { plan: "MiMo Token Plan", quotas: { Weekly: toWeeklyQuota(account.percent, account.resetAt, account.resetDate) } };
+    }
   }
 
   if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {

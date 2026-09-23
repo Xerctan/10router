@@ -84,7 +84,10 @@ describe("issue 13: mimo desktop session error", () => {
     // card must not advertise any of them (a cloud key cannot reach them).
     const { default: desktop } = await import("../../open-sse/providers/registry/mimo-desktop.js");
     const flagged = desktop.models.filter((m) => m.requiresSession === true).map((m) => m.id);
-    expect(flagged.sort()).toEqual(["mimo-v2.6-flash", "mimo-v2.6-pro"]);
+    expect(flagged.sort()).toEqual([
+      "mimo-v2.6-flash",
+      "mimo-v2.6-pro",
+    ]);
     const { default: base } = await import("../../open-sse/providers/registry/xiaomi-mimo.js");
     expect(base.models.filter((m) => m.requiresSession === true)).toEqual([]);
   });

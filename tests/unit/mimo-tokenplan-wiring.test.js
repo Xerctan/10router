@@ -58,6 +58,10 @@ describe("MiMo Token Plan banner is translated", () => {
 });
 
 describe("MiMo Token Plan usage row", () => {
+  // The account mock is module-level; clear its call history between cases so the
+  // "never called" assertion below means "not called by *this* case".
+  beforeEach(() => mockAccount.getMimoAccountUsage.mockClear());
+
   it("is registered, so the row no longer says 'not implemented'", () => {
     const usage = read("open-sse/services/usage.js");
     expect(usage).toContain('"xiaomi-tokenplan"');
@@ -88,9 +92,23 @@ describe("MiMo Token Plan usage row", () => {
   it("prefers a real weekly quota when the connection also has a Desktop session", async () => {
     mockAccount.getMimoAccountUsage.mockResolvedValue({ percent: 73, resetAt: 1893456000 });
     const { getXiaomiTokenPlanUsage } = await import("../../open-sse/services/usage/xiaomi-mimo.js");
-    const result = await getXiaomiTokenPlanUsage("tp-key", { region: "cn" }, null);
+    // Only a passToken stored ON THIS ROW counts — the same ownership rule the
+    // cloud card enforces (2026-09: "没有就不应该重新配额").
+    const result = await getXiaomiTokenPlanUsage("tp-key", { region: "cn", mimoPassToken: "pt-secret" }, null);
     expect(result.plan).toBe("MiMo Token Plan");
     expect(result.quotas.Weekly.remainingPercentage).toBe(73);
     expect(result.message).toBeUndefined();
+  });
+
+  it("never borrows this machine's Desktop session for a row that has none", async () => {
+    // A tp- key row cannot store a passToken (every passToken-writing route gates
+    // on the Desktop card), so an unguarded account read always resolved to the
+    // machine store — advertising a Desktop beta quota the plan does not own.
+    mockAccount.getMimoAccountUsage.mockResolvedValue({ percent: 73, resetAt: 1893456000 });
+    const { getXiaomiTokenPlanUsage } = await import("../../open-sse/services/usage/xiaomi-mimo.js");
+    const result = await getXiaomiTokenPlanUsage("tp-key", { region: "cn" }, null);
+    expect(mockAccount.getMimoAccountUsage).not.toHaveBeenCalled();
+    expect(result.quotas).toBeUndefined();
+    expect(result.message).toBe(NO_QUOTA_MESSAGE);
   });
 });

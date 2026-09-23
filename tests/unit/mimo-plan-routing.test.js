@@ -65,6 +65,13 @@ describe("xiaomi-tokenplan registry (desktop-catalog alignment)", () => {
     }
   });
 
+  it("lists ultraspeed so a contracted user can call it without hand-adding it", () => {
+    // 定制服务 upstream: a plan without the contract gets an upstream error, which is
+    // a better first-run than forcing the user to add a custom model (2026-09). The
+    // base card lists it for the same reason; only mimo-desktop leaves it off.
+    expect(ids).toContain("mimo-v2.6-pro-ultraspeed");
+  });
+
   it("drops the V2.5 chat line and the legacy V2 entries", () => {
     // The platform retires mimo-v2.5 / mimo-v2.5-pro at 2026-10-21 10:00 CST;
     // mimo-v2-pro and mimo-v2-tts no longer appear in its list at all. Leaving

@@ -20,10 +20,13 @@ describe("xiaomi-mimo api-key route", () => {
     expect(src()).toMatch(/Network error — still allow import/);
   });
 
-  it("reads the Desktop session passToken server-side", () => {
+  it("reads the Desktop session passToken server-side — for the Desktop card only", () => {
     expect(src()).toContain("readDesktopPassToken");
-    // …and does not require the client to send one.
-    expect(src()).toMatch(/Prefer a\s+\/\/ server-side read/);
+    // …and gates the read on the card: the cloud row must never store a session.
+    expect(src()).toContain("if (isDesktopCard && !session.passToken)");
+    // The cloud card also ignores a client-sent passToken instead of storing it.
+    expect(src()).toContain("isDesktopCard");
+    expect(src()).toMatch(/sessionData = isDesktopCard/);
   });
 
   it("updates an existing connection instead of duplicating it", () => {
@@ -262,6 +265,30 @@ describe("MiMo three-card split", () => {
     // ...and connection writes must use the addressed card, not a literal.
     expect(src).not.toContain('provider: "xiaomi-mimo",');
     expect(src).toContain("await getProviderConnections({ provider })");
+  });
+
+  it("folds the Desktop session into the Desktop card only", () => {
+    // The cloud card used to receive this machine's Desktop passToken on every
+    // browser sign-in, which is what made it advertise a "Desktop Session" badge
+    // and a weekly quota it does not own. The fold is now gated on the card.
+    const src = read("src/app/api/oauth/[provider]/[action]/route.js");
+    expect(src).toContain('const isDesktopCard = provider === "mimo-desktop"');
+    expect(src).toContain("if (isDesktopCard) {");
+    // The Desktop label rides the same gate — writing it on a cloud row was part
+    // of the contamination.
+    expect(src).toContain('...(isDesktopCard ? { provider: "Xiaomi MiMo Desktop" } : {})');
+    // A re-auth on the cloud card also strips fields an older build folded in.
+    expect(src).toContain("delete existingPsd.mimoPassToken;");
+  });
+
+  it("never stores a session (or honours session-only) on the cloud card via api-key", () => {
+    const src = read("src/app/api/oauth/xiaomi-mimo/api-key/route.js");
+    expect(src).toContain("const isDesktopCard = targetProvider === \"mimo-desktop\"");
+    // session-only is a Desktop-card concept only.
+    expect(src).toContain("isDesktopCard && (sessionOnly === true");
+    // And a client-sent passToken is ignored for the cloud card instead of stored.
+    expect(src).toContain("let session = isDesktopCard");
+    expect(src).toContain("const sessionData = isDesktopCard");
   });
 
   it("never runs the Desktop credential import for the cloud card", () => {

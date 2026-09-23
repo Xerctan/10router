@@ -22,12 +22,18 @@ export async function POST(request) {
     // 2026-09-22), so the row must be created under the card the user opened.
     // Anything unrecognised falls back to the base card rather than inventing an id.
     const targetProvider = requestedProvider === "mimo-desktop" ? "mimo-desktop" : "xiaomi-mimo";
+    const isDesktopCard = targetProvider === "mimo-desktop";
 
     // Session-only mode: the user signed in through MiMo Desktop (QR scan) and
     // holds an account session but no sk- API key. The session alone unlocks the
     // Desktop-exclusive Preview models, so a connection is worth creating even
     // without a key — cloud models will simply fail until a key is added.
-    const isSessionOnly = sessionOnly === true || (!apiKey && (mimoPassToken || mimoUserId));
+    // The account session is the Desktop card's surface ONLY: a cloud-card row
+    // that stores one starts advertising a Desktop session it does not own
+    // (badge + weekly quota). So session-only is never honoured for the cloud
+    // card — there, an sk- key is required.
+    const isSessionOnly =
+      isDesktopCard && (sessionOnly === true || (!apiKey && (mimoPassToken || mimoUserId)));
 
     let key = typeof apiKey === "string" ? apiKey.trim() : "";
     if (!isSessionOnly) {
@@ -71,14 +77,19 @@ export async function POST(request) {
       }
     }
 
-    // Account-session credential, for the Desktop-exclusive models. Prefer a
-    // server-side read so it never has to round-trip through the client.
-    let session = { passToken: mimoPassToken || null, userId: mimoUserId || null, cUserId: mimoCUserId || null };
+    // Account-session credential, for the Desktop-exclusive models. It belongs to
+    // the Desktop card only — a cloud-card row must never hold a passToken, or it
+    // renders the Desktop-session badge and reads the weekly quota through this
+    // machine's Desktop login. The cloud card therefore ignores whatever the
+    // client sent and skips the server-side read entirely.
+    let session = isDesktopCard
+      ? { passToken: mimoPassToken || null, userId: mimoUserId || null, cUserId: mimoCUserId || null }
+      : { passToken: null, userId: null, cUserId: null };
     // A running Desktop locks its cookie store, so the session read can fail — the
     // import itself does not depend on it (the sk- key covers the cloud models),
     // but Preview models do, so report the reason instead of swallowing it.
     let desktopLocked = false;
-    if (!session.passToken) {
+    if (isDesktopCard && !session.passToken) {
       try {
         const { readDesktopPassToken } = await import("open-sse/shared/mimoAccount.js");
         const desktop = await readDesktopPassToken();
@@ -108,26 +119,41 @@ export async function POST(request) {
       mimoUserId: session.userId || null,
     });
 
-    const sessionData = {
-      mimoPassToken: session.passToken,
-      mimoUserId: session.userId,
-      mimoCUserId: session.cUserId,
-    };
+    const sessionData = isDesktopCard
+      ? {
+          mimoPassToken: session.passToken,
+          mimoUserId: session.userId,
+          mimoCUserId: session.cUserId,
+        }
+      : {};
 
     if (existing) {
+      // Merged base psd: on the cloud card, drop any session fields an older
+      // build folded into this row — the spread would otherwise carry them back.
+      const existingPsd = { ...(existing.providerSpecificData || {}) };
+      if (!isDesktopCard) {
+        delete existingPsd.mimoPassToken;
+        delete existingPsd.mimoUserId;
+        delete existingPsd.mimoCUserId;
+      }
       const updated = await updateProviderConnection(existing.id, {
         // Never downgrade a real key to the session placeholder.
         accessToken: key || existing.accessToken,
         providerSpecificData: {
-          ...existing.providerSpecificData,
-          uid: uid || existing.providerSpecificData?.uid || null,
+          ...existingPsd,
+          uid: uid || existingPsd.uid || null,
           baseUrl: effectiveBaseUrl,
-          authMethod: key ? "api_key" : existing.providerSpecificData?.authMethod || "desktop-session",
+          authMethod: key ? "api_key" : existingPsd.authMethod || "desktop-session",
           // Per-account session credential — enables multi-account rotation.
-          mimoPassToken: session.passToken || existing.providerSpecificData?.mimoPassToken || null,
-          mimoUserId: session.userId || existing.providerSpecificData?.mimoUserId || null,
-          mimoCUserId: session.cUserId || existing.providerSpecificData?.mimoCUserId || null,
-          modelCount: modelCount || existing.providerSpecificData?.modelCount,
+          // Desktop card only; the cloud card stores the sk- key and nothing else.
+          ...(isDesktopCard
+            ? {
+                mimoPassToken: session.passToken || existingPsd.mimoPassToken || null,
+                mimoUserId: session.userId || existingPsd.mimoUserId || null,
+                mimoCUserId: session.cUserId || existingPsd.mimoCUserId || null,
+              }
+            : {}),
+          modelCount: modelCount || existingPsd.modelCount,
         },
         testStatus: validated ? "active" : existing.testStatus,
         // Re-imported key/session supersedes any stored failure text.

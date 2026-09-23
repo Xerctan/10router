@@ -374,20 +374,26 @@ export async function POST(request, { params }) {
           return NextResponse.json({ error: "OAuth session not completed" }, { status: 400 });
         }
         try {
-          // Browser sign-in yields the sk- key. If MiMo Desktop is also signed
-          // in on this machine, fold its account session (passToken) into the
-          // SAME connection — one row then serves both model families:
-          //   Preview models  → providerSpecificData.mimoPassToken
-          //   cloud models    → accessToken (sk-)
-          // Without this, routing would have to pick between a session-only row
-          // and a key-only row and would fail whichever half the model needs.
+          // Which card this browser sign-in was started from. The account session
+          // (passToken) belongs ONLY to the `mimo-desktop` card: folding it into
+          // the cloud card's row is what made its connection advertise a Desktop
+          // session it does not own (the "客户端会话" badge, and a weekly quota
+          // read from this machine's Desktop cookie store). The cloud card keeps
+          // the sk- key and nothing else; the executor never reads a stored
+          // passToken on it, and the Desktop card falls back to the machine
+          // cookie store on its own.
+          const isDesktopCard = provider === "mimo-desktop";
+
           let desktopSession = null;
-          try {
-            const { readDesktopPassToken } = await import("open-sse/shared/mimoAccount.js");
-            desktopSession = await readDesktopPassToken();
-          } catch {
-            // Desktop locked / not installed — the key alone still works for
-            // cloud models; Preview will prompt for the desktop sign-in.
+          if (isDesktopCard) {
+            try {
+              const { readDesktopPassToken } = await import("open-sse/shared/mimoAccount.js");
+              desktopSession = await readDesktopPassToken();
+            } catch {
+              // Desktop locked / not installed — the import still stores what
+              // the browser flow returned; the session can come from the
+              // Desktop card's own import path later.
+            }
           }
 
           const uid = session.result.uid || null;
@@ -417,15 +423,27 @@ export async function POST(request, { params }) {
             },
           );
 
+          // Merged base psd for the update path. On the cloud card, also drop
+          // any session fields an older build folded into the row — the
+          // {...existing} spread would otherwise carry them straight back in.
+          const existingPsd = { ...(existing?.providerSpecificData || {}) };
+          if (!isDesktopCard) {
+            delete existingPsd.mimoPassToken;
+            delete existingPsd.mimoUserId;
+            delete existingPsd.mimoCUserId;
+          }
+
           const connection = existing
             ? await updateProviderConnection(existing.id, {
                 accessToken: session.result.accessToken,
                 providerSpecificData: {
-                  ...(existing.providerSpecificData || {}),
+                  ...existingPsd,
                   uid,
                   baseUrl: session.result.baseUrl || "https://api.xiaomimimo.com/v1",
                   authMethod: "oauth",
-                  provider: "Xiaomi MiMo Desktop",
+                  // The Desktop label only ever belongs on the Desktop card —
+                  // on a cloud row it claimed a session that card does not own.
+                  ...(isDesktopCard ? { provider: "Xiaomi MiMo Desktop" } : {}),
                   ...sessionExtras,
                 },
                 testStatus: "active",
@@ -444,7 +462,7 @@ export async function POST(request, { params }) {
                   uid,
                   baseUrl: session.result.baseUrl || "https://api.xiaomimimo.com/v1",
                   authMethod: "oauth",
-                  provider: "Xiaomi MiMo Desktop",
+                  ...(isDesktopCard ? { provider: "Xiaomi MiMo Desktop" } : {}),
                   ...sessionExtras,
                 },
                 testStatus: "active",

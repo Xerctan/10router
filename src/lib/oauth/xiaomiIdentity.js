@@ -14,13 +14,22 @@
 //
 // Every caller must go through this so the rules cannot drift apart again.
 
+// The two cards that share the QR/browser/key flows this matcher dedups. It only
+// ever runs over rows the caller already filtered to ONE of these providers, so
+// accepting both cannot collapse the cards; rejecting `mimo-desktop` could not
+// either — it made the Desktop import never match its own filtered rows, so every
+// re-import stacked a duplicate. `xiaomi-tokenplan` deliberately stays out: its
+// tp- keys are a different credential family that must never dedup into a mimo
+// row.
+const XIAOMI_SESSION_CARDS = new Set(["xiaomi-mimo", "mimo-desktop"]);
+
 /**
  * @param {object} conn      candidate connection row
  * @param {{uid?: string|null, key?: string|null, mimoUserId?: string|null}} ident
  * @returns {boolean}
  */
 export function matchesXiaomiIdentity(conn, ident = {}) {
-  if (!conn || conn.provider !== "xiaomi-mimo") return false;
+  if (!conn || !XIAOMI_SESSION_CARDS.has(conn.provider)) return false;
   const { uid = null, key = null, mimoUserId = null } = ident;
   const psd = conn.providerSpecificData || {};
 

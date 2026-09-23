@@ -235,7 +235,10 @@ describe("mimo-desktop registry (account session)", () => {
     // The Desktop app's own picker prints these rates (积分倍率): usage there is
     // metered in credits, so the badge has to come from the registry.
     const byId = Object.fromEntries(desktop.models.map((m) => [m.id, m]));
-    expect(Object.keys(byId).sort()).toEqual(["mimo-v2.6-flash", "mimo-v2.6-pro"]);
+    expect(Object.keys(byId).sort()).toEqual([
+      "mimo-v2.6-flash",
+      "mimo-v2.6-pro",
+    ]);
     expect(byId["mimo-v2.6-pro"].rateMultiplier).toBe(1);
     expect(byId["mimo-v2.6-flash"].rateMultiplier).toBe(0.4);
     for (const m of desktop.models) {

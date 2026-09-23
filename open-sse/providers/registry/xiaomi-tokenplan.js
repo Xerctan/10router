@@ -79,6 +79,10 @@ export default {
     { id: "mimo-v2.6-pro", name: "MiMo V2.6 Pro" },
     { id: "mimo-v2.6-pro-claude", name: "MiMo V2.6 Pro (Claude Native)", targetFormat: "claude", upstreamModelId: "mimo-v2.6-pro" },
     { id: "mimo-v2.6-flash", name: "MiMo V2.6 Flash" },
+    // 定制服务 upstream: a plan without the contract gets an upstream error. Listed
+    // anyway so a contracted user calls it out of the box rather than hand-adding
+    // a custom model (2026-09) — the base card lists it for the same reason.
+    { id: "mimo-v2.6-pro-ultraspeed", name: "MiMo V2.6 Pro UltraSpeed" },
     { id: "mimo-v2.5-tts", name: "MiMo V2.5 TTS", kind: "tts" },
     { id: "mimo-v2.5-tts-voiceclone", name: "MiMo V2.5 TTS Voice Clone", kind: "tts" },
     { id: "mimo-v2.5-tts-voicedesign", name: "MiMo V2.5 TTS Voice Design", kind: "tts" },

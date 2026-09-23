@@ -153,10 +153,10 @@ export const MODEL_PRICING = {
   // connection is a pay-as-you-go equivalent, not what that user was charged.
   "mimo-v2.6-pro":                { input: 0.435, output: 0.87,  cached: 0.0036, reasoning: 0.87  },
   "mimo-v2.6-flash":              { input: 0.14,  output: 0.28,  cached: 0.0028, reasoning: 0.28  },
-  // 定制服务 upstream (contact sales), so no registry lists it; carried here
-  // because the page publishes its price and a passthrough request would
-  // otherwise report none. Real-time rates — Batch API is exactly half of these,
-  // and ultraspeed does not support Batch at all.
+  // 定制服务 upstream (contact sales). The cloud + Token Plan cards list it so a
+  // contracted user gets it out of the box; a key without the contract just errors.
+  // Real-time rates — Batch API is exactly half of these, and ultraspeed does not
+  // support Batch at all.
   "mimo-v2.6-pro-ultraspeed":     { input: 4.35,  output: 8.70,  cached: 0.036,  reasoning: 8.70  },
 
   // === OpenRouter fallback ===

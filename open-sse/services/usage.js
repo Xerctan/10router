@@ -64,13 +64,20 @@ const USAGE_HANDLERS = {
   kimi: (c) => getKimiUsage(c.accessToken, c.apiKey, c.proxyOptions, c.providerSpecificData),
   deepseek: (c) => getDeepseekUsage(c.apiKey, c.proxyOptions),
   "opencode-go": (c) => getOpencodeGoUsage(c.apiKey, c.proxyOptions),
-  "xiaomi-mimo": (c) => getXiaomiMimoUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
+  // The cloud card bills through the plan / API at formal rates and owns NO
+  // Desktop surface, so it reports no quota at all: no session read (that is how
+  // it advertised a "Desktop session" it never had) and no key probe (whose 401
+  // fallback printed a weekly-quota notice it also does not own). The handler
+  // short-circuits to an empty result on this flag.
+  "xiaomi-mimo": (c) =>
+    getXiaomiMimoUsage(c.accessToken, c.providerSpecificData, c.proxyOptions, { allowMachineSession: false }),
   // The Desktop card, split out of xiaomi-mimo. It reads the SAME weekly allowance
   // through the account session — and its connection is the one that actually
   // carries mimoPassToken. Without this entry the card fell through to "Usage API
   // not implemented for mimo-desktop" and showed no quota at all, while the cloud
-  // card (no passToken of its own, so it reads this machine's Desktop cookie store)
-  // showed one. Missed when the three-card split added the id.
+  // card showed one. Missed when the three-card split added the id.
+  // Machine-session fallback stays enabled: a Desktop row with no stored passToken
+  // reads the running Desktop's own cookie store, exactly like the executor does.
   "mimo-desktop": (c) => getXiaomiMimoUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
   // Token Plan keys (tp-) live on a cluster with no quota endpoint at all — the
   // handler exists so the row can explain that instead of falling through to

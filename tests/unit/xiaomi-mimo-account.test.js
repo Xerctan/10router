@@ -196,6 +196,21 @@ describe("xiaomi-mimo account session degradation", () => {
 });
 
 describe("xiaomi-mimo usage adapter", () => {
+  it("cloud card (allowMachineSession:false) shows a 'no separate quota' note, never a weekly-quota prompt", async () => {
+    // 2026-09 user reports: the cloud row first showed "每周配额需要小米账号会话…"
+    // (wrong), then an empty quota card (reads as broken). It bills through the
+    // plan / API at formal rates and owns no quota, so it short-circuits to a note
+    // that AFFIRMS there is no quota — no session read, no key probe.
+    const out = await getXiaomiMimoUsage("sk-x", { mimoPassToken: "pt-should-be-ignored" }, null, {
+      allowMachineSession: false,
+    });
+    expect(out.plan).toBe("Xiaomi MiMo");
+    expect(out.message).toMatch(/no separate quota/i);
+    expect(out.message).not.toMatch(/weekly|account session/i);
+    expect(out.quotas).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("asks for credentials when there is no session and no key", async () => {
     const out = await getXiaomiMimoUsage(null, null, null);
     expect(out.message).toMatch(/not connected/i);

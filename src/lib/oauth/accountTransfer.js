@@ -97,6 +97,21 @@ export async function importAccounts(provider, accounts) {
       const nickname = item.name || item.nickname || claims?.nickname || claims?.preferred_username || null;
       const refreshToken = item.refreshToken || item.refresh_token || null;
 
+      // A cloud-card row must not carry the Desktop account session (see
+      // migration 005 and the card-gated writes in the oauth routes) — but a
+      // transfer file exported from a pre-005 machine still has it folded into
+      // its xiaomi-mimo psd. Drop it on import so re-importing an old file
+      // cannot re-contaminate the card. The Desktop card keeps it: there the
+      // session IS the credential.
+      let itemPsd = item.providerSpecificData;
+      if (provider === "xiaomi-mimo" && itemPsd && typeof itemPsd === "object") {
+        itemPsd = { ...itemPsd };
+        delete itemPsd.mimoPassToken;
+        delete itemPsd.mimoUserId;
+        delete itemPsd.mimoCUserId;
+        if (itemPsd.authMethod === "desktop-session") delete itemPsd.authMethod;
+      }
+
       let expiresAt = null;
       if (claims && typeof claims.exp === "number" && claims.exp > 0) {
         expiresAt = new Date(claims.exp * 1000).toISOString();
@@ -140,9 +155,7 @@ export async function importAccounts(provider, accounts) {
         testStatus: "active",
         // Platform-bound extras (e.g. Xiaomi MiMo `mimoPassToken` for Preview
         // models). Merged over the existing row on update — never dropped.
-        ...(item.providerSpecificData && typeof item.providerSpecificData === "object"
-          ? { providerSpecificData: item.providerSpecificData }
-          : {}),
+        ...(itemPsd && typeof itemPsd === "object" ? { providerSpecificData: itemPsd } : {}),
       };
 
       if (match) {

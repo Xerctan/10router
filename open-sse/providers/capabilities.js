@@ -141,6 +141,11 @@ export const MODEL_CAPABILITIES = {
   // 表现为「有思考、无档位控制」；要补档位需新增 mimo 专用 thinkingFormat（见提交说明）。
   "mimo-v2.6-pro":   { vision: true, audioInput: true, videoInput: true, contextWindow: 1048576, maxOutput: 131072 },
   "mimo-v2.6-flash": { vision: true, audioInput: true, videoInput: true, contextWindow: 1048576, maxOutput: 131072 },
+  // UltraSpeed 是 pro 的加速档，模态/窗口相同；显式列出，否则同样只落到 `*mimo*` 兜底。
+  "mimo-v2.6-pro-ultraspeed": { vision: true, audioInput: true, videoInput: true, contextWindow: 1048576, maxOutput: 131072 },
+  // Token Plan 的 Claude 原生变体：upstreamModelId 就是 mimo-v2.6-pro，能力相同。必须显式
+  // 列出，否则 id 里的 "claude" 会命中 `*claude*` 兜底（200K/64K），headroom 按真实窗口 1/5 计。
+  "mimo-v2.6-pro-claude": { vision: true, audioInput: true, videoInput: true, contextWindow: 1048576, maxOutput: 131072 },
   "mimo-v2-omni":   { vision: true, audioInput: true, videoInput: true, pdf: true, contextWindow: 262144, maxOutput: 131072 }, // xiaomi：text+image+audio+video+pdf
   "hy3":            { reasoning: true, thinkingFormat: "hunyuan", contextWindow: 256000, maxOutput: 128000 }, // tencent-tokenhub；`hy3*` 的 262144/262144（输出=窗口）无来源
   "hy3-preview":    { reasoning: true, thinkingFormat: "hunyuan", contextWindow: 256000, maxOutput: 64000 }, // tencent-tokenhub：预览版输出（64000）比正式版（128000）更小

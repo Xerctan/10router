@@ -73,8 +73,12 @@ export default {
     //     callers and getModelUpstreamId falls through to the raw id), so a
     //     combo already pointing at mimo-v2.5-pro keeps routing until upstream
     //     actually cuts over.
-    //   • mimo-v2.6-pro-ultraspeed deliberately NOT listed — the platform marks
-    //     it 定制服务 (contact sales), so it is not callable with a normal key.
+    //   • mimo-v2.6-pro-ultraspeed IS listed — here and on the Token Plan card,
+    //     but NOT on mimo-desktop. Upstream marks it 定制服务 (contact sales) on
+    //     the open API, so a key without that contract gets an upstream error;
+    //     listing it anyway lets a contracted user call it out of the box instead
+    //     of hand-adding a custom model just to try it (2026-09). The Desktop
+    //     account-session surface stays pro + flash.
     // Earlier removals still stand: the V2 generation (mimo-v2-omni,
     // mimo-v2-flash) and the no-longer-sold mimo-v2.5-pro-ultraspeed.
     // The -tts family belongs to the TTS media provider surface (serviceKinds
@@ -82,6 +86,8 @@ export default {
     // and is still the V2.5 generation upstream, so it stays as-is.
     { id: "mimo-v2.6-pro", name: "MiMo V2.6 Pro" },
     { id: "mimo-v2.6-flash", name: "MiMo V2.6 Flash" },
+    // 定制服务 upstream — see the note above; listed for out-of-the-box access.
+    { id: "mimo-v2.6-pro-ultraspeed", name: "MiMo V2.6 Pro UltraSpeed" },
     { id: "mimo-v2.5-tts", name: "MiMo V2.5 TTS", kind: "tts" },
   ],
   ttsConfig: {
