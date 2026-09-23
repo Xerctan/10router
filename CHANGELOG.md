@@ -2,6 +2,21 @@
 
 > 面向用户的精简更新见 [`public/i18n/changelog/`](https://github.com/techysy/10router/tree/main/public/i18n/changelog)（`en.md` / `zh-CN.md` / `zh-TW.md`，仪表盘「Change Log」按界面语言加载对应文件）。本文件为完整开发日志，按版本从上往下排列。
 
+## v1.2.1 (unreleased)
+
+### ✨ 新功能 / 修复
+
+- **10router-sync 插件 v1.5.0：ZCode 大版本套餐渠道 id 适配 + mirasim 输入口径全量订正 + 10r 同步链路加固**（原错位于 v1.1.2 块，随本次订正归位）。
+  - **套餐渠道 id 适配**：ZCode 大版本把套餐/赠送配额渠道（智谱 Start Plan）的 provider id 从 `builtin:bigmodel-start-plan` 改为 `account:bigmodel-start-plan`，插件的官方判据从「仅 `builtin:`」扩为「`builtin:` 或 `account:`」，剥前缀规则同步扩展（新旧行在目标侧同名合并为 `zcode-bigmodel-start-plan`）。旧判据把新形态当自定义渠道跳过，导致 09-18 起套餐流量漏同步——本机实测补导 343 行到 NAS。教训入库：ZCode 大版本会改官方渠道 id 形态，漏判表现是「某渠道突然没新数据」，先看跳过计数列表里的新前缀。
+  - **mirasim 输入口径全量订正**：mirasim 账本的 `input` 是**净新增输入**（不含缓存，三协议腿实测：anthropic 110K vs 缓存读 4.71 亿、openai-chat 1651 万 vs 1.23 亿、openai-responses 584 万 vs 1.45 亿），旧转换器原样落库导致仪表盘出现「输入 638、缓存 1.13 亿」的失真口径。转换器改为 `prompt = input + cacheRead + cacheWrite`；新工具 `scripts/normalize-mirasim-input.mjs`（dry-run 默认 / `--apply` 写入 / `meta.mirasimInputNormalized` 幂等）对已导入行原地订正 **usageHistory 行 + usageDaily 日桶 delta 打补丁**（刻意不做全量重建——只动 promptTokens，其余字节不动）。双库实测：本机 20 行（delta 115 万 / 2 桶）、NAS 2998 行（delta **7.86 亿** / 12 桶 / 77 计数器），`verify-usage-db` 双库 **PASS（23/23、65/65 天全对）**；终局证明：订正后重同步 `imported 18（纯新行）/ skipped 2998（历史行签名逐条命中，零重复）`。备份 `data.sqlite.bak-*-mirasim` 留存于两库目录。
+  - **运维工具预存分叉修复（#9 连带）**：服务端 `9826b8c3`（#9 第 5 项，usage 日志不再存完整 key）后，`usageHistory.apiKey` 列存 **mask** 而桶键是 sha256(原始 key)——原始 key 已不入库，插件侧**结构上无法复现**非空 key 的桶键（09-12「56/56 PASS」是导入库全 `local-no-key` 键未撞上）。`usage-daily.mjs` 镜像 meta 对齐（`apiKeyMasked` 替代 raw `apiKey`），`verify-usage-db.mjs` 的 byApiKey 维度改为**聚合比对**（数值总量仍精确，键身份对非空 key 不可验证）——修后本机 verify 从 16 例失败回到全绿。
+  - **gatewaySync 标记**：`--source 10r` 源库**原生**行导出时打 `meta.gatewaySync=true`，目标侧健康度评分豁免「导入行排除」（见 v1.1.2 块「数据口径」条）；B 实例自己从客户端账本导入过的行经链式同步不打标、继续排除。
+  - **同实例防护扩展到离线回导**：10r 导出每行盖 `meta.sourceDbPath`（与 `--tag` 无关的机器可查来源），`--import` 分支识别「离线文件来自本机默认实例库 + loopback endpoint」同样以退出码 2 拒绝。
+
+- **OAuth 加密导入/导出补齐 MiMo Desktop 卡（以及其他单认证 OAuth 供应商）**：传输功能上线时导出/导入按钮只渲染在「双认证」分支里，单认证模式（`authModes: ["oauth"]`）的卡走另一条分支、只有 Add 按钮 —— `mimo-desktop` 恰好是单认证，**唯一把「账号会话」本身当凭据的卡**（Windows → NAS 迁移全靠它）反而没有任何传输入口。抽出单一 `renderOAuthTransferButtons()`（保留实验开关与 CN 签到互斥两道门）注入全部四个渲染位。真机验证：mimo-desktop 页按钮 0/0 → 1/1，导出路由对伪造 CLI token 仍正确 401。摆位守卫用例进 `oauth-transfer.test.js`（4 调用位、无内联残留）。
+- **zcode 插件同步进来的用量终于有预估计价**：导入历来原样照抄源库的 `cost`，而 ZCode/mirasim 本地账本没有 10Router 定价概念 —— 每条导入行都是 $0，仪表盘计价长期空转。三层修复：① 新导入按实时写入同一套定价表即时估算（仅补空，绝不覆盖源库已算好的成本）；② **重导入去重命中时补洞** —— 插件日常同步因此能自行治愈历史天，且当日聚合按差量同步全部桶（只 bump 既有桶、绝不凭空造桶）；③ 开机清扫覆盖插件「离线直写 DB」的入口（不经过任何导入函数）。幂等：修好的行退出扫描，重复跑是 no-op；未标记的实时零成本行绝不动。回归 6 例进 `usage-import-cost.test.js`（估价/保源/去重修复/清扫/幂等/不碰实时行）。
+
+- **Qwen 全系官方精确价 + 定价覆盖审计工具**：所有新一代 Qwen 旗舰此前全部经由 `qwen*` 通配兜底 —— 通配值是 qwen3-coder-flash 档（0.5/2），**qwen3.8-max 实际官方价 2/6，被系统性低估 4 倍**，而且因为"有数字"所以无人察觉。从阿里云 Model Studio 官方计费文档（Singapore/International 标价，2026-09-24 抓取，缓存 hit 10%/创建 125% 规则）为全系补精确条目（max/plus/flash 三代际 + 带日期别名）；`mimo-v2.6-pro-claude` 补漏（Token Plan 变体上线时加了能力行漏了定价行，费率与 v2.6-pro 同源）。新增 `scripts/audit-pricing.mjs`（对齐 audit-capabilities 形态，离线跑真实解析器）：[A] 无价 LLM 门禁（credit 渠道/免费托管/媒体厂商按注明理由豁免）、[B] 通配兜底清单供人工对账。审计发现的真实未定价积压 68 条（mistral/cohere/morph/豆包 seed-2.0/托管开源 llama 等）为 1.2.1 待办 —— StepFun 官方定价页本轮无法抓取（文档路径 404），**刻意不反推**、入待办。14 条钉死测试（每个旗舰断言"不等于通配值" —— 正是本次回归的类型）。
 ## v1.2.0 (2026-09-24)
 
 > 本版主题：**供应商治理收敛 + 网关契约修复 + 一次安全审计收尾**。含两处破坏性变更（i18n 品牌重命名、MiMo Desktop 按 provider 判定），故走 minor。
@@ -209,11 +224,6 @@
   - 新 API `GET /api/usage/dashboard`（`src/lib/db/repos/usageRepo.js` 的 `getUsageDashboard`，`period/days/start/end` 参数保留兼容但已不使用）；i18n 词条接入 zh-CN；新增 `tests/unit/usage-dashboard-import-exclusion.test.js` 4 例（导入排除/热力包含/阈值/范围无关性 + lifetime 断言）。
 
 - **小米 Token Plan 出口节点智能匹配（ip.sb 多源探测）**：官方三集群 `cn`/`sgp`/`ams` 不再需要手动猜——添加/编辑 `xiaomi-tokenplan` 连接时自动探测本机网络出口地区并预选对应节点（中国大陆/港澳台→`cn`，欧洲→`ams`，其余海外→`sgp`），节点下拉框旁提示「已根据当前网络出口自动匹配节点」，用户随时可手动改回。服务端探测接口 `GET /api/network/egress-region`（`src/lib/network/egressRegion.js`）：ip.sb geoip + 3 秒超时 + 15 分钟内存缓存 + 整链 fail-open（探测失败静默返回 null，绝不阻塞连接添加/编辑流程）。顺带修复存量缺陷：连接「测试」按钮原把 `xiaomi-tokenplan` 硬编码打向 `sgp` 集群，配置 `cn`/`ams` 的连接永远测不通——现按 `providerSpecificData.region` 动态解析测试端点，与聊天转发行为一致；小米桌面会话模型出口在海外时的探测失败提示附带回国代理指引。新增 `tests/unit/egress-region.test.js`（国家→集群映射/缓存/超时 fail-open）与 `tests/unit/xiaomi-tokenplan-test-region.test.js`（region→测试 URL 路由）锁行为。
-
-- **10router-sync 插件 v1.5.0：ZCode 大版本套餐渠道 id 适配 + 10r 同步链路加固**。
-  - **套餐渠道 id 适配**：ZCode 大版本把套餐/赠送配额渠道（智谱 Start Plan）的 provider id 从 `builtin:bigmodel-start-plan` 改为 `account:bigmodel-start-plan`，插件的官方判据从「仅 `builtin:`」扩为「`builtin:` 或 `account:`」，剥前缀规则同步扩展（新旧行在目标侧同名合并为 `zcode-bigmodel-start-plan`）。旧判据把新形态当自定义渠道跳过，导致 09-18 起套餐流量漏同步——本机实测补导 343 行到 NAS。教训入库：ZCode 大版本会改官方渠道 id 形态，漏判表现是「某渠道突然没新数据」，先看跳过计数列表里的新前缀。
-  - **gatewaySync 标记**：`--source 10r` 源库**原生**行导出时打 `meta.gatewaySync=true`，目标侧健康度评分豁免「导入行排除」（见上方「数据口径」条）；B 实例自己从客户端账本导入过的行经链式同步不打标、继续排除。
-  - **同实例防护扩展到离线回导**：10r 导出每行盖 `meta.sourceDbPath`（与 `--tag` 无关的机器可查来源），`--import` 分支识别「离线文件来自本机默认实例库 + loopback endpoint」同样以退出码 2 拒绝。
 
 - **10router-sync 插件 v1.4.0：新增 `/10router-sync:status` 实例状态监控命令**：不打开仪表盘、一条命令查看目标 10Router 实例的运行状态与今日用量摘要（版本、连接规模、今日请求数/Token/费用等），复用插件既有认证链（仪表盘会话 / CLI token `x-9r-cli-token`），与导出/导入命令同配置即用。插件发版三处版本号同步：`.zcode-plugin/plugin.json` + 根 `marketplace.json`（Discover 实际索引）+ `zcode-plugin/marketplace.json`。
 
