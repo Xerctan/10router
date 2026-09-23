@@ -371,6 +371,28 @@ export default function ProviderDetailPage() {
   const oauthTransferOn = isOAuth && providerInfo?.authModes?.includes("oauth") && oauthTransferEnabled;
   // Experimental auto daily check-in — mutually exclusive display vs import/export.
   const codeBuddyCheckinOn = isCodeBuddy && codeBuddyCheckinEnabled;
+  /**
+   * The Export/Import button pair, hoisted out of the dual-auth-only branch.
+   *
+   * The transfer routes are provider-agnostic and `accountTransfer` carries
+   * each provider's session payload — for `mimo-desktop` that payload (the
+   * account session) IS the credential, and the Desktop card's authModes are a
+   * single "oauth", so keeping these buttons inside the dual-auth arm left the
+   * one card that most needs cross-machine migration with no transfer UI at
+   * all. The helper is the only place the pair is rendered now.
+   */
+  const renderOAuthTransferButtons = (className) =>
+    oauthTransferOn && !codeBuddyCheckinOn ? (
+      <>
+        <Button size="sm" icon="file_download" variant="secondary" onClick={() => openCbPassword("export")} className={className}>
+          {translate("Export")}
+        </Button>
+        <Button size="sm" icon="upload_file" variant="secondary" onClick={() => { setOauthTransferMode("import"); setShowOAuthTransfer(true); }} className={className}>
+          {translate("Import")}
+        </Button>
+      </>
+    ) : null;
+
   const staticModels = getModelsByProviderId(providerId);
   // Qoder publishes credit multipliers + off-peak promos only on its live
   // catalog (price_factor flips to 0 during a free window, the promotion
@@ -2110,16 +2132,7 @@ export default function ProviderDetailPage() {
                     <Button size="sm" icon="key" onClick={triggerApiKeyConnection}>
                       {apiKeyConnectionLabel}
                     </Button>
-                    {(oauthTransferOn && !codeBuddyCheckinOn) && (
-                      <>
-                        <Button size="sm" icon="file_download" variant="secondary" onClick={() => openCbPassword("export")}>
-                          {translate("Export")}
-                        </Button>
-                        <Button size="sm" icon="upload_file" variant="secondary" onClick={() => { setOauthTransferMode("import"); setShowOAuthTransfer(true); }}>
-                          {translate("Import")}
-                        </Button>
-                      </>
-                    )}
+                    {renderOAuthTransferButtons()}
                     {codeBuddyCheckinOn && renderCbCheckinBlock()}
                   </>
                 ) : (
@@ -2149,6 +2162,7 @@ export default function ProviderDetailPage() {
                         </span>
                       ) : "Add Connection")}
                     </Button>
+                    {renderOAuthTransferButtons()}
                   </>
                 )}
               </div>
@@ -2230,40 +2244,22 @@ export default function ProviderDetailPage() {
                       >
                         {apiKeyConnectionLabel}
                       </Button>
-                      {(oauthTransferOn && !codeBuddyCheckinOn) && (
-                        <>
-                          <Button
-                            size="sm"
-                            icon="file_download"
-                            variant="secondary"
-                            onClick={() => openCbPassword("export")}
-                            className="w-full sm:w-auto"
-                          >
-                            {translate("Export")}
-                          </Button>
-                          <Button
-                            size="sm"
-                            icon="upload_file"
-                            variant="secondary"
-                            onClick={() => { setOauthTransferMode("import"); setShowOAuthTransfer(true); }}
-                            className="w-full sm:w-auto"
-                          >
-                            {translate("Import")}
-                          </Button>
-                        </>
-                      )}
+                      {renderOAuthTransferButtons("w-full sm:w-auto")}
                       {codeBuddyCheckinOn && renderCbCheckinBlock()}
                       {(providerId === "qoder" || providerId === "qoder-cn") && renderQoderCheckinBlock()}
                     </>
                   ) : (
-                    <Button
-                      size="sm"
-                      icon="add"
-                      onClick={triggerAddConnection}
-                      className="w-full sm:w-auto"
-                    >
-                      Add
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        icon="add"
+                        onClick={triggerAddConnection}
+                        className="w-full sm:w-auto"
+                      >
+                        Add
+                      </Button>
+                      {renderOAuthTransferButtons("w-full sm:w-auto")}
+                    </>
                   )}
                 </div>
               )}

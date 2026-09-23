@@ -302,3 +302,48 @@ describe("export wiring — provider page must hand the verified password to the
     expect(modal).toMatch(/handleClose[\s\S]{0,120}clearTimeout\(closeTimer\.current\)/);
   });
 });
+
+describe("transfer buttons placement — single-auth OAuth providers too", () => {
+  // The Export/Import pair used to be inline inside the `hasDualAuthModes`
+  // branch of both action areas. `mimo-desktop` declares a SINGLE auth mode
+  // (["oauth"]) — its session IS its credential, and cross-machine migration is
+  // exactly what its users need — yet it landed in the else arm that only ever
+  // had an Add button, so the card never offered transfer. The pair is now one
+  // helper called from all four arms; an inline copy would silently miss one.
+  const page = readFileSync(
+    new URL("../../src/app/(dashboard)/dashboard/providers/[id]/page.js", import.meta.url),
+    "utf8",
+  );
+
+  it("renders through one helper gated on oauthTransferOn (not inline copies)", () => {
+    expect(page).toContain("const renderOAuthTransferButtons = (className) =>");
+    // The gate must keep BOTH conditions: the toggle and the CN check-in mutual
+    // exclusion that the inline versions had.
+    const def = page.match(/const renderOAuthTransferButtons[\s\S]{0,140}/)?.[0] || "";
+    expect(def).toContain("oauthTransferOn && !codeBuddyCheckinOn");
+    // No leftover inline conditional JSX blocks anywhere.
+    expect(page).not.toMatch(/\{\s*\(oauthTransferOn && !codeBuddyCheckinOn\) && \(/);
+  });
+
+  it("calls the helper in every arm: zero-connection and has-connection, dual and single", () => {
+    const calls = page.match(/renderOAuthTransferButtons\((?:"w-full sm:w-auto")?\)/g) || [];
+    expect(calls).toHaveLength(4);
+    // Plain in the zero-connection row, grid-width class in the connections row.
+    expect(calls.filter((c) => c === "renderOAuthTransferButtons()")).toHaveLength(2);
+    expect(
+      calls.filter((c) => c === 'renderOAuthTransferButtons("w-full sm:w-auto")'),
+    ).toHaveLength(2);
+  });
+
+  it("mimo-desktop really is single-auth (the arm the fix targets)", () => {
+    const registry = readFileSync(
+      new URL("../../open-sse/providers/registry/mimo-desktop.js", import.meta.url),
+      "utf8",
+    );
+    const modes = registry.match(/authModes:\s*\[([^\]]*)\]/)?.[1] || "";
+    expect(modes).toContain('"oauth"');
+    expect(modes).not.toContain("apikey");
+    expect(modes).not.toContain("api_key");
+    expect(registry).toMatch(/category:\s*"oauth"/); // → present in OAUTH_PROVIDERS, providerInfo exists
+  });
+});
