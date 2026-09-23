@@ -128,44 +128,67 @@ describe("settings reorganisation", () => {
     expect(src).not.toContain("setHideNoQuota");
   });
 
-  it("collapses the two quota-row visibility buttons into one flip control (no second dropdown)", () => {
+  it("drives the bulk row filter through the SAME hidden list the per-row button writes", () => {
     const src = read(QUOTA_PAGE_LIMITS);
-    // One button that flips a plain, independently-persisted boolean — not two
-    // buttons, not a <select>. The flip state is deliberately NOT derived from
-    // whether `quotaVisibility` happens to hold a hidden row: that coupling let
-    // a manually-hidden (or stale) row make the toggle read "on" while nothing
-    // was actually hidden on screen, so a click flipped the label but changed
-    // nothing ("翻转没有生效"). The boolean always mirrors what's rendered.
-    expect(src).toContain("setHideDepleted((prev) => !prev)");
-    expect(src).toMatch(/localStorage\.setItem\("quotaHideDepleted"/);
-    // One button whose label flips with state — not two buttons, not a <select>.
-    expect(src).toMatch(/translate\(hideDepleted \? "Show all" : "Only with balance"\)/);
-    // The retired derived-state approach must not creep back.
-    expect(src).not.toContain("depletedRowsHidden");
-    expect(src).not.toContain("handleToggleDepletedFilter");
+    // "Only with balance" must not be its own render-time filter. Implementing it
+    // that way (an independent `hideDepleted` boolean) dropped rows with no
+    // "Hidden:" chips to explain them and no way to restore one by name — the
+    // state and the screen disagreed, and the manual per-row hide no longer had
+    // any visible relationship to the bulk control. Both must go through
+    // `quotaVisibility.hidden`, so a row hidden either way shows up as a chip and
+    // can be brought back individually.
+    expect(src).toContain("const handleHideDepletedQuotas = useCallback(");
+    expect(src).toContain("const handleShowAllQuotas = useCallback(");
+    // The bulk paths funnel into the same updater the per-row handlers use.
+    expect(src).toContain("applyVisibilityToConnections");
+    expect(src).toContain("setQuotaVisibility((current) => {");
+    // "Only with balance" computes its list with the shared helper rather than
+    // filtering the rendered rows itself.
+    expect(src).toMatch(
+      /handleHideDepletedQuotas[\s\S]{0,400}computeDepletedHiddenKeys/,
+    );
+    // The separate boolean, and the parallel render-time filter it fed, are gone.
+    expect(src).not.toContain("setHideDepleted");
+    expect(src).not.toContain("quotaHideDepleted");
+    expect(src).not.toMatch(/if \(hideDepleted\) \{/);
   });
 
-  it("keeps the flip control's eye icon pointing the same way as its label", () => {
+  it("pairs each bulk row-filter button's icon with its own label", () => {
     const src = read(QUOTA_PAGE_LIMITS);
-    // Every toolbar sibling pairs icon↔label by MEANING: block/check_circle with
-    // "Turn off Empty"/"Turn on Available", hourglass_top with "Expiring first".
-    // The flip button's label names what the mode does, so "Only with balance"
-    // (which hides the zero-balance rows) takes the struck-through eye and
-    // "Show all" takes the open one. That is also the glyph the "Hidden:" chip
-    // row uses, so the button and the chips agree. The inverse was what shipped
-    // first and it made the icon contradict its own label.
-    expect(src).toMatch(/\{hideDepleted \? "visibility" : "visibility_off"\}/);
-    expect(src).not.toMatch(/\{hideDepleted \? "visibility_off" : "visibility"\}/);
+    // Two buttons, not one flip control. Each icon must read as the action its
+    // label names, matching the sibling convention (block/Turn off Empty,
+    // check_circle/Turn on Available): "Only with balance" hides rows so it takes
+    // the struck-through eye, "Show all" takes the open one — the same glyph the
+    // "Hidden:" chip row uses for hidden rows.
+    expect(src).toMatch(
+      /onClick=\{handleHideDepletedQuotas\}[\s\S]{0,400}visibility_off[\s\S]{0,200}translate\("Only with balance"\)/,
+    );
+    expect(src).toMatch(
+      /onClick=\{handleShowAllQuotas\}[\s\S]{0,400}material-symbols-outlined[\s\S]{0,200}\bvisibility\b[\s\S]{0,200}translate\("Show all"\)/,
+    );
+  });
+
+  it("declares the bulk row-filter handlers after the sortedConnections memo they read", () => {
+    const src = read(QUOTA_PAGE_LIMITS);
+    // These read `sortedConnections`. Declaring them above that memo is a
+    // temporal-dead-zone ReferenceError — and it only surfaces at prerender, so
+    // `next build` fails while lint and the unit suite stay green.
+    const sorted = src.indexOf("const sortedConnections = useMemo(");
+    const hideDepleted = src.indexOf("const handleHideDepletedQuotas = useCallback(");
+    const showAll = src.indexOf("const handleShowAllQuotas = useCallback(");
+    expect(sorted).toBeGreaterThan(-1);
+    expect(hideDepleted).toBeGreaterThan(sorted);
+    expect(showAll).toBeGreaterThan(sorted);
   });
 
   it("explains an empty card body instead of collapsing to a bare chip row", () => {
     const src = read(QUOTA_PAGE_LIMITS);
     // QuotaTable returns null for an empty list, so a card whose rows are all
     // hidden (CodeBuddy Intl had all 5 of its rows hidden) rendered as a "Hidden:"
-    // chip row with no body — it looked broken rather than filtered.
+    // chip row with no body — it looked broken rather than filtered. It must
+    // point at the chips, because every hidden row is reachable from them.
     expect(src).toMatch(/visibleQuotas\.length === 0 && rawQuotas\.length > 0/);
     expect(src).toContain("All quota rows are hidden — use the chips below to show them");
-    expect(src).toContain("No quota left to show — all rows are at zero balance");
   });
 
   it("applies hide/show edits without dropping clicks made in the same tick", () => {
@@ -215,10 +238,13 @@ describe("settings reorganisation", () => {
     expect(src).toMatch(
       /\{viewFilterActive \? visiblePageSummary : connectionsPageSummary\}/,
     );
-    // The "only with balance" mode filters quota ROWS, not cards, so a
-    // card-count comparison alone never trips. It has to be part of the
-    // condition or the notice misses the very case it was written for.
-    expect(src).toMatch(/const viewFilterActive =[\s\S]{0,200}hideDepleted \|\|/);
+    // Only the card-level filter feeds this. "Only with balance" hides quota
+    // ROWS, so it must NOT drag the summary onto a row-based number — that would
+    // make the count mean something else for no reason.
+    expect(src).toMatch(
+      /const viewFilterActive = renderConnections\.length !== sortedConnections\.length;/,
+    );
+    expect(src).not.toMatch(/const viewFilterActive =[\s\S]{0,200}hideDepleted/);
     // And it must tell the user why the two counts disagree.
     expect(src).toContain('translate(');
     expect(src).toMatch(/View filter is on: counts below cover the cards shown on this page/);
@@ -262,9 +288,9 @@ describe("settings reorganisation", () => {
       expect(
         dict["View filter is on: counts below cover the cards shown on this page. Paging still follows all connections."],
       ).toBeTruthy();
-      // Empty-body explanations (a card whose rows are all hidden).
+      // Empty-body explanation (a card whose rows are all hidden). The chips
+      // below the card can restore any of them, so the message points at them.
       expect(dict["All quota rows are hidden — use the chips below to show them"]).toBeTruthy();
-      expect(dict["No quota left to show — all rows are at zero balance"]).toBeTruthy();
     }
     // Retired keys must be fully removed — a stale key would silently fall
     // back to English if code ever referenced it again.

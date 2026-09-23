@@ -191,21 +191,14 @@ export default function ProviderLimits() {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("quotaHideNoQuota") === "1";
   });
-  // "Only with balance": a live view filter, independent of the per-row
-  // manual hide/show (which writes into `quotaVisibility` and drives the
-  // "Hidden:" chips). Keeping it a plain boolean — rather than deriving the
-  // button's on/off state from whether `quotaVisibility` happens to contain
-  // any hidden row — means the flip always reflects what's on screen and
-  // always toggles: a stale or manually-hidden entry in `quotaVisibility`
-  // (trimmed away on the render side already) can no longer make the button
-  // appear "on" while nothing is actually hidden, or vice versa.
-  const [hideDepleted, setHideDepleted] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem("quotaHideDepleted") === "1";
-  });
-  useEffect(() => {
-    if (typeof window !== "undefined") window.localStorage.setItem("quotaHideDepleted", hideDepleted ? "1" : "0");
-  }, [hideDepleted]);
+  // "Only with balance" is NOT a separate view filter. It writes the
+  // zero-balance rows into the SAME per-connection `quotaVisibility.hidden` list
+  // that the per-row hide button writes, so the two stay one thing: a row hidden
+  // either way shows up in the "Hidden:" chips below its card, is listed by name,
+  // and can be restored individually. Implementing it as its own render-time
+  // filter instead (the "hideDepleted" boolean that used to live here) dropped
+  // rows with NO chips to explain them and no way to bring one back — the state
+  // and the screen disagreed.
   const [providerMenuOpen, setProviderMenuOpen] = useState(false);
   const [bulkToggling, setBulkToggling] = useState(false);
   const [page, setPage] = useState(1);
@@ -715,6 +708,63 @@ export default function ProviderLimits() {
     });
   }, [editQuotaVisibility]);
 
+  /**
+   * Bulk-apply a hidden-list to every given connection, through the same
+   * setState updater the per-row buttons use, so a bulk click and a row click in
+   * the same tick cannot lose each other.
+   */
+  const applyVisibilityToConnections = useCallback((connectionIds, buildHidden) => {
+    if (!connectionIds.length) return;
+    setQuotaVisibility((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const connId of connectionIds) {
+        const entryVisibility = next[connId] || {};
+        const hiddenList = buildHidden(connId, entryVisibility);
+        if (hiddenList === null) continue; // nothing to change
+        const prevHidden = entryVisibility.hidden || [];
+        if (
+          hiddenList.length !== prevHidden.length ||
+          hiddenList.some((k, i) => k !== prevHidden[i])
+        ) {
+          next[connId] = { ...entryVisibility, hidden: hiddenList };
+          changed = true;
+        }
+      }
+      if (!changed) return current;
+      void (async () => {
+        try {
+          const response = await fetch("/api/settings", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ quotaVisibility: next }),
+          });
+          if (!response.ok) throw new Error("Failed to update quota visibility");
+        } catch (error) {
+          console.error("Error updating quota visibility:", error);
+          setQuotaVisibility(current);
+        }
+      })();
+      return next;
+    });
+  }, []);
+
+  /**
+   * "Only with balance": hide every zero-balance row across the current
+   * connections by writing them into `quotaVisibility.hidden` — the same list
+   * the per-row hide button writes.
+   *
+   * This is a live re-filter, not a one-way add: a row that currently HAS balance
+   * (used < total — including a fresh 0/total pack, e.g. CodeBuddy CN's daily
+   * check-in bonus) is dropped from `hidden` even if a past click hid it.
+   * CodeBuddy renumbers bonus packs (older ones expire and later packs shift into
+   * their names), so a persistent hide-by-name would otherwise keep a brand-new
+   * full pack invisible under the name of a pack that used to be depleted.
+   *
+   * Defined further down, next to `sortedConnections` — these need that memo,
+   * and referencing it from here would be a temporal-dead-zone error.
+   */
+
   // Auto-refresh interval
   useEffect(() => {
     if (!hasHydratedAutoRefresh || !autoRefresh) {
@@ -803,6 +853,35 @@ export default function ProviderLimits() {
     });
   }, [sortedConnections, hideNoQuota, loading, errors, quotaData]);
 
+  /**
+   * "Only with balance": hide every zero-balance row across the current
+   * connections by writing them into `quotaVisibility.hidden` — the same list
+   * the per-row hide button writes.
+   *
+   * This is a live re-filter, not a one-way add: a row that currently HAS balance
+   * (used < total — including a fresh 0/total pack, e.g. CodeBuddy CN's daily
+   * check-in bonus) is dropped from `hidden` even if a past click hid it.
+   * CodeBuddy renumbers bonus packs (older ones expire and later packs shift into
+   * their names), so a persistent hide-by-name would otherwise keep a brand-new
+   * full pack invisible under the name of a pack that used to be depleted.
+   */
+  const handleHideDepletedQuotas = useCallback(() => {
+    applyVisibilityToConnections(
+      sortedConnections.map((conn) => conn.id),
+      (connId) => [...computeDepletedHiddenKeys(quotaData[connId]?.quotas || [])],
+    );
+  }, [applyVisibilityToConnections, sortedConnections, quotaData]);
+
+  /** Un-hide every quota row across the current connections ("show all packs"). */
+  const handleShowAllQuotas = useCallback(() => {
+    applyVisibilityToConnections(
+      sortedConnections
+        .filter((conn) => quotaVisibility[conn.id]?.hidden?.length)
+        .map((conn) => conn.id),
+      () => [],
+    );
+  }, [applyVisibilityToConnections, sortedConnections, quotaVisibility]);
+
   // A connection is empty (depleted) only when EVERY quota row has an absolute
   // zero balance — 0/0 (no allowance, e.g. Qoder) or used >= total. Any single
   // row with remaining credit (e.g. a fresh Bonus Pack) keeps the account
@@ -867,20 +946,15 @@ export default function ProviderLimits() {
     accountFilter,
   );
   const connectionsPageSummary = getConnectionsPaginationSummary(pagination);
-  // When a client-side view filter drops cards from this page, the backend
-  // summary ("Showing 1-10 of 46") no longer describes the grid — it counted
-  // the server's page and cannot see the filters. Report what is actually
-  // rendered instead, and say so, so the mismatch reads as "a filter is on"
-  // rather than "the controls are broken".
+  // "Hide no-quota" removes whole cards from this page, and the backend summary
+  // ("Showing 1-10 of 46") counts the server's page — it cannot see the filter.
+  // Report what is actually rendered instead, so the mismatch reads as "a filter
+  // is on" rather than as broken controls.
   //
-  // Two independent filters feed this: "hide no-quota" removes whole cards, and
-  // "only with balance" removes quota rows inside them. The second one leaves
-  // the card count alone but still changes what the page shows, so keying the
-  // notice off the card count alone missed exactly the case it was written for.
-  const viewFilterActive =
-    hideDepleted ||
-    renderConnections.length !== sortedConnections.length ||
-    (hideNoQuota && renderConnections.length !== connections.length);
+  // "Only with balance" deliberately does NOT feed this: it hides quota ROWS
+  // inside the cards and leaves the card count alone, so switching to a
+  // row-based number here would only make the summary mean something else.
+  const viewFilterActive = renderConnections.length !== sortedConnections.length;
   const visiblePageSummary = getVisiblePageSummary(renderConnections.length, pageSize);
   const isCustomPageSize = !ACCOUNT_PAGE_SIZE_OPTIONS.includes(pageSize);
   const pageSizeLabel = getPageSizeLabel(pageSize, isCustomPageSize);
@@ -1092,26 +1166,32 @@ export default function ProviderLimits() {
             <span className="hidden sm:inline">{translate("Turn on Available")}</span>
           </button>
 
-          {/* View: hide depleted quota rows ↔ show all (one flip button) */}
+          {/* Bulk: show only quota rows with a balance — writes the zero-balance
+              rows into the shared hidden list, so they appear as "Hidden:" chips
+              and stay individually restorable, exactly like a manual hide. */}
           <button
             type="button"
-            onClick={() => setHideDepleted((prev) => !prev)}
-            aria-pressed={hideDepleted}
-            className={`flex h-8 shrink-0 items-center gap-1 rounded-lg border px-2 text-xs transition-colors ${hideDepleted ? "border-blue-500/40 bg-blue-500/10 text-blue-500" : "border-black/10 text-text hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"}`}
-            title={translate(hideDepleted ? "Show all quota packs across current connections" : "Hide depleted (zero-balance) quota packs across current connections")}
+            onClick={handleHideDepletedQuotas}
+            className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-blue-500/30 px-2 text-xs text-blue-500 transition-colors hover:bg-blue-500/10"
+            title={translate("Hide depleted (zero-balance) quota packs across current connections")}
           >
             <span className="material-symbols-outlined text-[14px]">
-              {/* The icon must agree with the LABEL, not just with the pressed
-                  state. Every toolbar sibling pairs icon↔label: block/check_circle
-                  with "Turn off Empty"/"Turn on Available", hourglass_top with
-                  "Expiring first". Here the label names what the mode DOES —
-                  "Only with balance" hides the zero-balance rows — so it takes
-                  the struck-through eye, and "Show all" (nothing hidden) takes
-                  the open eye. This is also the glyph the "Hidden:" chip row
-                  uses, so the button and the chips now read the same way. */}
-              {hideDepleted ? "visibility" : "visibility_off"}
+              visibility_off
             </span>
-            <span className="hidden sm:inline">{translate(hideDepleted ? "Show all" : "Only with balance")}</span>
+            <span className="hidden sm:inline">{translate("Only with balance")}</span>
+          </button>
+
+          {/* Bulk: show all quota packs — clears the shared hidden list. */}
+          <button
+            type="button"
+            onClick={handleShowAllQuotas}
+            className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-black/10 px-2 text-xs text-text transition-colors hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+            title={translate("Show all quota packs across current connections")}
+          >
+            <span className="material-symbols-outlined text-[14px]">
+              visibility
+            </span>
+            <span className="hidden sm:inline">{translate("Show all")}</span>
           </button>
 
           {/* Auto-refresh toggle */}
@@ -1202,18 +1282,10 @@ export default function ProviderLimits() {
           const isResettingLimit = resettingLimitId === conn.id;
           const rowBusy = deletingId === conn.id || togglingId === conn.id || isResettingLimit;
           const rawQuotas = quota?.quotas || [];
-          let visibleQuotas = filterQuotasByVisibility(conn.id, rawQuotas, quotaVisibility, conn.provider);
-          // "Only with balance": live-drop depleted rows on top of the manual
-          // per-row visibility above. Recomputed from the current snapshot on
-          // every render, so a pack that regains balance (or a fresh renumbered
-          // bonus pack) reappears on its own — no separate persisted list to
-          // fall out of sync with what's on screen.
-          if (hideDepleted) {
-            const depletedKeys = computeDepletedHiddenKeys(rawQuotas);
-            if (depletedKeys.size > 0) {
-              visibleQuotas = visibleQuotas.filter((q) => !depletedKeys.has(getQuotaVisibilityKey(q)));
-            }
-          }
+          // One source of truth: rows hidden by "Only with balance" and rows
+          // hidden by the per-row button are both listed in `quotaVisibility`, so
+          // both surface as "Hidden:" chips and both can be restored individually.
+          const visibleQuotas = filterQuotasByVisibility(conn.id, rawQuotas, quotaVisibility, conn.provider);
           const hiddenQuotaRows = getHiddenQuotaRows(conn.id, rawQuotas, quotaVisibility, conn.provider);
 
           return (
@@ -1439,19 +1511,18 @@ export default function ProviderLimits() {
                 ) : (
                   <>
                     {/* QuotaTable renders nothing for an empty list, so a card
-                        whose rows are ALL hidden (or all filtered by "only with
-                        balance") collapsed to a bare "Hidden:" chip row with no
-                        body at all — it read as a broken card rather than as a
-                        filtered one. Say what happened instead. */}
+                        whose rows are ALL hidden collapsed to a bare "Hidden:"
+                        chip row with no body at all — it read as a broken card
+                        rather than as a filtered one. Say what happened instead.
+                        Every hidden row is reachable from the chips below, so
+                        point at them. */}
                     {visibleQuotas.length === 0 && rawQuotas.length > 0 && (
                       <div className="text-center py-5">
                         <span className="material-symbols-outlined text-[28px] text-text-muted opacity-40">
                           visibility_off
                         </span>
                         <p className="mt-1.5 text-xs text-text-muted">
-                          {hideDepleted && hiddenQuotaRows.length === 0
-                            ? translate("No quota left to show — all rows are at zero balance")
-                            : translate("All quota rows are hidden — use the chips below to show them")}
+                          {translate("All quota rows are hidden — use the chips below to show them")}
                         </p>
                       </div>
                     )}

@@ -314,6 +314,8 @@ node scripts/browser-probe.mjs http://localhost:20128/dashboard/providers --out 
 | 装完应用不会自己起来 | 静默安装跳过 `runAfterFinish`，按 §2.3 手动启动（§2.5） |
 | 新功能字段存不进去 / 去重键不生效 | 签名静默丢参：saveRequestUsage 曾丢 entry.meta、saveUsageStats 曾丢 usageKey——传参外观正常，只有断言"终点真有该字段"的测试能拦（[test-report-1.1.2-silent-data-drop.md](test-report-1.1.2-silent-data-drop.md)） |
 | 图标/标签看着矛盾，改一回还是反的 | 只看「图标画的是什么」会两种都说得通；要按**这一排按钮的约定**判：动作按钮排里图标=按钮做什么（`Only with balance` 藏行→闭眼），状态指示排里图标=当前状态。判错方向就会来回改（§4③） |
+| 某批量操作「不跟手动操作联动」了 | 别给它另起一份渲染期状态：批量与单条必须写**同一个**持久 state，否则批量隐藏的行不出现在「已隐藏」列表里、也无法单条恢复。重构时"顺手简化"成独立 boolean 就会丢这层耦合（§4③） |
+| 改完 lint/单测全绿，`next build` 却挂在 prerender | 组件里 `const a = useMemo(...)` 被下面的 `useCallback` 读到 → 声明顺序成了 TDZ（`Cannot access 'x' before initialization`）。该 hook 必须排在被依赖的 memo **之后**；lint 与 vitest 都不覆盖预渲染（§4③） |
 | 多点几下反而少生效（点 5 个只恢复 2 个） | 同 tick 突发点击撞陈旧闭包：handler 从 render 闭包读 state，整批都按同一份点击前快照算，最后一次写覆盖其余。必须用 setState 更新式；单测/顺序点击都复现不了（§4③） |
 
 ## 7. 相关文件

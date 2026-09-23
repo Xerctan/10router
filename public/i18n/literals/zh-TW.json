@@ -691,6 +691,5 @@
   "Enable connections that still have quota on the current page": "啟用目前頁面上仍有配額的連線",
   "Refresh all": "全部重新整理",
   "View filter is on: counts below cover the cards shown on this page. Paging still follows all connections.": "檢視篩選已開啟：下方計數僅統計目前頁面顯示的卡片。翻頁仍依全部連線。",
-  "No quota left to show — all rows are at zero balance": "沒有可顯示的配額了 — 所有配額列餘額皆為零",
   "All quota rows are hidden — use the chips below to show them": "所有配額列都已隱藏 — 用下方標籤可重新顯示"
 }
