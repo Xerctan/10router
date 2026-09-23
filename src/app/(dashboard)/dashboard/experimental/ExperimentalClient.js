@@ -11,6 +11,19 @@ import SecurityCard from "./SecurityCard";
 // the general Settings card stack. Auto-compaction moved to Token Saver.
 export default function ExperimentalClient() {
   const [settings, setSettings] = useState({});
+  // Client-side view preference (localStorage), read by the quota page — not a
+  // server setting, so it does not go through /api/settings.
+  const [hideNoQuota, setHideNoQuota] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.localStorage.getItem("quotaHideNoQuota") === "1",
+  );
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("quotaHideNoQuota", hideNoQuota ? "1" : "0");
+    }
+  }, [hideNoQuota]);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -47,6 +60,21 @@ export default function ExperimentalClient() {
             <h3 className="text-base sm:text-lg font-semibold">{translate("Providers")}</h3>
           </div>
           <div className="flex flex-col gap-4">
+            {/* Quota page view toggle — moved here because the quota toolbar
+                was getting crowded. Writes the localStorage pref that page reads. */}
+            <div className="flex items-start sm:items-center justify-between gap-4 pb-4 border-b border-border/50">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm sm:text-base">{translate("Hide no-quota provider cards")}</p>
+                <p className="text-xs sm:text-sm text-text-muted">
+                  {translate("Quota page view: hide cards that have no quota to display")}
+                </p>
+              </div>
+              <Toggle
+                checked={hideNoQuota}
+                onChange={() => setHideNoQuota((prev) => !prev)}
+              />
+            </div>
+
             {/* OAuth account import/export (provider detail pages, all OAuth providers) */}
             <div className="flex items-start sm:items-center justify-between gap-4">
               <div className="flex-1 min-w-0">

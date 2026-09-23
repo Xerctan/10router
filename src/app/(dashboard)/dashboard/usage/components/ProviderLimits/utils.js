@@ -169,6 +169,34 @@ export function getConnectionsPaginationSummary(pagination) {
   return `Showing ${start}-${end} of ${pagination.total}`;
 }
 
+/**
+ * Page summary for when a CLIENT-SIDE view filter is on ("Hide no-quota" cards,
+ * "Only with balance" rows).
+ *
+ * The backend summary (`getConnectionsPaginationSummary`) counts the server's
+ * page: 46 connections, 10 per page. The view filters run afterwards, on this
+ * page's cards only, so they can leave fewer cards on screen than the server
+ * counted — and the untouched summary then read "Showing 1-10 of 46" above a
+ * grid of 12 cards, which looks like the controls are broken rather than like
+ * a filter is on. This variant counts what is actually rendered.
+ *
+ * `total` stays honest about scope: it is the number of cards surviving the
+ * filter on THIS page, not a global count the client cannot compute (the filter
+ * is applied to the current page only, and paging still follows the backend).
+ *
+ * @param {number} visibleCount - cards rendered after the view filters
+ * @param {number} pageSize - accounts per backend page
+ * @returns {string} e.g. "Showing 1-12 of 12"
+ */
+export function getVisiblePageSummary(visibleCount, pageSize) {
+  const count = Math.max(0, Number(visibleCount) || 0);
+  if (count === 0) return "Showing 0 of 0";
+  const size = Math.max(1, Number(pageSize) || count);
+  const start = 1;
+  const end = Math.min(count, size);
+  return `Showing ${start}-${end} of ${count}`;
+}
+
 export function getSafePagination(pagination, fallbackPageSize) {
   return (
     pagination || {

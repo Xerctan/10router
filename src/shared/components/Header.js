@@ -172,7 +172,7 @@ const getPageInfo = (pathname) => {
   if (pathname.includes("/experimental"))
     return {
       title: "Experimental",
-      description: "Beta toggles for provider transfer and daily credit check-ins",
+      description: "Beta toggles for provider tools, daily check-ins, and dashboard security",
       icon: "science",
       breadcrumbs: [],
     };

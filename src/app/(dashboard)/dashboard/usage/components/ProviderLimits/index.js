@@ -20,6 +20,7 @@ import {
   getConnectionsEmptyMessage,
   getPageSizeLabel,
   getConnectionsPaginationSummary,
+  getVisiblePageSummary,
   getSafePagination,
   getSafeTotals,
   shouldResetPage,
@@ -181,6 +182,30 @@ export default function ProviderLimits() {
   const [quotaSortMode, setQuotaSortMode] = useState("default");
   const [quotaVisibility, setQuotaVisibility] = useState({});
   const [expiringFirst, setExpiringFirst] = useState(false);
+  // "Hide no-quota cards": a view toggle that drops connections with no quota
+  // package to show (the cloud MiMo card, Token Plan, …). The switch itself
+  // lives on the Experimental page (Providers card) — the toolbar here was
+  // getting crowded — so this page only reads the persisted pref. Default
+  // off so nothing disappears unasked.
+  const [hideNoQuota] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("quotaHideNoQuota") === "1";
+  });
+  // "Only with balance": a live view filter, independent of the per-row
+  // manual hide/show (which writes into `quotaVisibility` and drives the
+  // "Hidden:" chips). Keeping it a plain boolean — rather than deriving the
+  // button's on/off state from whether `quotaVisibility` happens to contain
+  // any hidden row — means the flip always reflects what's on screen and
+  // always toggles: a stale or manually-hidden entry in `quotaVisibility`
+  // (trimmed away on the render side already) can no longer make the button
+  // appear "on" while nothing is actually hidden, or vice versa.
+  const [hideDepleted, setHideDepleted] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("quotaHideDepleted") === "1";
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem("quotaHideDepleted", hideDepleted ? "1" : "0");
+  }, [hideDepleted]);
   const [providerMenuOpen, setProviderMenuOpen] = useState(false);
   const [bulkToggling, setBulkToggling] = useState(false);
   const [page, setPage] = useState(1);
@@ -618,66 +643,77 @@ export default function ProviderLimits() {
     }
   }, []);
 
+  /**
+   * Apply a hide/show edit against the CURRENT visibility map.
+   *
+   * This must not read `quotaVisibility` from the render closure. The "Hidden:"
+   * chip row and the per-row hide buttons are all in one card, so a burst of
+   * clicks lands in the same tick — every handler would then compute its edit
+   * from the same pre-click snapshot and the last PATCH would win, silently
+   * discarding the rest. That is why clicking five chips only restored two rows.
+   * Taking the updater form of setState makes each edit see the previous one.
+   */
+  const editQuotaVisibility = useCallback((connectionId, mutate) => {
+    if (!connectionId) return;
+    setQuotaVisibility((current) => {
+      const entryVisibility = current[connectionId] || {};
+      const nextHidden = mutate(new Set(entryVisibility.hidden || []));
+      const next = {
+        ...current,
+        [connectionId]: { ...entryVisibility, hidden: [...nextHidden] },
+      };
+      // Persist the map we are actually installing. Failures roll the UI back
+      // to the snapshot this edit started from.
+      void (async () => {
+        try {
+          const response = await fetch("/api/settings", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ quotaVisibility: next }),
+          });
+          if (!response.ok) throw new Error("Failed to update quota visibility");
+        } catch (error) {
+          console.error("Error updating quota visibility:", error);
+          setQuotaVisibility(current);
+        }
+      })();
+      return next;
+    });
+  }, []);
+
+  // Antigravity rows are family groups (gemini/claude); toggling the group also
+  // clears stale per-model keys so the group row and its members never disagree.
+  const pruneAntigravityGroup = (hidden, key) => {
+    if (key === "gemini") {
+      for (const k of hidden) {
+        if (k.startsWith("gemini-") && !k.includes("image")) hidden.delete(k);
+      }
+    } else if (key === "claude") {
+      for (const k of hidden) {
+        if (k.startsWith("claude-") || k.startsWith("gpt-")) hidden.delete(k);
+      }
+    }
+  };
+
   const handleHideQuota = useCallback((connectionId, quota, provider) => {
     const key = getQuotaVisibilityKey(quota);
     if (!connectionId || !key) return;
-
-    const previous = quotaVisibility;
-    const entryVisibility = previous[connectionId] || {};
-    const hidden = new Set(entryVisibility.hidden || []);
-    hidden.add(key);
-    // Antigravity rows are family groups (gemini/claude); toggling the group
-    // also clears stale per-model keys so the group row and its members never
-    // disagree.
-    if (provider === "antigravity") {
-      if (key === "gemini") {
-        for (const k of hidden) {
-          if (k.startsWith("gemini-") && !k.includes("image")) hidden.delete(k);
-        }
-      } else if (key === "claude") {
-        for (const k of hidden) {
-          if (k.startsWith("claude-") || k.startsWith("gpt-")) hidden.delete(k);
-        }
-      }
-    }
-    const next = {
-      ...previous,
-      [connectionId]: {
-        ...entryVisibility,
-        hidden: [...hidden],
-      },
-    };
-    updateQuotaVisibility(next, previous);
-  }, [quotaVisibility, updateQuotaVisibility]);
+    editQuotaVisibility(connectionId, (hidden) => {
+      hidden.add(key);
+      if (provider === "antigravity") pruneAntigravityGroup(hidden, key);
+      return hidden;
+    });
+  }, [editQuotaVisibility]);
 
   const handleShowQuota = useCallback((connectionId, quota, provider) => {
     const key = getQuotaVisibilityKey(quota);
     if (!connectionId || !key) return;
-
-    const previous = quotaVisibility;
-    const entryVisibility = previous[connectionId] || {};
-    const hidden = new Set(entryVisibility.hidden || []);
-    hidden.delete(key);
-    if (provider === "antigravity") {
-      if (key === "gemini") {
-        for (const k of hidden) {
-          if (k.startsWith("gemini-") && !k.includes("image")) hidden.delete(k);
-        }
-      } else if (key === "claude") {
-        for (const k of hidden) {
-          if (k.startsWith("claude-") || k.startsWith("gpt-")) hidden.delete(k);
-        }
-      }
-    }
-    const next = {
-      ...previous,
-      [connectionId]: {
-        ...entryVisibility,
-        hidden: [...hidden],
-      },
-    };
-    updateQuotaVisibility(next, previous);
-  }, [quotaVisibility, updateQuotaVisibility]);
+    editQuotaVisibility(connectionId, (hidden) => {
+      hidden.delete(key);
+      if (provider === "antigravity") pruneAntigravityGroup(hidden, key);
+      return hidden;
+    });
+  }, [editQuotaVisibility]);
 
   // Auto-refresh interval
   useEffect(() => {
@@ -751,46 +787,21 @@ export default function ProviderLimits() {
     [connections, quotaData, expiringFirst, providerFilter, quotaSortMode],
   );
 
-  // Hide every depleted (zero-balance) quota row across the current connections.
-  // This is a live re-filter, not a one-way add: a row that currently HAS balance
-  // (used < total — including a fresh 0/total pack, e.g. CodeBuddy CN's daily
-  // check-in bonus) is removed from `hidden` even if a past click hid it. CodeBuddy
-  // renumbers bonus packs (older ones expire and later packs shift into their
-  // names), so a persistent hide-by-name would otherwise keep a brand-new full
-  // pack invisible under the name of a pack that used to be depleted.
-  const handleHideDepletedQuotas = useCallback(() => {
-    const previous = quotaVisibility;
-    const next = { ...previous };
-    let changed = false;
-    for (const conn of sortedConnections) {
-      const entryVisibility = next[conn.id] || {};
-      // Live re-filter: rebuild hidden from the CURRENT snapshot. Any legacy key
-      // that is no longer a currently-depleted row (now has balance, went
-      // unlimited, or the pack was renumbered/expired) is dropped automatically.
-      const hiddenList = [...computeDepletedHiddenKeys(quotaData[conn.id]?.quotas || [])];
-      const prevHidden = entryVisibility.hidden || [];
-      if (hiddenList.length !== prevHidden.length ||
-          hiddenList.some((k, i) => k !== prevHidden[i])) {
-        next[conn.id] = { ...entryVisibility, hidden: hiddenList };
-        changed = true;
-      }
-    }
-    if (changed) updateQuotaVisibility(next, previous);
-  }, [quotaVisibility, updateQuotaVisibility, sortedConnections, quotaData]);
-
-  // Un-hide every quota row across the current connections (show all packs).
-  const handleShowAllQuotas = useCallback(() => {
-    const previous = quotaVisibility;
-    const next = { ...previous };
-    let changed = false;
-    for (const conn of sortedConnections) {
-      if (next[conn.id]?.hidden?.length) {
-        next[conn.id] = { ...next[conn.id], hidden: [] };
-        changed = true;
-      }
-    }
-    if (changed) updateQuotaVisibility(next, previous);
-  }, [quotaVisibility, updateQuotaVisibility, sortedConnections]);
+  // "Hide no-quota" view: drop a card only once its fetch has COMPLETED with no
+  // quota package at all (kept while loading, on error, or as soon as any quota
+  // row is present, so a real card never blinks out). A message-only card (the
+  // cloud MiMo "no separate quota" note, Token Plan) counts as no-quota here —
+  // that is exactly what the toggle is for.
+  const renderConnections = useMemo(() => {
+    if (!hideNoQuota) return sortedConnections;
+    return sortedConnections.filter((conn) => {
+      if (loading[conn.id]) return true;
+      if (errors[conn.id]) return true;
+      const q = quotaData[conn.id];
+      if (!q) return true; // not fetched yet — decide once we know
+      return (q.quotas?.length ?? 0) > 0;
+    });
+  }, [sortedConnections, hideNoQuota, loading, errors, quotaData]);
 
   // A connection is empty (depleted) only when EVERY quota row has an absolute
   // zero balance — 0/0 (no allowance, e.g. Qoder) or used >= total. Any single
@@ -849,13 +860,28 @@ export default function ProviderLimits() {
   const selectedProviderLabel =
     providerFilter === "all" ? "All providers" : providerFilter;
   const hasEligibleConnections = totals.eligibleConnections > 0;
-  const hasVisibleConnections = sortedConnections.length > 0;
+  const hasVisibleConnections = renderConnections.length > 0;
   const emptyState = getConnectionsEmptyMessage(
     totals,
     providerFilter,
     accountFilter,
   );
   const connectionsPageSummary = getConnectionsPaginationSummary(pagination);
+  // When a client-side view filter drops cards from this page, the backend
+  // summary ("Showing 1-10 of 46") no longer describes the grid — it counted
+  // the server's page and cannot see the filters. Report what is actually
+  // rendered instead, and say so, so the mismatch reads as "a filter is on"
+  // rather than "the controls are broken".
+  //
+  // Two independent filters feed this: "hide no-quota" removes whole cards, and
+  // "only with balance" removes quota rows inside them. The second one leaves
+  // the card count alone but still changes what the page shows, so keying the
+  // notice off the card count alone missed exactly the case it was written for.
+  const viewFilterActive =
+    hideDepleted ||
+    renderConnections.length !== sortedConnections.length ||
+    (hideNoQuota && renderConnections.length !== connections.length);
+  const visiblePageSummary = getVisiblePageSummary(renderConnections.length, pageSize);
   const isCustomPageSize = !ACCOUNT_PAGE_SIZE_OPTIONS.includes(pageSize);
   const pageSizeLabel = getPageSizeLabel(pageSize, isCustomPageSize);
 
@@ -902,7 +928,7 @@ export default function ProviderLimits() {
               className="flex h-8 items-center justify-between gap-1 rounded-lg border border-black/10 bg-black/[0.02] px-2 text-xs text-text transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/10"
               aria-haspopup="menu"
               aria-expanded={providerMenuOpen}
-              title="Filter quota providers"
+              title={translate("Filter quota providers")}
             >
               <span className="flex min-w-0 items-center gap-1.5">
                 {providerFilter === "all" ? (
@@ -1033,12 +1059,11 @@ export default function ProviderLimits() {
             onClick={() => setExpiringFirst((prev) => !prev)}
             aria-pressed={expiringFirst}
             className={`flex h-8 shrink-0 items-center gap-1 rounded-lg border px-2 text-xs transition-colors ${expiringFirst ? "border-amber-500/40 bg-amber-500/10 text-amber-500" : "border-black/10 text-text hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"}`}
-            title="Sort accounts by earliest quota reset time"
+            title={translate("Sort accounts by earliest quota reset time")}
           >
             <span className="material-symbols-outlined text-[14px]">
               hourglass_top
             </span>
-            <span className="hidden sm:inline">Expiring first</span>
           </button>
 
           {/* Bulk: disable depleted */}
@@ -1047,7 +1072,7 @@ export default function ProviderLimits() {
             onClick={handleDisableDepleted}
             disabled={bulkToggling}
             className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-red-500/30 px-2 text-xs text-red-500 transition-colors hover:bg-red-500/10 disabled:opacity-50"
-            title="Disable connections with depleted quota on the current page"
+            title={translate("Disable connections with depleted quota on the current page")}
           >
             <span className="material-symbols-outlined text-[14px]">block</span>
             <span className="hidden sm:inline">{translate("Turn off Empty")}</span>
@@ -1059,7 +1084,7 @@ export default function ProviderLimits() {
             onClick={handleEnableAvailable}
             disabled={bulkToggling}
             className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-emerald-500/30 px-2 text-xs text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-50"
-            title="Enable connections that still have quota on the current page"
+            title={translate("Enable connections that still have quota on the current page")}
           >
             <span className="material-symbols-outlined text-[14px]">
               check_circle
@@ -1067,37 +1092,35 @@ export default function ProviderLimits() {
             <span className="hidden sm:inline">{translate("Turn on Available")}</span>
           </button>
 
-          {/* Bulk: show only quota rows with a balance */}
+          {/* View: hide depleted quota rows ↔ show all (one flip button) */}
           <button
             type="button"
-            onClick={handleHideDepletedQuotas}
-            className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-blue-500/30 px-2 text-xs text-blue-500 transition-colors hover:bg-blue-500/10"
-            title="Hide depleted (zero-balance) quota packs across current connections"
+            onClick={() => setHideDepleted((prev) => !prev)}
+            aria-pressed={hideDepleted}
+            className={`flex h-8 shrink-0 items-center gap-1 rounded-lg border px-2 text-xs transition-colors ${hideDepleted ? "border-blue-500/40 bg-blue-500/10 text-blue-500" : "border-black/10 text-text hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"}`}
+            title={translate(hideDepleted ? "Show all quota packs across current connections" : "Hide depleted (zero-balance) quota packs across current connections")}
           >
             <span className="material-symbols-outlined text-[14px]">
-              visibility
+              {/* The icon must agree with the LABEL, not just with the pressed
+                  state. Every toolbar sibling pairs icon↔label: block/check_circle
+                  with "Turn off Empty"/"Turn on Available", hourglass_top with
+                  "Expiring first". Here the label names what the mode DOES —
+                  "Only with balance" hides the zero-balance rows — so it takes
+                  the struck-through eye, and "Show all" (nothing hidden) takes
+                  the open eye. This is also the glyph the "Hidden:" chip row
+                  uses, so the button and the chips now read the same way. */}
+              {hideDepleted ? "visibility" : "visibility_off"}
             </span>
-            <span className="hidden sm:inline">{translate("Only with balance")}</span>
-          </button>
-
-          {/* Bulk: show all quota packs */}
-          <button
-            type="button"
-            onClick={handleShowAllQuotas}
-            className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-black/10 px-2 text-xs text-text transition-colors hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-            title="Show all quota packs across current connections"
-          >
-            <span className="material-symbols-outlined text-[14px]">
-              visibility_off
-            </span>
-            <span className="hidden sm:inline">{translate("Show all")}</span>
+            <span className="hidden sm:inline">{translate(hideDepleted ? "Show all" : "Only with balance")}</span>
           </button>
 
           {/* Auto-refresh toggle */}
           <button
+            type="button"
             onClick={() => setAutoRefresh((prev) => !prev)}
+            aria-pressed={autoRefresh}
             className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-black/10 px-2 text-xs transition-colors hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-            title={autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh"}
+            title={translate(autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh")}
           >
             <span
               className={`material-symbols-outlined text-[14px] ${
@@ -1106,9 +1129,7 @@ export default function ProviderLimits() {
             >
               {autoRefresh ? "toggle_on" : "toggle_off"}
             </span>
-            <span className="hidden text-text sm:inline">
-              Auto-refresh
-            </span>
+            <span className="hidden sm:inline">{translate("Auto-refresh")}</span>
             {autoRefresh && (
               <span className="text-[10px] text-text-muted tabular-nums">
                 ({countdown}s)
@@ -1116,14 +1137,13 @@ export default function ProviderLimits() {
             )}
           </button>
 
-
           {/* Refresh all button */}
           <button
             type="button"
             onClick={() => refreshAll(true)}
             disabled={refreshingAll}
             className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-black/10 px-2 text-xs text-text transition-colors hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5 disabled:opacity-50"
-            title="Refresh all"
+            title={translate("Refresh all")}
           >
             <span
               className={`material-symbols-outlined text-[14px] ${refreshingAll ? "animate-spin" : ""}`}
@@ -1143,6 +1163,20 @@ export default function ProviderLimits() {
         </div>
       )}
 
+      {/* View-filter reminder — the count above describes this page's cards
+          after the client-side filters, not the backend page. Without this the
+          two numbers just look wrong against each other. */}
+      {viewFilterActive && (
+        <div className="flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
+          <span className="material-symbols-outlined text-[14px] shrink-0">filter_alt</span>
+          <span>
+            {translate(
+              "View filter is on: counts below cover the cards shown on this page. Paging still follows all connections.",
+            )}
+          </span>
+        </div>
+      )}
+
       {/* Provider cards: 2 columns, compact */}
       {expiringFirst && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
@@ -1156,7 +1190,7 @@ export default function ProviderLimits() {
 
       {!emptyStateNode && (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {sortedConnections.map((conn) => {
+        {renderConnections.map((conn) => {
           const quota = quotaData[conn.id];
           const isLoading = loading[conn.id];
           const error = errors[conn.id];
@@ -1168,7 +1202,18 @@ export default function ProviderLimits() {
           const isResettingLimit = resettingLimitId === conn.id;
           const rowBusy = deletingId === conn.id || togglingId === conn.id || isResettingLimit;
           const rawQuotas = quota?.quotas || [];
-          const visibleQuotas = filterQuotasByVisibility(conn.id, rawQuotas, quotaVisibility, conn.provider);
+          let visibleQuotas = filterQuotasByVisibility(conn.id, rawQuotas, quotaVisibility, conn.provider);
+          // "Only with balance": live-drop depleted rows on top of the manual
+          // per-row visibility above. Recomputed from the current snapshot on
+          // every render, so a pack that regains balance (or a fresh renumbered
+          // bonus pack) reappears on its own — no separate persisted list to
+          // fall out of sync with what's on screen.
+          if (hideDepleted) {
+            const depletedKeys = computeDepletedHiddenKeys(rawQuotas);
+            if (depletedKeys.size > 0) {
+              visibleQuotas = visibleQuotas.filter((q) => !depletedKeys.has(getQuotaVisibilityKey(q)));
+            }
+          }
           const hiddenQuotaRows = getHiddenQuotaRows(conn.id, rawQuotas, quotaVisibility, conn.provider);
 
           return (
@@ -1392,15 +1437,34 @@ export default function ProviderLimits() {
                     <p className="text-xs text-text-muted">{quota.message}</p>
                   </div>
                 ) : (
-                  <QuotaTable
-                    quotas={visibleQuotas}
-                    compact
-                    sortMode="default"
-                    showSortLabel={
-                      conn.provider === "codex" && quotaSortMode !== "default"
-                    }
-                    onHideQuota={(quotaRow) => handleHideQuota(conn.id, quotaRow, conn.provider)}
-                  />
+                  <>
+                    {/* QuotaTable renders nothing for an empty list, so a card
+                        whose rows are ALL hidden (or all filtered by "only with
+                        balance") collapsed to a bare "Hidden:" chip row with no
+                        body at all — it read as a broken card rather than as a
+                        filtered one. Say what happened instead. */}
+                    {visibleQuotas.length === 0 && rawQuotas.length > 0 && (
+                      <div className="text-center py-5">
+                        <span className="material-symbols-outlined text-[28px] text-text-muted opacity-40">
+                          visibility_off
+                        </span>
+                        <p className="mt-1.5 text-xs text-text-muted">
+                          {hideDepleted && hiddenQuotaRows.length === 0
+                            ? translate("No quota left to show — all rows are at zero balance")
+                            : translate("All quota rows are hidden — use the chips below to show them")}
+                        </p>
+                      </div>
+                    )}
+                    <QuotaTable
+                      quotas={visibleQuotas}
+                      compact
+                      sortMode="default"
+                      showSortLabel={
+                        conn.provider === "codex" && quotaSortMode !== "default"
+                      }
+                      onHideQuota={(quotaRow) => handleHideQuota(conn.id, quotaRow, conn.provider)}
+                    />
+                  </>
                 )}
                 {hiddenQuotaRows.length > 0 && (
                   <div className="mt-2 flex min-w-0 items-center gap-1 border-t border-black/5 pt-2 text-[10px] text-text-muted dark:border-white/5">
@@ -1432,7 +1496,9 @@ export default function ProviderLimits() {
 
       <div className="rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs text-text-muted">{connectionsPageSummary}</span>
+            <span className="text-xs text-text-muted">
+              {viewFilterActive ? visiblePageSummary : connectionsPageSummary}
+            </span>
             <div className="flex flex-wrap items-center gap-2">
               <select
                 value={isCustomPageSize ? "custom" : String(pageSize)}
