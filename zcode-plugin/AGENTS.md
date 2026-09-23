@@ -224,9 +224,10 @@ node scripts/export-usage.mjs --import usage.json --endpoint <URL> --key sk-…
 
 | 工具 | 用途 |
 |---|---|
-| `usage-daily.mjs` | 聚合契约的共享实现（`aggregateEntryToDay` 的精确移植 + 本地日期分桶）。与 10Router 仓库 `src/lib/db/repos/usageRepo.js` 保持同步 |
-| `verify-usage-db.mjs` | 只读校验：完整性 / 外键 / **usageDaily 与 usageHistory 逐日逐字段一致性** / lifetime 计数器。退出码 0=PASS、1=FAIL |
+| `usage-daily.mjs` | 聚合契约的共享实现（`aggregateEntryToDay` 的精确移植 + 本地日期分桶）。与 10Router 仓库 `src/lib/db/repos/usageRepo.js` 保持同步。**注意**：#9 后 `apiKey` 列存 mask 而活桶键是 sha256(原始 key)——非空 key 的桶键身份结构上不可复现（头注有详述），byApiKey meta 带 `apiKeyMasked` |
+| `verify-usage-db.mjs` | 只读校验：完整性 / 外键 / **usageDaily 与 usageHistory 逐日逐字段一致性** / lifetime 计数器。byApiKey 维度为**聚合比对**（#9 后键身份不可验证，数值总量仍精确），其余四维逐键。退出码 0=PASS、1=FAIL |
 | `clean-usage-db.mjs` | 按 `--provider <名>` 或 `--where "<谓词>"` 删行并忠实重建受影响日桶 + 修正计数器；默认 dry-report，`--apply` 才写入；内置事后自检，失败返回 1 |
+| `normalize-mirasim-input.mjs` | 一次性订正 mirasim 行的输入口径（`prompt += cache_read + cache_creation` + 幂等 flag + 日桶 delta 打补丁）。2026-09-24 已在双库执行；新装实例不需要。默认 dry-run，`--apply` 写入 |
 
 典型流程（**务必先停 10Router 服务**，它会持有数据库并发的写会损坏文件）：
 

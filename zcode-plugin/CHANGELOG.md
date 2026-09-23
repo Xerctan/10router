@@ -7,18 +7,40 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 本插件尚未发布 1.0.0——0.3.0 之后直接进入 1.1.0（首次支持多数据源）。
 
-## [1.5.0] — 2026-09-20
+## [1.5.0] — 2026-09-24
 
 ### 修复
 
+- **mirasim 输入口径全量订正**：mirasim 账本的 `input` 是**净新增输入**，不含缓存
+  （三协议腿实测：anthropic 110K vs 缓存读 4.71 亿、openai-chat 1651 万 vs 1.23 亿、
+  openai-responses 584 万 vs 1.45 亿——绝大多数行 cacheRead > input）。旧转换器把 `input`
+  原样落为 `prompt_tokens`，仪表盘因此出现「输入 638、缓存 1.13 亿」的失真口径。转换器改为
+  `prompt = input + cacheRead + cacheWrite`（缓存字段仍在 `tokens` 里，缓存命中率口径不变）。
+  已导入的历史行由新工具 `normalize-mirasim-input.mjs` 原地订正（见下），双库实测：
+  本机 20 行（delta 115 万 / 2 桶）、NAS 2998 行（delta **7.86 亿** / 12 桶 / 77 计数器），
+  `verify-usage-db` 双库 PASS（23/23、65/65 天全对）；订正后重同步
+  `imported 18（纯新行）/ skipped 2998（历史行签名逐条命中，零重复）`。
 - **适配 ZCode 大版本的套餐渠道 id 变更**：官方判据从「仅 `builtin:` 前缀」扩为
   「`builtin:` 或 `account:`」——新版把套餐/赠送配额渠道（如智谱 Start Plan）的 provider id
   从 `builtin:bigmodel-start-plan` 改为 `account:bigmodel-start-plan`，旧判据把它当自定义
   渠道跳过，导致 09-18 起的套餐流量漏同步。剥前缀规则同步扩展，新旧行在目标侧同名合并为
   `zcode-bigmodel-start-plan`（本机实测补导 343 行到 NAS）。
+- **运维工具对齐服务端 #9 key 脱敏**（`usage-daily.mjs` / `verify-usage-db.mjs`）：服务端
+  `9826b8c3` 后 `usageHistory.apiKey` 列存 mask（前 8 位 + `***`）而活桶键是
+  sha256(原始 key)——原始 key 不再入库，插件**结构上无法复现**非空 key 的桶键（此前
+  「56/56 PASS」是导入库全 `local-no-key` 键未撞上）。镜像 meta 改带 `apiKeyMasked`
+  （不再携带 key 字段），verify 的 byApiKey 维度改为**聚合比对**（数值总量仍精确；键身份
+  对非空 key 不可验证）。修后本机 verify 从 16 例失败回到全绿。
 
 ### 新增
 
+- **迁移工具 `scripts/normalize-mirasim-input.mjs`**：把已导入的 mirasim 行（
+  `provider LIKE 'mirasim-%'`）订正到新口径——行级 `promptTokens += cache_read +
+  cache_creation`（`tokens` JSON 同步）+ `meta.mirasimInputNormalized` 幂等标记，随后对
+  受影响日桶做 **delta 打补丁**（只动 `promptTokens` 与对应计数器，其余字节不动——刻意
+  不做全量重建，避免 byApiKey 键身份重写风险）。默认 dry-run，`--apply` 单事务写入，
+  预检缺日桶即拒绝；退出码 0/1/2。用前备份 `data.sqlite + -wal + -shm`，用后
+  `verify-usage-db.mjs` 复检。
 - **gatewaySync 标记**（配合服务端数据口径例外）：`--source 10r` 源库**原生**行（meta 无
   `imported` 标记）导出时加 `meta.gatewaySync = true`，目标侧健康度评分凭此豁免「导入行
   排除」；源实例自己从客户端账本导入过的行不打标，链式同步多远都保持排除。服务端配套见

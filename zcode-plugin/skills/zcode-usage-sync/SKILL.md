@@ -73,6 +73,10 @@ node "$ZCODE_PLUGIN_ROOT/scripts/export-usage.mjs" --source mirasim --endpoint <
 Rows land under provider `mirasim-<protocol>` (mirasim-anthropic / mirasim-openai-responses /
 mirasim-openai-chat), cost 0 (plan-based relay). Failed calls without token consumption are
 skipped automatically; agent/leg/upstreamHost/effort/repo/workspace details ride in `meta`.
+`prompt_tokens` reports **true input = input + cacheRead + cacheWrite** — mirasim's ledger logs
+`input` as net-new only (cache fields are separate), so the raw value alone would understate
+input by orders of magnitude on cached sessions (since 1.5.0; historical rows were normalized
+by `scripts/normalize-mirasim-input.mjs`).
 
 ### Xiaomi MiMo desktop (mimocode)
 

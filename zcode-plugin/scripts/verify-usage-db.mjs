@@ -82,6 +82,17 @@ try {
     const dimDiff = [];
     for (const dim of dims) {
       const a = exp[dim] || {}, b = got[dim] || {};
+      if (dim === "byApiKey") {
+        // #9 (9826b8c3): raw keys are no longer stored — the usageHistory
+        // column holds the mask (first 8 chars + "***") while live buckets
+        // key by sha256(raw), so per-key identity is structurally
+        // unreproducible from stored data. Compare the AGGREGATE instead:
+        // numeric totals stay exact, key identity for non-null keys does not.
+        const sa = Object.values(a).reduce((n, c) => n + (c.requests || 0), 0);
+        const sb = Object.values(b).reduce((n, c) => n + (c.requests || 0), 0);
+        if (sa !== sb) dimDiff.push(`byApiKey[total] exp=${sa} got=${sb}`);
+        continue;
+      }
       for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
         if ((a[k]?.requests || 0) !== (b[k]?.requests || 0)) {
           dimDiff.push(`${dim}:${k} exp=${a[k]?.requests || 0} got=${b[k]?.requests || 0}`);

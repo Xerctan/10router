@@ -12,10 +12,24 @@
  *     the UTC date part — on a UTC+8 host those differ for ~20% of rows
  *   - five dimensions: byProvider / byModel / byAccount / byApiKey / byEndpoint
  *   - cachedTokens = tokens.cached_tokens || tokens.cache_read_input_tokens
- *   - apiKey falls back to the literal "local-no-key" when null / non-string
+ *   - byApiKey: since server commit 9826b8c3 (#9, raw keys no longer stored)
+ *     the COLUMN holds the mask (first 8 chars + "***") while the server's
+ *     live bucket key embeds sha256(raw) — the raw value is gone, so tooling
+ *     CANNOT reproduce live key identity from stored data. Rebuilds key by
+ *     the column value (mask form, "local-no-key" when null); numeric
+ *     aggregates stay exact, key identity for non-null keys does not —
+ *     verify-usage-db therefore aggregate-compares this one dim.
  *
  * Keep in sync with src/lib/db/repos/usageRepo.js in the 10router repo.
  */
+
+// Port of src/lib/db/crypto/apiKeyIdentity.js maskApiKey (keep in sync).
+// Works for both raw keys and already-masked column values (idempotent).
+export function maskApiKey(key) {
+  if (!key || typeof key !== "string") return null;
+  if (key.length <= 8) return key.charAt(0) + "***";
+  return key.slice(0, 8) + "***";
+}
 
 export function localDateKey(timestamp) {
   const d = timestamp ? new Date(timestamp) : new Date();
@@ -73,7 +87,7 @@ export function aggregateEntryToDay(day, entry) {
 
   const apiKeyVal = entry.apiKey && typeof entry.apiKey === "string" ? entry.apiKey : "local-no-key";
   addToCounter(day.byApiKey, `${apiKeyVal}|${entry.model}|${entry.provider || "unknown"}`, {
-    ...vals, meta: { rawModel: entry.model, provider: entry.provider, apiKey: entry.apiKey || null },
+    ...vals, meta: { rawModel: entry.model, provider: entry.provider, apiKeyMasked: maskApiKey(entry.apiKey) },
   });
 
   addToCounter(day.byEndpoint, `${entry.endpoint || "Unknown"}|${entry.model}|${entry.provider || "unknown"}`, {

@@ -513,8 +513,16 @@ function isSelfHostedUpstream(upstreamHost, endpointUrl) {
 }
 
 function convertMirasimRow(e) {
+  // mirasim's ledger logs `input` as NET-NEW input only — cache reads/writes
+  // live in separate fields and are excluded (verified across all three legs:
+  // anthropic sum(input)=110K vs sum(cacheRead)=471M; openai-chat 16.5M vs
+  // 123M; openai-responses 5.8M vs 145M). Report true input as
+  // input + cacheRead + cacheWrite so dashboards don't show "input: 638,
+  // cache: 113M" for a heavy cached session. The cache fields stay in `tokens`
+  // for cache-hit accounting; only prompt_tokens carries the total.
+  const inputTotal = (e.input || 0) + (e.cacheRead || 0) + (e.cacheWrite || 0);
   const tokens = {
-    prompt_tokens: e.input || 0,
+    prompt_tokens: inputTotal,
     completion_tokens: e.output || 0,
   };
   if (e.cacheRead) tokens.cache_read_input_tokens = e.cacheRead;

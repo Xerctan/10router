@@ -62,7 +62,7 @@ node scripts/export-usage.mjs --source mirasim --export mirasim-usage.json
 node scripts/export-usage.mjs --import mirasim-usage.json --endpoint http://<host>:<port> --key sk-…
 ```
 
-说明：导入后 provider 显示为 `mirasim-<协议>`（如 `mirasim-anthropic`、`mirasim-openai-responses`、`mirasim-openai-chat`），cost 记 0（mirasim 中转为套餐制）；失败调用（HTTP ≥400 无 token 消耗）自动跳过；agent/leg/upstreamHost/effort/repo/workspace 等溯源明细在 meta 里。
+说明：导入后 provider 显示为 `mirasim-<协议>`（如 `mirasim-anthropic`、`mirasim-openai-responses`、`mirasim-openai-chat`），cost 记 0（mirasim 中转为套餐制）；失败调用（HTTP ≥400 无 token 消耗）自动跳过；agent/leg/upstreamHost/effort/repo/workspace 等溯源明细在 meta 里。`prompt_tokens` 记**真实输入 = input + cacheRead + cacheWrite**——mirasim 账本的 `input` 只算净新增（缓存分列），原样落库会把缓存重度会话的输入低估几个量级（v1.5.0 起；存量历史行已由 `scripts/normalize-mirasim-input.mjs` 订正）。
 
 ### 小米 MiMo 桌面版用量同步
 
@@ -192,6 +192,7 @@ Node 22 需加 `--experimental-sqlite`；Node 24+ 直接跑。
 | `scripts/verify-usage-db.mjs` | 10Router 用量库只读体检（见上节） |
 | `scripts/clean-usage-db.mjs` | 10Router 用量库删行 + 日聚合重建（见上节） |
 | `scripts/usage-daily.mjs` | 聚合契约共享实现，被上面两个工具引用 |
+| `scripts/normalize-mirasim-input.mjs` | 一次性订正 mirasim 行输入口径（2026-09-24 已在双库执行；新装实例不需要） |
 
 ## 文档
 

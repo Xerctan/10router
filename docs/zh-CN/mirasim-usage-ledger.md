@@ -17,7 +17,7 @@
 | `upstreamHost` | `relay.mirasim.ai` 或 null(=local)；**指向 10Router 时是 IP/localhost——防双计的关键字段** |
 | `leg` / `viaRelay` | relay / direct；`viaRelay:false` + `leg:"direct"` 与 upstreamHost 组成「走了 10Router」信号 |
 | `status` / `durationMs` | HTTP 码 / 耗时；status ≥ 400 的失败调用 token 全 0 |
-| token 五项 | `input` / `output` / `cacheRead` / `cacheWrite` / `reasoning` |
+| token 五项 | `input` / `output` / `cacheRead` / `cacheWrite` / `reasoning`。**`input` 是净新增输入，不含缓存**——三协议腿实测绝大多数行 `cacheRead > input`（anthropic 全量 110K vs 缓存读 4.71 亿；openai-chat 1651 万 vs 1.23 亿；openai-responses 584 万 vs 1.45 亿）。真实输入 = `input + cacheRead + cacheWrite`。10router-sync v1.5.0 起转换器按此口径落 `prompt_tokens`；存量行由 `scripts/normalize-mirasim-input.mjs` 订正（2026-09-24 双库执行，delta 本机 115 万 / NAS 7.86 亿） |
 | `reqBytes` / `resBytes` | 请求/响应字节数 |
 | `repo` / `workspace` / `effort` / `agent` | 工作区与推理档溯源 |
 | `relayCallId` | 中转回填的对账键 |
