@@ -1852,6 +1852,5 @@
   "Hide depleted (zero-balance) quota packs across current connections": "隐藏当前连接中已耗尽（余额为零）的配额包",
   "Disable auto-refresh": "关闭自动刷新",
   "Enable auto-refresh": "开启自动刷新",
-  "View filter is on: counts below cover the cards shown on this page. Paging still follows all connections.": "视图筛选已开启：下方计数仅统计当前页显示的卡片。翻页仍按全部连接。",
   "All quota rows are hidden — use the chips below to show them": "所有配额行都已隐藏 — 用下方标签可重新显示"
 }

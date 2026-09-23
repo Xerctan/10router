@@ -1243,20 +1243,6 @@ export default function ProviderLimits() {
         </div>
       )}
 
-      {/* View-filter reminder — the count above describes this page's cards
-          after the client-side filters, not the backend page. Without this the
-          two numbers just look wrong against each other. */}
-      {viewFilterActive && (
-        <div className="flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
-          <span className="material-symbols-outlined text-[14px] shrink-0">filter_alt</span>
-          <span>
-            {translate(
-              "View filter is on: counts below cover the cards shown on this page. Paging still follows all connections.",
-            )}
-          </span>
-        </div>
-      )}
-
       {/* Provider cards: 2 columns, compact */}
       {expiringFirst && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">

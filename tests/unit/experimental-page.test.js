@@ -245,9 +245,10 @@ describe("settings reorganisation", () => {
       /const viewFilterActive = renderConnections\.length !== sortedConnections\.length;/,
     );
     expect(src).not.toMatch(/const viewFilterActive =[\s\S]{0,200}hideDepleted/);
-    // And it must tell the user why the two counts disagree.
-    expect(src).toContain('translate(');
-    expect(src).toMatch(/View filter is on: counts below cover the cards shown on this page/);
+    // The count alone carries the correction. A banner explaining "this number
+    // counts the filtered cards" was tried and removed: it restated what the
+    // number already says, and sat above the cards costing vertical space.
+    expect(src).not.toMatch(/View filter is on/);
   });
 
   it("keeps the quota toolbar readable: translated tooltips + a visible refresh label", () => {
@@ -283,11 +284,6 @@ describe("settings reorganisation", () => {
       expect(dict["Enable auto-refresh"]).toBeTruthy();
       expect(dict["Show all quota packs across current connections"]).toBeTruthy();
       expect(dict["Hide depleted (zero-balance) quota packs across current connections"]).toBeTruthy();
-      // Explains why the visible-count and the backend page count differ once a
-      // view filter is on — without it the numbers just look broken.
-      expect(
-        dict["View filter is on: counts below cover the cards shown on this page. Paging still follows all connections."],
-      ).toBeTruthy();
       // Empty-body explanation (a card whose rows are all hidden). The chips
       // below the card can restore any of them, so the message points at them.
       expect(dict["All quota rows are hidden — use the chips below to show them"]).toBeTruthy();
@@ -299,6 +295,11 @@ describe("settings reorganisation", () => {
       expect(dict["Beta toggles for provider transfer and daily credit check-ins"]).toBeUndefined();
       expect(dict["Hide no-quota"]).toBeUndefined();
       expect(dict["Hide cards with no quota to display"]).toBeUndefined();
+      // The filter-explainer banner was removed as redundant.
+      expect(
+        dict["View filter is on: counts below cover the cards shown on this page. Paging still follows all connections."],
+      ).toBeUndefined();
+      expect(dict["No quota left to show — all rows are at zero balance"]).toBeUndefined();
     }
   });
 });
