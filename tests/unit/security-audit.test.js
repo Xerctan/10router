@@ -66,14 +66,18 @@ describe("AUDIT-002: API key masking", () => {
     expect(livePath.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("byApiKey object keys should use masked key, not raw key", () => {
+  it("byApiKey object keys use the per-key digest, never the raw key", () => {
     const source = fs.readFileSync(
       srcPath("src/lib/db/repos/usageRepo.js"),
       "utf-8"
     );
-    // The 24h path should use apiKeyMasked in the akKey template
-    expect(source).toContain("${apiKeyMasked}|${r.model}|${r.provider");
-    // Should NOT use raw r.apiKey in the key
+    // The 24h (live-history) path groups on the per-key sha256 digest, NOT the
+    // mask: the mask is `sk-` + the machine-id prefix, identical for every key on
+    // one machine, so it folded them all into a single bucket. The digest is
+    // non-reversible and unique per key (mask collision fix + AUDIT-002 intact).
+    expect(source).toContain("${groupId}|${r.model}|${r.provider");
+    expect(source).toMatch(/const groupId = apiKeyHash \|\| apiKeyMasked/);
+    // Must never key on the raw value.
     expect(source).not.toContain("${r.apiKey}|${r.model}|${r.provider");
   });
 });

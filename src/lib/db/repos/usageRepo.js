@@ -656,12 +656,19 @@ export async function getUsageStats(period = "all") {
       }
 
       if (r.apiKey && typeof r.apiKey === "string") {
-        const keyInfo = r.apiKeyHash ? apiKeyMap[r.apiKeyHash] : null;
+        const apiKeyHash = r.apiKeyHash || hashApiKey(r.apiKey);
+        const keyInfo = apiKeyHash ? apiKeyMap[apiKeyHash] : null;
         const apiKeyMasked = maskApiKey(r.apiKey);
         const keyName = keyInfo?.name || (apiKeyMasked ? apiKeyMasked.slice(0, 8) + "..." : "Local (No API Key)");
-        const akKey = `${apiKeyMasked}|${r.model}|${r.provider || "unknown"}`;
+        // Group by the per-key sha256 digest, NOT the mask: the mask is `sk-` + the
+        // first 5 chars of the machine id, so it is IDENTICAL for every key on one
+        // machine — grouping by it collapsed all a machine's keys into a single
+        // bucket. The mask stays for display only. Matches the daily-aggregation
+        // path above, which already keys byApiKey on the hash.
+        const groupId = apiKeyHash || apiKeyMasked;
+        const akKey = `${groupId}|${r.model}|${r.provider || "unknown"}`;
         if (!stats.byApiKey[akKey]) {
-          stats.byApiKey[akKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, rawModel: r.model, provider: providerDisplayName, apiKeyMasked, keyName, apiKeyKey: apiKeyMasked, lastUsed: r.timestamp };
+          stats.byApiKey[akKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, rawModel: r.model, provider: providerDisplayName, apiKeyMasked, keyName, apiKeyKey: groupId, lastUsed: r.timestamp };
         }
         const ake = stats.byApiKey[akKey];
         ake.requests++; ake.promptTokens += promptTokens; ake.completionTokens += completionTokens; ake.cachedTokens += cachedTokens; ake.cost += entryCost;

@@ -125,6 +125,32 @@ describe("what actually lands in the database", () => {
     expect(named, "the per-key aggregate should still know the key's name").toBeTruthy();
     expect(named.apiKeyMasked).toBe(realKey.slice(0, 8) + "***");
   });
+
+  it("keeps two same-machine keys (identical mask, different hash) in separate buckets", async () => {
+    const { maskApiKey, hashApiKey } = await import("@/lib/db/crypto/apiKeyIdentity.js");
+    // The mask is `sk-` + the first 5 chars of the machine id, so every key issued
+    // on one machine shares it. Two such keys must NOT collapse into one usage
+    // bucket — the live-history grouping keys on the sha256, not the mask.
+    const keyA = "sk-abc12" + "a".repeat(40);
+    const keyB = "sk-abc12" + "b".repeat(40);
+    expect(maskApiKey(keyA)).toBe(maskApiKey(keyB));
+    expect(hashApiKey(keyA)).not.toBe(hashApiKey(keyB));
+
+    const now = new Date().toISOString();
+    for (const k of [keyA, keyB]) {
+      await db.saveRequestUsage({
+        provider: "stepfun-cn", model: "step-collision", connectionId: "c",
+        apiKey: k, tokens: { prompt_tokens: 10, completion_tokens: 5 },
+        endpoint: "/v1/chat/completions", status: "ok", timestamp: now,
+      });
+    }
+
+    // "24h" reads live history — the on-the-fly grouping path (not the daily
+    // summary), which is where the mask collision lived.
+    const stats = await db.getUsageStats("24h");
+    const buckets = Object.values(stats.byApiKey).filter((e) => e.rawModel === "step-collision");
+    expect(buckets.length).toBe(2);
+  });
 });
 
 describe("004-usage-apikey-digest migration", () => {
