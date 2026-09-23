@@ -52,6 +52,7 @@ Architecture and engineering notes for the 10Router gateway + dashboard. All doc
   - [v1.1.0 Release Review](/docs/zh-CN/archive/reviews/release-review-v1.1.0.md)
   - [v1.1.1 Release Review](/docs/zh-CN/archive/reviews/release-review-v1.1.1.md)
   - [v1.1.2 Release Review](/docs/zh-CN/archive/reviews/release-review-v1.1.2.md)
+  - [v1.2.0 Release Review](/docs/zh-CN/archive/reviews/release-review-v1.2.0.md) — 6 high / 8 medium / low-severity findings, all verified in code, with per-fix status
 - Historical triages & reports (zh-only):
   - [Upstream v0.5.69 → v0.5.75 triage](/docs/zh-CN/archive/upstream-triage-v0.5.75.md)
   - [Open issues status snapshot (2026-09-11)](/docs/zh-CN/archive/open-issues-status.md)
@@ -108,6 +109,7 @@ Architecture and engineering notes for the 10Router gateway + dashboard. All doc
   - [v1.1.0 发版范围评审](/docs/zh-CN/archive/reviews/release-review-v1.1.0.md) — 1.1.0 发版范围与决策记录（原 1.0.9 决策原貌）
   - [v1.1.1 发版前审计报告](/docs/zh-CN/archive/reviews/release-review-v1.1.1.md) — 全部 81 笔提交逐笔审读、全量回归门禁与发版最终检查单
   - [v1.1.2 全量审查报告](/docs/zh-CN/archive/reviews/release-review-v1.1.2.md) — v1.1.1 → HEAD 共 87 笔提交（150 文件，+8013/−621）安全/熔断/退避/凭据刷新/数据账本/i18n/供应商治理逐项审查、三注册表基线复核与发版检查单
+  - [v1.2.0 全量审查报告](/docs/zh-CN/archive/reviews/release-review-v1.2.0.md) — v1.1.3 → v1.2.0 共 91 笔提交（347 文件，+17873/−1865）：6 高危 / 8 中危 / 一批低危逐条核查与修复状态、修复阶段新增的 CDP 无头浏览器探针方法论、发布元数据现状与发版检查单
 - 阶段性调研与历史排查：
   - [上游 v0.5.69 → v0.5.75 分诊](/docs/zh-CN/archive/upstream-triage-v0.5.75.md) — 上游 7 个版本 26 笔提交内容分诊记录（已在 v1.1.0 落地）
   - [未关闭 Issue 现状汇总（2026-09-11 快照）](/docs/zh-CN/archive/open-issues-status.md) — 历史 issue 核对快照（其中 #12、#13、#14 现已全部关闭）
