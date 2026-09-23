@@ -25,7 +25,10 @@ export default {
   id: "stepfun-cn",
   priority: 65,
   alias: "step-cn",
-  aliases: ["stepfun-cn", "sf-cn", "sfcn"],
+  // `sfcn` intentionally omitted: siliconflow-cn owns it (registered since
+  // v1.1.3). Keep `sf-cn` for StepFun CN — `sfcn` would shadow SiliconFlow CN
+  // because the alias map is last-writer-wins over the registry order.
+  aliases: ["stepfun-cn", "sf-cn"],
   display: {
     name: "StepFun CN",
     icon: "bolt",
