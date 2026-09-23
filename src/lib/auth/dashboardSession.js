@@ -54,6 +54,26 @@ export function isDashboardAuthConfigured(settings) {
 // while a token that leaks is worthless within two hours.
 const SESSION_MAX_AGE_SEC = 2 * 60 * 60;
 
+// Absolute session lifetime, measured from the ORIGINAL sign-in and carried
+// across every renewal. Without it the sliding renewal is unbounded: each
+// renewal mints a token with a fresh `iat`, so a stolen cookie that is presented
+// at least once per half-life can be renewed indefinitely and the 2-hour window
+// never closes. `origIat` is signed into the token at creation, so a client
+// cannot set or extend it — it only ever makes the session die sooner.
+//
+// 30 days is the "I left a tab open" ceiling, not a security boundary; the
+// security work is the 2h sliding window. Re-authenticating thereafter is the
+// intended cost.
+const SESSION_ABSOLUTE_MAX_AGE_SEC = 30 * 24 * 60 * 60;
+
+function readOrigIat(session) {
+  const orig = typeof session?.origIat === "number" ? session.origIat : null;
+  const iat = typeof session?.iat === "number" ? session.iat : null;
+  // A token minted before this claim existed falls back to its own iat, which is
+  // the best available approximation of when the session started.
+  return orig ?? iat;
+}
+
 // Placeholder values that ship in .env.example / old builds' source. A secret
 // the whole internet can guess is worse than no secret — fall back to the
 // auto-generated one instead of signing sessions with a public string.
@@ -96,7 +116,14 @@ export function shouldUseSecureCookie(request) {
 }
 
 export async function createDashboardAuthToken(claims = {}) {
-  return new SignJWT({ authenticated: true, ...claims })
+  const nowSec = Math.floor(Date.now() / 1000);
+  return new SignJWT({
+    authenticated: true,
+    // Carried across renewals so the absolute cap can be enforced; a renewal
+    // passes the original through and cannot move it forward.
+    origIat: nowSec,
+    ...claims,
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${SESSION_MAX_AGE_SEC}s`)
@@ -146,9 +173,22 @@ export async function renewDashboardAuthCookie(cookieStore, request, session) {
   try {
     const iat = typeof session?.iat === "number" ? session.iat * 1000 : 0;
     if (!iat) return false;
+    // Absolute cap: a session older than this is NOT renewed, so it dies at its
+    // next expiry regardless of how actively it is used. Refusing here (rather
+    // than handing back a short-lived token) keeps the failure honest — the user
+    // is asked to sign in again.
+    const origIat = readOrigIat(session);
+    if (origIat) {
+      const ageSec = Math.floor(Date.now() / 1000) - origIat;
+      if (ageSec >= SESSION_ABSOLUTE_MAX_AGE_SEC) return false;
+    }
     const halfLifeMs = (SESSION_MAX_AGE_SEC * 1000) / 2;
     if (Date.now() - iat < halfLifeMs) return false;
     await setDashboardAuthCookie(cookieStore, request, {
+      // Preserve the original sign-in time across renewals; falling back to the
+      // presented iat keeps the chain intact for tokens minted before origIat
+      // existed.
+      ...(origIat ? { origIat } : {}),
       ...(session?.oidcName ? { oidcName: session.oidcName } : {}),
       ...(session?.oidcEmail ? { oidcEmail: session.oidcEmail } : {}),
       ...(session?.samlName ? { samlName: session.samlName } : {}),
