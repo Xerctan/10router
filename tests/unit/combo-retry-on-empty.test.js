@@ -165,6 +165,43 @@ describe("gateResponse", () => {
     expect(gate.action).toBe("retry");
   });
 
+  it("drains the abandoned stream to completion instead of cancelling it", async () => {
+    // The retry decision is made at the filtered terminal, but a trailing usage
+    // frame + [DONE] still follow. Cancelling the reader there aborted the
+    // underlying metering stream's flush → the attempt landed in the DB as a
+    // client disconnect with zero usage. Draining lets the usage frame through.
+    const lines = [
+      { id: "1", choices: [{ index: 0, delta: { role: "assistant" } }] },
+      { id: "1", choices: [{ index: 0, delta: {}, finish_reason: "sensitive" }] },
+      { id: "1", choices: [], usage: { prompt_tokens: 1500000, completion_tokens: 0 } },
+    ]
+      .map((e) => `data: ${JSON.stringify(e)}\n\n`)
+      .concat("data: [DONE]\n\n");
+
+    let cancelled = false;
+    let drainedToDone = false;
+    let i = 0;
+    const stream = new ReadableStream({
+      pull(controller) {
+        if (i < lines.length) {
+          controller.enqueue(new TextEncoder().encode(lines[i++]));
+        } else {
+          drainedToDone = true;
+          controller.close();
+        }
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const res = new Response(stream, { status: 200, headers: { "content-type": "text/event-stream" } });
+
+    const gate = await gateResponse(res);
+    expect(gate.action).toBe("retry");
+    expect(cancelled).toBe(false); // NOT cancelled
+    expect(drainedToDone).toBe(true); // read all the way through the trailing usage frame + [DONE]
+  });
+
   it("commits a real stream and replays every buffered byte losslessly", async () => {
     const original = sseResponse(openaiContent);
     const expected = await original.clone().text();
@@ -365,5 +402,70 @@ describe("handleComboChat retryOnEmpty (issue #10)", () => {
       retryOnEmpty: true,
     });
     expect(warnings.some((w) => w.includes("same provider"))).toBe(false);
+  });
+});
+
+// --- issue #10 follow-up: a tool-call-only turn is NOT empty --------------
+// The bug: Responses-API and Gemini function-call answers, and the OpenRouter
+// `delta.reasoning` spelling, were classified as empty → the combo abandoned
+// them and re-billed the whole input against the next model. These pin that a
+// call/reasoning-only head commits instead of retrying.
+
+describe("createStreamScanner: tool-call / reasoning-only heads commit (issue #10)", () => {
+  const line = (obj) => enc.encode(`data: ${JSON.stringify(obj)}\n\n`);
+
+  it("OpenAI: delta.reasoning (OpenRouter/xAI spelling) is valuable", () => {
+    const s = createStreamScanner();
+    expect(s.push(line({ choices: [{ delta: { reasoning: "thinking…" } }] })).kind).toBe("commit");
+  });
+
+  it("Responses: an output_item.added function_call commits", () => {
+    const s = createStreamScanner();
+    expect(s.push(line({ type: "response.output_item.added", item: { type: "function_call", name: "get_weather" } })).kind).toBe("commit");
+  });
+
+  it("Responses: function_call_arguments.delta commits", () => {
+    const s = createStreamScanner();
+    expect(s.push(line({ type: "response.function_call_arguments.delta", delta: '{"city":' })).kind).toBe("commit");
+  });
+
+  it("Responses: a completed response whose only output is a function_call is not empty", () => {
+    const s = createStreamScanner();
+    const r = s.push(line({ type: "response.completed", response: { output: [{ type: "function_call", name: "f", arguments: "{}" }] } }));
+    expect(r.kind).toBe("commit");
+  });
+
+  it("Responses: reasoning_summary_text.delta (correct spelling) is valuable", () => {
+    const s = createStreamScanner();
+    expect(s.push(line({ type: "response.reasoning_summary_text.delta", delta: "let me think" })).kind).toBe("commit");
+  });
+
+  it("Gemini: a functionCall part commits", () => {
+    const s = createStreamScanner();
+    const r = s.push(line({ candidates: [{ content: { parts: [{ functionCall: { name: "f", args: {} } }] }, finishReason: "STOP" }] }));
+    expect(r.kind).toBe("commit");
+  });
+
+  it("Gemini: a genuinely empty filtered turn still retries (no regression)", () => {
+    const s = createStreamScanner();
+    expect(s.push(line({ candidates: [{ content: { parts: [] }, finishReason: "SAFETY" }] })).kind).toBe("retry");
+  });
+});
+
+describe("inspectNonStream: tool-call / reasoning answers are not retryable (issue #10)", () => {
+  it("OpenAI: delta.reasoning-style message is not empty", () => {
+    expect(inspectNonStream({ choices: [{ message: { content: "", reasoning: "thought" }, finish_reason: "stop" }] }).retryable).toBe(false);
+  });
+
+  it("OpenAI: array (multimodal) content is not empty", () => {
+    expect(
+      inspectNonStream({ choices: [{ message: { content: [{ type: "text", text: "hi" }] }, finish_reason: "stop" }] }).retryable
+    ).toBe(false);
+  });
+
+  it("Gemini: a functionCall answer is not empty", () => {
+    expect(
+      inspectNonStream({ candidates: [{ content: { parts: [{ functionCall: { name: "f", args: {} } }] }, finishReason: "STOP" }] }).retryable
+    ).toBe(false);
   });
 });

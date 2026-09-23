@@ -93,6 +93,13 @@ export class StopSequenceGuard {
     this.shape = null;
     /** Last real chunk, cloned when a synthetic chunk must be emitted. */
     this.template = null;
+    /** Anthropic content-block index of the text block, so a synthetic holdover
+     *  delta targets the right block instead of hardcoding 0 (a thinking block
+     *  occupies index 0, text is index 1). Null until a text block is seen, so
+     *  a preceding block's content_block_stop can't be mistaken for it. */
+    this.textBlockIndex = null;
+    /** A buffered Anthropic `event:` line awaiting its `data:` line. */
+    this.pendingEventLine = null;
   }
 
   get active() {
@@ -161,7 +168,15 @@ function isOpenAIChunk(json) {
 }
 
 function isAnthropicChunk(json) {
-  return typeof json?.type === "string" && (json.type.startsWith("content_block_delta") || json.type === "message_delta" || json.type === "message_stop" || json.type === "message_start");
+  return (
+    typeof json?.type === "string" &&
+    (json.type.startsWith("content_block_delta") ||
+      json.type === "content_block_start" ||
+      json.type === "content_block_stop" ||
+      json.type === "message_delta" ||
+      json.type === "message_stop" ||
+      json.type === "message_start")
+  );
 }
 
 /** Terminal chunks must not be forwarded before held-back text is flushed. */
@@ -231,11 +246,28 @@ function finishReasonAccessor(json) {
 /** A synthetic chunk carrying held-back text, shaped like the upstream stream. */
 function holdoverChunk(guard, text) {
   if (guard.shape === "anthropic") {
-    return { type: "content_block_delta", index: 0, delta: { type: "text_delta", text } };
+    return { type: "content_block_delta", index: guard.textBlockIndex ?? 0, delta: { type: "text_delta", text } };
   }
   const base = guard.template && isOpenAIChunk(guard.template) ? { ...guard.template } : {};
   delete base.usage;
   return { ...base, choices: [{ index: 0, delta: { content: text }, finish_reason: null }] };
+}
+
+/**
+ * The lines of ONE complete SSE event for a chunk, terminated by a blank line.
+ * A synthetic event we inject must be self-contained: two `data:` lines with no
+ * blank line between them are, per the SSE spec, a single event whose data is
+ * their concatenation — which is exactly how the OpenAI/Anthropic SDK parsers
+ * read it, so a holdover pushed straight before the terminal frame used to make
+ * `JSON.parse` throw on the merged blob. Anthropic events also carry an
+ * `event:` name line, without which the client cannot route the delta.
+ */
+function eventLines(guard, json) {
+  const lines = [];
+  if (guard.shape === "anthropic" && typeof json.type === "string") lines.push(`event: ${json.type}`);
+  lines.push(`data: ${JSON.stringify(json)}`);
+  lines.push(""); // blank line terminates the event
+  return lines;
 }
 
 function encodeDataLine(guard, json) {
@@ -243,23 +275,58 @@ function encodeDataLine(guard, json) {
 }
 
 function emitHoldover(guard, out) {
+  // takeHoldover() clears the buffer, so a second call finds nothing and is a
+  // no-op — that is what makes this idempotent across the two flush points
+  // (content_block_stop of the text block, and the terminal frame).
   const held = guard.takeHoldover();
-  if (held) out.push(encodeDataLine(guard, holdoverChunk(guard, held)));
+  if (held) out.push(...eventLines(guard, holdoverChunk(guard, held)));
+}
+
+/** Emit a buffered Anthropic `event:` line (if any) into `out`. */
+function flushPendingEventLine(guard, out) {
+  if (guard.pendingEventLine != null) {
+    out.push(guard.pendingEventLine);
+    guard.pendingEventLine = null;
+  }
 }
 
 /**
- * Rewrite one SSE line. Returns the list of lines to emit in its place (usually
- * exactly the input line).
+ * Rewrite one SSE line, appending the line(s) to emit in its place to `out`.
+ *
+ * Anthropic events span two lines — an `event:` name line then a `data:` line —
+ * so the name line is buffered until its data line is processed. That lets a
+ * synthetic holdover event be injected *before* the name line rather than after
+ * it, which would otherwise strand the real event's name ahead of the injected
+ * event and corrupt the client's event routing. OpenAI streams have no `event:`
+ * lines, so the buffer stays empty and this is a no-op for them.
  */
 function transformLine(line, guard, out) {
-  if (!guard.active || !line.startsWith("data:")) {
+  if (!guard.active) {
     out.push(line);
     return;
   }
+
+  if (line.startsWith("event:")) {
+    // Only ever one name line precedes a data line; an orphan (two in a row) is
+    // malformed but we pass the earlier one through rather than drop it.
+    flushPendingEventLine(guard, out);
+    guard.pendingEventLine = line;
+    return;
+  }
+
+  if (!line.startsWith("data:")) {
+    // Comment / id: / retry: / the blank line that terminates an event.
+    flushPendingEventLine(guard, out);
+    out.push(line);
+    return;
+  }
+
   const payload = line.slice(5).trim();
   if (payload.length === 0 || payload === "[DONE]") {
-    // Keepalive or end-of-stream: held-back text must go out first.
+    // Keepalive or end-of-stream: held-back text must go out first, as its own
+    // complete event, then the buffered name line, then this data line.
     emitHoldover(guard, out);
+    flushPendingEventLine(guard, out);
     out.push(line);
     return;
   }
@@ -267,20 +334,57 @@ function transformLine(line, guard, out) {
   try {
     json = JSON.parse(payload);
   } catch {
+    flushPendingEventLine(guard, out);
     out.push(line);
     return;
   }
   if (!isOpenAIChunk(json) && !isAnthropicChunk(json)) {
+    flushPendingEventLine(guard, out);
     out.push(line);
     return;
   }
   guard.shape = isAnthropicChunk(json) ? "anthropic" : "openai";
   if (isOpenAIChunk(json)) guard.template = json;
 
-  if (isTerminalChunk(json)) emitHoldover(guard, out);
+  // Remember which content block is the text block, so a synthetic holdover
+  // delta addresses it instead of hardcoding index 0 (a thinking block sits at
+  // 0, text at 1).
+  if (guard.shape === "anthropic") {
+    if (json.type === "content_block_start" && json.content_block?.type === "text") {
+      guard.textBlockIndex = json.index ?? guard.textBlockIndex;
+    } else if (json.type === "content_block_delta" && json.delta?.type === "text_delta") {
+      guard.textBlockIndex = json.index ?? guard.textBlockIndex;
+    }
+  }
+
+  // Flush the holdover before the stream's terminal frame, or before the text
+  // block it belongs to is closed — whichever comes first — so the client never
+  // receives a delta for an already-closed block. emitHoldover is idempotent.
+  const flushBeforeThis =
+    isTerminalChunk(json) ||
+    (guard.shape === "anthropic" && json.type === "content_block_stop" && json.index === guard.textBlockIndex);
+  if (flushBeforeThis) emitHoldover(guard, out);
 
   const before = JSON.stringify(json);
   const hitBeforeChunk = guard.hit;
+
+  // After the cut, a NEW Anthropic content block (a tool_use the model began past
+  // the stop point) must be dropped WHOLE, not merely blanked: stripDelta only
+  // empties a tool block's partial_json, leaving the client a tool_use with
+  // input:{} it may still execute with empty args. Drop its start/delta/stop
+  // entirely (and its buffered `event:` line), mirroring the OpenAI side deleting
+  // tool_calls. The text block being closed (index === textBlockIndex) and the
+  // terminal message_delta / message_stop frames still pass.
+  if (
+    hitBeforeChunk &&
+    guard.shape === "anthropic" &&
+    (json.type === "content_block_start" || json.type === "content_block_delta" || json.type === "content_block_stop") &&
+    json.index !== guard.textBlockIndex
+  ) {
+    guard.pendingEventLine = null;
+    return;
+  }
+
   const accessor = textAccessor(json);
   if (accessor) {
     const original = accessor.get();
@@ -297,6 +401,7 @@ function transformLine(line, guard, out) {
     // must not survive — it is what makes the client discard the answer.
     if (finish) finish.set(guard.shape === "anthropic" ? "stop_sequence" : "stop");
   }
+  flushPendingEventLine(guard, out);
   out.push(JSON.stringify(json) !== before ? encodeDataLine(guard, json) : line);
 }
 
@@ -336,6 +441,7 @@ export function applyStopSequenceGuard(stream, guard) {
         }
         const out = [];
         emitHoldover(guard, out);
+        flushPendingEventLine(guard, out);
         for (const entry of out) controller.enqueue(encoder.encode(`${entry}\n`));
       },
     })

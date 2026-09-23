@@ -314,4 +314,127 @@ describe("applyStopSequenceGuard (Anthropic-shaped upstream)", () => {
     // usage must survive the cut
     expect(payloads(out).find((json) => json.type === "message_delta")?.usage).toEqual({ output_tokens: 64 });
   });
+
+  it("drops a tool_use block the model starts after the cut, whole", async () => {
+    const out = await guardSSE(
+      [
+        `data: ${JSON.stringify({ type: "message_start", message: { id: "msg_1" } })}\n\n`,
+        `data: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } })}\n\n`,
+        `data: ${JSON.stringify(anthropicChunk("verdict </severity>4"))}\n\n`,
+        `data: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
+        // A tool_use the model began PAST the stop point — must not reach the client,
+        // or a claude→claude client executes it with whatever args survive.
+        `data: ${JSON.stringify({ type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_1", name: "run_bash", input: {} } })}\n\n`,
+        `data: ${JSON.stringify({ type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: '{"cmd":"rm -rf /"}' } })}\n\n`,
+        `data: ${JSON.stringify({ type: "content_block_stop", index: 1 })}\n\n`,
+        `data: ${JSON.stringify({ type: "message_delta", delta: { stop_reason: "max_tokens" } })}\n\n`,
+        `data: ${JSON.stringify({ type: "message_stop" })}\n\n`,
+      ],
+      ["</severity>"]
+    );
+    const events = payloads(out);
+    // Nothing from the post-cut tool block leaks — not its start, args, or stop.
+    expect(events.some((j) => j.type === "content_block_start" && j.content_block?.type === "tool_use")).toBe(false);
+    expect(events.some((j) => j.index === 1)).toBe(false);
+    expect(out).not.toContain("run_bash");
+    expect(out).not.toContain("rm -rf");
+    // The text block still closes cleanly and the turn ends as stop_sequence.
+    expect(events.some((j) => j.type === "content_block_stop" && j.index === 0)).toBe(true);
+    expect(events.find((j) => j.type === "message_delta")?.delta?.stop_reason).toBe("stop_sequence");
+    expect(events.some((j) => j.type === "message_stop")).toBe(true);
+    // And the surviving stream is still well-formed SSE (one data line per event).
+    expectWellFormed(out);
+  });
+});
+
+// --- SSE frame-boundary regressions (issue #18 holdover framing) -----------
+
+/**
+ * Parse an SSE text the way a real client does: split into events on the blank
+ * line, then read each event's `event:`/`data:` lines. A holdover that was
+ * emitted without its own blank-line terminator shows up here as an event with
+ * TWO data lines (the injected one glued to the next frame) — which is exactly
+ * what broke JSON.parse in the OpenAI/Anthropic SDKs.
+ */
+function parseSSEEvents(sseText) {
+  return sseText
+    .split(/\n\n/)
+    .map((block) => block.split("\n").filter((l) => l.length > 0))
+    .filter((lines) => lines.length > 0)
+    .map((lines) => ({
+      eventName: lines.find((l) => l.startsWith("event:"))?.slice(6).trim() ?? null,
+      dataLines: lines.filter((l) => l.startsWith("data:")).map((l) => l.slice(5).trim()),
+    }));
+}
+
+/** Assert every event carries at most one data line and each one parses. */
+function expectWellFormed(sseText) {
+  for (const ev of parseSSEEvents(sseText)) {
+    expect(ev.dataLines.length, `one data line per event, got: ${ev.dataLines.join(" || ")}`).toBeLessThanOrEqual(1);
+    for (const d of ev.dataLines) {
+      if (d && d !== "[DONE]") expect(() => JSON.parse(d), `parseable: ${d}`).not.toThrow();
+    }
+  }
+}
+
+describe("holdover is emitted as its own complete SSE event (issue #18)", () => {
+  const oa = (content) => ({ choices: [{ index: 0, delta: { content }, finish_reason: null }] });
+
+  it("OpenAI: a held-back stop prefix before the terminal frame does not merge", async () => {
+    // stop "\nObservation"; the text ends on "\n", a proper prefix, so it is held.
+    const out = await guardSSE(
+      [
+        `data: ${JSON.stringify(oa("answer"))}\n\n`,
+        `data: ${JSON.stringify(oa("\n"))}\n\n`,
+        `data: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage: { total_tokens: 5 } })}\n\n`,
+        `data: [DONE]\n\n`,
+      ],
+      ["\nObservation"]
+    );
+    expectWellFormed(out);
+    // the held "\n" comes back (nothing was lost) and the terminal usage survives
+    expect(openAIContent(out)).toBe("answer\n");
+    expect(payloads(out).find((j) => j.usage)?.usage).toEqual({ total_tokens: 5 });
+  });
+
+  it("Anthropic: holdover carries an event: line, targets the text block, keeps real event names", async () => {
+    const out = await guardSSE(
+      [
+        `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "m1" } })}\n\n`,
+        // thinking block occupies index 0…
+        `event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 0, content_block: { type: "thinking" } })}\n\n`,
+        `event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 0 })}\n\n`,
+        // …text is index 1
+        `event: content_block_start\ndata: ${JSON.stringify({ type: "content_block_start", index: 1, content_block: { type: "text" } })}\n\n`,
+        `event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", index: 1, delta: { type: "text_delta", text: "done\n" } })}\n\n`,
+        `event: content_block_stop\ndata: ${JSON.stringify({ type: "content_block_stop", index: 1 })}\n\n`,
+        `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 3 } })}\n\n`,
+        `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`,
+      ],
+      ["\nHuman:"]
+    );
+    expectWellFormed(out);
+    const events = parseSSEEvents(out);
+
+    // The synthetic holdover is a content_block_delta on the TEXT block (index 1).
+    const holdover = events.find(
+      (e) => e.eventName === "content_block_delta" && JSON.parse(e.dataLines[0]).delta?.text === "\n"
+    );
+    expect(holdover, "holdover event present with event: line").toBeTruthy();
+    expect(JSON.parse(holdover.dataLines[0]).index).toBe(1);
+
+    // The held "\n" is not lost, and the real terminal event keeps its name + usage.
+    const text = payloads(out).map((j) => j.delta?.text ?? "").join("");
+    expect(text).toBe("done\n");
+    const md = events.find((e) => e.eventName === "message_delta");
+    expect(md).toBeTruthy();
+    expect(JSON.parse(md.dataLines[0]).usage).toEqual({ output_tokens: 3 });
+
+    // The holdover was flushed BEFORE the text block closed, not after.
+    const idxHoldover = events.indexOf(holdover);
+    const idxTextStop = events.findIndex(
+      (e) => e.eventName === "content_block_stop" && JSON.parse(e.dataLines[0]).index === 1
+    );
+    expect(idxHoldover).toBeLessThan(idxTextStop);
+  });
 });
