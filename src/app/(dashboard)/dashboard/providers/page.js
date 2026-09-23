@@ -177,12 +177,17 @@ export default function ProvidersPage() {
     return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
   };
 
-  const sortByPriority = (entries, authType) =>
+  const sortByPriority = (entries) =>
     [...entries].sort(([ka, a], [kb, b]) => {
       // Connection state is the primary axis: active/connected providers always
       // surface before unconnected ones, then manual drag order, then priority, then name.
-      const sa = getProviderStats(ka, authType);
-      const sb = getProviderStats(kb, authType);
+      // Count connections under EVERY auth type the provider can store (dualAuthTypes),
+      // NOT a flat "oauth": a dual-auth card stores its credential as authType
+      // "api_key"/"apikey" (mimo-desktop's account session, a qoder PAT), so the old
+      // flat filter counted a live card as unconnected and sank it below empty ones —
+      // while its badge (which already uses dualAuthTypes) showed it connected.
+      const sa = getProviderStats(ka, dualAuthTypes(a, ka));
+      const sb = getProviderStats(kb, dualAuthTypes(b, kb));
       const ra = providerRank(sa, a, ka);
       const rb = providerRank(sb, b, kb);
       if (ra !== rb) return ra - rb;
@@ -358,6 +363,12 @@ export default function ProvidersPage() {
   // kiro has no authModes in registry but accepts both (headless uses "api_key").
   const dualAuthTypes = (info, key) => {
     if (key === "kiro") return ["oauth", "apikey", "api_key"];
+    // mimo-desktop declares authModes ["oauth"] (its credential is the account
+    // session, not a key), but its ONLY connect path — the shared MiMo modal
+    // through /api/oauth/xiaomi-mimo/api-key — writes rows with authType
+    // "api_key" (placeholder token). Counting "oauth" only made the card show
+    // "No connections" next to a live, tested connection on the detail page.
+    if (key === "mimo-desktop") return ["oauth", "apikey", "api_key"];
     const modes = info?.authModes;
     // Free-tier and API-key providers default to supporting apikey even when the
     // registry entry omits authModes (e.g. cloudflare-ai, byteplus, ollama,
@@ -373,7 +384,6 @@ export default function ProvidersPage() {
 
   const oauthEntries = sortByPriority(
     Object.entries(OAUTH_PROVIDERS).filter(([, info]) => !info.hidden && matchSearch(info.name)),
-    "oauth",
   );
   // Merge free (noAuth/connectionless) and free-tier (api-key) providers into
   // ONE list sorted by the shared connection-state rule. Without this, the two

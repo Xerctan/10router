@@ -80,6 +80,9 @@ function toSafeConnection(connection) {
   delete result.accessToken;
   delete result.refreshToken;
   delete result.idToken;
+  // Internal carrier for ciphertext that could not be decrypted (kept on the
+  // row so a later write doesn't erase it); never part of an API response.
+  delete result.__unreadableCredentials;
   return result;
 }
 

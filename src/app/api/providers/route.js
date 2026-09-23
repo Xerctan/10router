@@ -86,6 +86,8 @@ export async function GET() {
         accessToken: undefined,
         refreshToken: undefined,
         idToken: undefined,
+        // Internal carrier for undecryptable ciphertext — never expose it.
+        __unreadableCredentials: undefined,
         // True only for a REAL key — the session placeholder is not a key.
         hasAccessToken: rawToken.length > 0 && !rawToken.startsWith("mimo-desktop-session"),
         hasDesktopSession: Boolean(c.providerSpecificData?.mimoPassToken),

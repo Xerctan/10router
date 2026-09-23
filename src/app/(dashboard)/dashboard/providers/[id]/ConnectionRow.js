@@ -90,8 +90,11 @@ export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst
   const isOAuthConnection = rowAuthType === "oauth";
   const isCookieConnection = rowAuthType === "cookie";
   // Label by WHAT CREDENTIALS THE ROW ACTUALLY HOLDS, not by which flow wrote
-  // it last. A Xiaomi row can end up with both halves (desktop session from the
-  // QR import + sk- key from the browser authorization).
+  // it last. Since the three-card split a session can only live on the Desktop
+  // card, so the both-halves shape only occurs there (session + a manually
+  // added sk- key). The cloud card's rows hold a key alone — an older build
+  // folded the machine's Desktop session into them, which is what made that
+  // card advertise "Desktop Session"; migration 005 removed those fields.
   //   session + key → two badges: "Desktop Session" + "Browser sign-in"
   //   session only  → "Desktop Session"
   //   key only      → "Browser sign-in" (oauth) / "API Key" (manual paste)

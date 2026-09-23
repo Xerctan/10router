@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { getProviderIconSrc, markProviderIconMissing } from "@/shared/utils/providerIcon";
-import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, XiaomiMimoAuthModal, IFlowCookieModal, GitLabAuthModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal, InviteCodeChip } from "@/shared/components";
+import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, XiaomiMimoAuthModal, IFlowCookieModal, GitLabAuthModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal, InviteCodeChip, Tooltip } from "@/shared/components";
 import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, FREE_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, getProviderAlias, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, AI_PROVIDERS } from "@/shared/constants/providers";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { mergeQoderLivePricing } from "@/shared/utils/qoderLivePricing";
@@ -116,6 +116,13 @@ export default function ProviderDetailPage() {
   const [showAgRiskModal, setShowAgRiskModal] = useState(false);
   const [oneByOneRunning, setOneByOneRunning] = useState(false);
   const [oneByOneStopping, setOneByOneStopping] = useState(false);
+  // Model sent with each one-by-one probe. The sentinel (not "") because Select
+  // always renders a disabled placeholder option on value="" — a real "" option
+  // would be shadowed by it. The test route treats an absent body.model as
+  // "provider default". Needed because some credentials only accept a subset of
+  // ids (e.g. mimo-desktop: its session reaches the desktop models only).
+  const ONE_BY_ONE_DEFAULT_MODEL = "__provider_default__";
+  const [oneByOneModel, setOneByOneModel] = useState(ONE_BY_ONE_DEFAULT_MODEL);
   const [oneByOneCurrentConnectionId, setOneByOneCurrentConnectionId] = useState(null);
   const [oneByOneResults, setOneByOneResults] = useState({});
   const [oneByOneSummary, setOneByOneSummary] = useState(null);
@@ -1080,7 +1087,14 @@ export default function ProviderDetailPage() {
         }));
 
         try {
-          const res = await fetch(`/api/providers/${connection.id}/test`, { method: "POST" });
+          // Guard against a persisted selection drifting across provider
+          // navigation: only send the model if it is one of this provider's.
+          const probeModel = models.some((m) => m.id === oneByOneModel) ? oneByOneModel : null;
+          const res = await fetch(`/api/providers/${connection.id}/test`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(probeModel && probeModel !== ONE_BY_ONE_DEFAULT_MODEL ? { model: probeModel } : {}),
+          });
           const data = await res.json();
           const valid = !!data.valid;
 
@@ -1998,6 +2012,20 @@ export default function ProviderDetailPage() {
                       Delete Selected ({selectedConnectionIds.length})
                     </Button>
                   )}
+                  {connections.length > 0 && models.length > 1 && (
+                    <Select
+                      value={oneByOneModel}
+                      onChange={(e) => setOneByOneModel(e.target.value)}
+                      disabled={oneByOneRunning}
+                      options={[
+                        { value: ONE_BY_ONE_DEFAULT_MODEL, label: translate("Provider default") },
+                        ...models
+                          .filter((m) => { const k = getModelKind(m); return !k || k === "llm"; })
+                          .map((m) => ({ value: m.id, label: m.name || m.id })),
+                      ]}
+                      selectClassName="!py-2 !text-xs w-44"
+                    />
+                  )}
                   <Button
                     size="sm"
                     variant="secondary"
@@ -2112,7 +2140,14 @@ export default function ProviderDetailPage() {
                       icon="add"
                       onClick={triggerAddConnection}
                     >
-                      {isCompatible ? "Add API Key" : (providerId === "iflow" ? "OAuth" : providerId === "mimo-desktop" ? translate("Connect with Desktop Session") : "Add Connection")}
+                      {isCompatible ? "Add API Key" : (providerId === "iflow" ? "OAuth" : providerId === "mimo-desktop" ? (
+                        <span className="inline-flex items-center gap-1">
+                          {translate("Connect with Desktop Session")}
+                          <Tooltip text={translate("Requires sign-in to Xiaomi MiMo Desktop app first")} position="top">
+                            <span className="material-symbols-outlined text-[14px] opacity-60">info</span>
+                          </Tooltip>
+                        </span>
+                      ) : "Add Connection")}
                     </Button>
                   </>
                 )}
