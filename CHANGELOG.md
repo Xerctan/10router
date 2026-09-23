@@ -5,6 +5,8 @@
 ## v1.2.0 (2026-09-24)
 
 > 本版主题：**供应商治理收敛 + 网关契约修复 + 一次安全审计收尾**。含两处破坏性变更（i18n 品牌重命名、MiMo Desktop 按 provider 判定），故走 minor。
+>
+> **关于 v1.1.4**：本版一并收录了 v1.1.4 开发位的全部内容。那个版本号是开发期盖上的，**从未发布**（无 tag、无 npm 包、无 Release），发布前已被 revert（`c714f2a8`），内容并入本版。因此本文档中没有 `v1.1.4` 独立版本段 —— 下方「v1.1.4 开发位」小节即其全部内容。
 
 ### ✨ 新功能
 
@@ -49,9 +51,11 @@
 - **文档与常量归位**：`docs/zh-CN/ARCHITECTURE.md` 的 `x-9r-real-ip` 更正为 `x-10r-*`（cli-token 头代码里仍是 `x-9r-cli-token`，准确，未动）；`MAX_ENFORCED_STOP_LENGTH` 从 `utils/` 移入 `config/runtimeConfig.js`（符合 open-sse 的 config 集中约定）；`fnos-packaging/manifest` 的维护者从上游残留名 `decolua` 更正为 `techysy`（`maintainer_url` 早已指向本仓库，只有名字没跟上）。
 - 本地构建与验证手册新增「渲染类问题必须驱动真浏览器看 DOM」一节，含本版**实际付出的两个误判教训**：按图标「画的是什么」判方向而非按该排按钮的约定判；以及用顺序交互去覆盖同 tick 竞态（顺序点击会完全掩盖后者）。
 
-## v1.1.4 (2026-09-20)
+### 以下为 v1.1.4 开发位的内容（该版本号未发布，一并随本版发布）
 
-### ✨ 新功能
+该位次积累的 57 个提交（StepFun 四渠道、ComfyUI 本地生图、combo 空回复回退、stop 序列守卫、默认密码斩断、凭据加密落库等）在 `v1.1.3` 之后落地，未随任何版本发布。
+
+#### ✨ 新功能
 
 - **变更日志只渲染到已发行版本**：仪表盘 Change Log 从仓库 `main` 拉取（旧版本用户能看到后续更新），但开发期写入的「未来版本」条目会立刻到达所有已安装客户端，告知用户自己并没有的功能。现以 `/api/version` 的 npm 已发版本与自身构建版本两者较高者为上限，截掉高于它的版本段；完全离线 / 版本未知时回退为不截断（旧行为），绝不会出现空白弹窗。附 12 例回归（`changelog-release-cap.test.js`）。
 - **StepFun（阶跃星辰）全系列原生接入与多媒体能力隔离**：
@@ -73,7 +77,7 @@
 - **Qoder 签到与额度识别优化**：
   - 增强 Qoder 国际版与国内版签到容错，清晰展示当前账号代金券与 Credits 状态。
 
-### 🐛 修复
+#### 🐛 修复
 
 - **小米 MiMo 浏览器登录在局域网 / HTTP 访问下完全不可用**：连接弹窗生成 OAuth `state` 时直接调用 `crypto.randomUUID()`，而该 API **仅存在于安全上下文**（HTTPS 或 localhost）。从另一台设备以 `http://局域网IP:20128` 打开仪表盘（NAS / 自托管的常态访问方式）时它是 `undefined`，点击「浏览器」直接抛 `crypto.randomUUID is not a function`；又因为服务端 `/authorize` 强制要求客户端提供 `state`（缺失返回 400 `Missing state`，X25519 密钥对需绑定该字符串），整条浏览器登录链路被彻底堵死。新增浏览器安全 `uuid()` 工具：优先原生 `randomUUID`，否则用不受安全上下文限制的 `getRandomValues` 拼出 v4（正确置版本 / 变体位），全无 WebCrypto 时再降级；附 5 例回归用例（`browser-safe-uuid.test.js`）覆盖三种运行环境。同一弹窗里的桌面凭据自动导入与手动 API 密钥两条路径不受影响。
 - **StepFun 连接测试报「Provider test not supported」**：StepFun 四个渠道（国内站 / 国际站 × 按量 / Step Plan）此前未在连接测试分支注册，仪表盘「逐个测试连接」与单连接测试对**健康密钥**也一律返回 `Provider test not supported`。现统一走通用 OpenAI 兼容校验（`GET {base}/models` + `Authorization: Bearer`）：`stepfun-cn`→`api.stepfun.com/v1/models`、`stepfun`→`api.stepfun.ai/v1/models`、`stepfun-plan-cn`→`api.stepfun.com/step_plan/v1/models`、`stepfun-plan`→`api.stepfun.ai/step_plan/v1/models`（Step Plan 仅 `/accounts` 额度路由 404，`/models` 正常）。401/403 判为无效密钥、网关 HTML/403 判为维护中，与其余通用渠道一致。附离线回归用例（`stepfun-connection-test.test.js`，mock fetch 校验路由与判定，不依赖真实网络）。
