@@ -100,9 +100,11 @@ describe("accountTransfer.importAccounts", () => {
     expect(res.updated).toBe(1);
   });
 
-  it("carries providerSpecificData across machines (mimoPassToken survives transfer)", async () => {
-    // Seed a connection the way the xiaomi-mimo session-only import does.
-    await mod.importAccounts("xiaomi-mimo", [
+  it("carries providerSpecificData across machines (Desktop card keeps its session)", async () => {
+    // On `mimo-desktop` the account session IS the credential, so a transfer must
+    // carry it or the target machine has nothing to route with. Seed the row the
+    // way the Desktop-card session-only import does.
+    await mod.importAccounts("mimo-desktop", [
       {
         name: "Desktop Session",
         accessToken: "mimo-desktop-session-6786673",
@@ -114,22 +116,51 @@ describe("accountTransfer.importAccounts", () => {
       },
     ]);
     const { getProviderConnections } = await import("../../src/models/index.js");
-    const conns = await getProviderConnections({ provider: "xiaomi-mimo" });
+    const conns = await getProviderConnections({ provider: "mimo-desktop" });
     const seeded = conns.find((c) => c.accessToken === "mimo-desktop-session-6786673");
     expect(seeded?.providerSpecificData?.mimoPassToken).toBe("PT-abc123");
 
     // Export → the passToken must be in the payload (cross-machine transfer).
-    const exported = mod.buildExportAccounts("xiaomi-mimo", conns);
+    const exported = mod.buildExportAccounts("mimo-desktop", conns);
     const row = exported.find((a) => a.accessToken === "mimo-desktop-session-6786673");
     expect(row?.providerSpecificData?.mimoPassToken).toBe("PT-abc123");
 
     // Re-import on another machine (fresh provider) → session preserved.
-    const res = await mod.importAccounts("xiaomi-mimo-copy", [
-      { ...row, provider: "xiaomi-mimo-copy" },
+    const res = await mod.importAccounts("mimo-desktop-copy", [
+      { ...row, provider: "mimo-desktop-copy" },
     ]);
     expect(res.imported).toBe(1);
-    const copyConns = await getProviderConnections({ provider: "xiaomi-mimo-copy" });
+    const copyConns = await getProviderConnections({ provider: "mimo-desktop-copy" });
     expect(copyConns[0]?.providerSpecificData?.mimoPassToken).toBe("PT-abc123");
+  });
+
+  it("refuses to re-contaminate the cloud card from an old transfer file", async () => {
+    // A file exported before migration 005 can still carry a Desktop session
+    // folded into its xiaomi-mimo row. Importing it must not put that session
+    // back on the cloud card — that is what made it advertise a weekly Desktop
+    // quota it does not own.
+    const res = await mod.importAccounts("xiaomi-mimo", [
+      {
+        name: "Legacy",
+        accessToken: "sk-cloud-key",
+        providerSpecificData: {
+          mimoPassToken: "PT-stale",
+          mimoUserId: "6786673",
+          mimoCUserId: "C-stale",
+          authMethod: "desktop-session",
+          baseUrl: "https://api.xiaomimimo.com/v1/chat/completions",
+        },
+      },
+    ]);
+    expect(res.imported).toBe(1);
+    const { getProviderConnections } = await import("../../src/models/index.js");
+    const [conn] = await getProviderConnections({ provider: "xiaomi-mimo" });
+    expect(conn.providerSpecificData.mimoPassToken).toBeUndefined();
+    expect(conn.providerSpecificData.mimoUserId).toBeUndefined();
+    expect(conn.providerSpecificData.mimoCUserId).toBeUndefined();
+    expect(conn.providerSpecificData.authMethod).toBeUndefined();
+    // …while unrelated fields the cloud card does own survive.
+    expect(conn.providerSpecificData.baseUrl).toBe("https://api.xiaomimimo.com/v1/chat/completions");
   });
 
   it("re-import merges providerSpecificData instead of wiping omitted fields", async () => {
