@@ -377,18 +377,28 @@ describe("the fnOS package does not ship a public initial password", () => {
     expect(main).toContain("crypto");
   });
 
-  it("reads the value back from .env instead of overriding it with a constant", () => {
+  it("reads the value back from the persistent password file, not a constant", () => {
     // Process env beats .env for Next.js, so a constant fallback here would
     // silently replace the generated password.
     expect(main).not.toContain('INITIAL_PASSWORD="${INITIAL_PASSWORD:-' + FORBIDDEN_LITERAL + '}"');
-    expect(main).toContain("sed -n 's/^INITIAL_PASSWORD=//p'");
+    // The password persists in ${DATA_DIR} (which survives fpk upgrades — the app
+    // payload dir does NOT) and is read back from there, so a restart/upgrade
+    // keeps the same password instead of minting a new one and locking the user
+    // out. It must no longer be written into the wiped payload dir.
+    expect(main).toContain('PW_FILE="${DATA_DIR}/initial-password"');
+    expect(main).toContain('head -1 "${PW_FILE}"');
+    expect(main).not.toContain('> "${SRC_DIR}/.env"');
   });
 
-  it("the install and upgrade callbacks replace the placeholder with a random value", () => {
+  it("install and upgrade callbacks seed the PERSISTENT password, not the wiped payload dir", () => {
     for (const hook of ["install_callback", "upgrade_callback"]) {
       const code = readSource(`fnos-packaging/cmd/${hook}`);
       expect(code).not.toContain("INITIAL_PASSWORD=" + FORBIDDEN_LITERAL);
       expect(code).toContain("gen_initial_password");
+      // Seed the persistent file only when absent — on upgrade it already exists,
+      // so the original password is preserved instead of regenerated.
+      expect(code).toContain('PW_FILE="${DATA_DIR}/initial-password"');
+      expect(code).toContain('if [ ! -f "${PW_FILE}" ]');
     }
   });
 });
