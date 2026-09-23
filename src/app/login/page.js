@@ -51,6 +51,18 @@ export default function LoginPage() {
 
   const needsLocalSetup = status?.needsLocalSetup === true;
   const bootstrapLocal = status?.bootstrapLocal === true;
+  // The hint below tells the operator where to open the dashboard on the host
+  // machine. A hardcoded :20128 is wrong for anyone who moved the port or is
+  // reached through a proxy, and the number they need is the one already in the
+  // address bar — so derive it. Lazy initial state rather than an effect: this is
+  // a one-shot read of an external value, and setState-in-effect would cascade an
+  // extra render. Before hydration the documented default stands.
+  const [localOrigin] = useState(() => {
+    if (typeof window === "undefined") return "http://127.0.0.1:20128";
+    const { protocol, hostname, port } = window.location;
+    const p = port || (protocol === "https:" ? "443" : "80");
+    return `${protocol}//${hostname}:${p}`;
+  });
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-bg p-4">
@@ -66,7 +78,8 @@ export default function LoginPage() {
               <p className="text-sm font-medium">No dashboard password is set yet</p>
               <p className="text-xs text-text-muted">
                 Remote access to the dashboard stays disabled until a password is set. Set the first
-                password on the machine running 10Router (open http://127.0.0.1:20128 there), or start
+                password on the machine running 10Router (open{" "}
+                <code className="break-all font-mono text-text">{localOrigin}</code> there), or start
                 it with the INITIAL_PASSWORD environment variable.
               </p>
             </div>

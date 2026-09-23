@@ -1852,5 +1852,6 @@
   "Hide depleted (zero-balance) quota packs across current connections": "隐藏当前连接中已耗尽（余额为零）的配额包",
   "Disable auto-refresh": "关闭自动刷新",
   "Enable auto-refresh": "开启自动刷新",
-  "All quota rows are hidden — use the chips below to show them": "所有配额行都已隐藏 — 用下方标签可重新显示"
+  "All quota rows are hidden — use the chips below to show them": "所有配额行都已隐藏 — 用下方标签可重新显示",
+  "Backup downloaded, but {count} connection(s) could not be decrypted — their credentials are stored as ciphertext and can only be restored with the original key.": "备份已下载，但有 {count} 个连接无法解密 —— 其凭据以密文形式保存，只有用原始密钥才能恢复。"
 }

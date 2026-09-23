@@ -690,5 +690,6 @@
   "Disable connections with depleted quota on the current page": "停用目前頁面上配額已耗盡的連線",
   "Enable connections that still have quota on the current page": "啟用目前頁面上仍有配額的連線",
   "Refresh all": "全部重新整理",
-  "All quota rows are hidden — use the chips below to show them": "所有配額列都已隱藏 — 用下方標籤可重新顯示"
+  "All quota rows are hidden — use the chips below to show them": "所有配額列都已隱藏 — 用下方標籤可重新顯示",
+  "Backup downloaded, but {count} connection(s) could not be decrypted — their credentials are stored as ciphertext and can only be restored with the original key.": "備份已下載，但有 {count} 個連線無法解密 —— 其憑證以密文形式保存，只有用原始金鑰才能還原。"
 }

@@ -739,7 +739,24 @@ export default function ProfilePage() {
       document.body.removeChild(anchor);
       URL.revokeObjectURL(url);
 
-      setDbStatus({ type: "success", message: "Database backup downloaded" });
+      // A backup taken while some credentials could not be decrypted still
+      // downloads — the ciphertext is carried through rather than dropped — but
+      // calling that a plain success would hide the one thing the operator needs
+      // to know: those rows are only restorable on a machine holding the key
+      // they were encrypted with.
+      const credentialErrors = Array.isArray(payload?.credentialErrors)
+        ? payload.credentialErrors
+        : [];
+      if (credentialErrors.length > 0) {
+        setDbStatus({
+          type: "error",
+          message: translate(
+            "Backup downloaded, but {count} connection(s) could not be decrypted — their credentials are stored as ciphertext and can only be restored with the original key.",
+          ).replace("{count}", String(credentialErrors.length)),
+        });
+      } else {
+        setDbStatus({ type: "success", message: "Database backup downloaded" });
+      }
     } catch (err) {
       setDbStatus({ type: "error", message: err.message || "Failed to export database" });
     } finally {
