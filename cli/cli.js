@@ -172,8 +172,15 @@ for (let i = 0; i < args.length; i++) {
   }
 }
 
-// Auto-relaunch after update: detached process has no TTY → fallback to tray
-if (skipUpdate && !trayMode && !process.stdin.isTTY) {
+// Headless: run in tray *mode* (keep the server alive, ignore SIGHUP, no TUI)
+// whenever there is nothing to drive an interactive menu. Two cases:
+//   - no interactive terminal — a supervisor (systemd / nohup / a container) or
+//     the detached auto-relaunch after an update. Their stdin is not a TTY, so
+//     selectMenu() reads EOF and resolves to -1 → "exit", which would tear down
+//     the server it just started (exit code 0, so Restart=on-failure won't fire).
+//   - explicit --no-tray, documented as "serve headless": tray *mode* still
+//     applies, there is simply no icon (initTrayIcon() already degrades to that).
+if (!trayMode && (noTray || !process.stdin.isTTY)) {
   trayMode = true;
   process.env.TRAY_MODE = "1";
 }

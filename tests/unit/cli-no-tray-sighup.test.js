@@ -102,6 +102,17 @@ describe("CLI launcher source guards", () => {
   it("keeps tray mode's own SIGHUP exemption", () => {
     expect(src).toContain('process.removeAllListeners("SIGHUP")');
   });
+
+  it("enters headless keep-alive when there is no TTY or --no-tray", () => {
+    // A non-TTY supervisor (nohup / systemd / container) or --no-tray must run in
+    // tray *mode*, so the interactive menu loop — which reads EOF and resolves to
+    // "exit" — never runs and tears the server down. Regression for the launcher
+    // killing the gateway it just started under nohup/systemd.
+    expect(src).toMatch(/if \(!trayMode && \(noTray \|\| !process\.stdin\.isTTY\)\) \{[\s\S]{0,80}trayMode = true/);
+    // and it is no longer gated on --skip-update alone (which left plain
+    // `--no-tray` / nohup falling through to the exiting menu).
+    expect(src).not.toMatch(/if \(skipUpdate && !trayMode && !process\.stdin\.isTTY\)/);
+  });
 });
 
 describe("CLI publish metadata & docs", () => {
