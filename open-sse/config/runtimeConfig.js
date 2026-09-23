@@ -65,6 +65,11 @@ export const GEMINI_NATIVE_TTS_FETCH_TIMEOUT_MS = envMs("GEMINI_NATIVE_TTS_FETCH
 export const DEFAULT_MAX_TOKENS = 64000;
 export const DEFAULT_MIN_TOKENS = 32000;
 
+// Stop-sequence enforcement: a requested stop longer than this is left to the
+// provider, because withholding text while a very long sequence could still be
+// completing would stall the stream (see utils/stopSequenceGuard.js).
+export const MAX_ENFORCED_STOP_LENGTH = 256;
+
 export const TOKEN_SAVER_HEADER = "x-9router-token-saver";
 
 // Retry config for 429 responses (legacy - kept for backward compatibility)

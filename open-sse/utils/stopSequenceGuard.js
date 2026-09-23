@@ -1,3 +1,5 @@
+import { MAX_ENFORCED_STOP_LENGTH } from "../config/runtimeConfig.js";
+
 /**
  * Stop-sequence enforcement (issue #18).
  *
@@ -47,8 +49,10 @@
  *    risked — such streams never contain `data:` lines anyway.
  */
 
-/** Sequences longer than this are left to the provider — enforcing them would stall streaming. */
-export const MAX_ENFORCED_STOP_LENGTH = 256;
+/** Sequences longer than this are left to the provider — enforcing them would
+ *  stall streaming. Defined in config/ with the other runtime limits and
+ *  re-exported here so existing importers keep working. */
+export { MAX_ENFORCED_STOP_LENGTH };
 
 const DELTA_TEXT_KEYS = ["content", "reasoning_content", "reasoning", "thinking"];
 
