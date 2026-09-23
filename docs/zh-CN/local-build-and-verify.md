@@ -247,7 +247,32 @@ INSTALL_CHANNEL=desktop DATA_DIR="/tmp/verify-data" "$INST/10Router.exe" custom-
 - 依赖浏览器手点的流程（OAuth、粘贴授权码）就用**真实调用点**验证：
   例如用真 crypto 造一份平台侧密文，喂给处理函数，断言能解开。
 
-**③ 自加密自解密的测试等于没测。** 自定义加解密/线格式（wire format）类逻辑，测试助手必须
+**③ 渲染类问题必须驱动真浏览器看 DOM，不能读代码推断。** 有一类 bug 只存在于渲染结果里：
+计数在客户端过滤后仍报后端分页数、图标与自己旁边的标签矛盾、同一张卡里多个按钮在同一
+tick 连点导致后续写入被静默丢弃。这些读源码看不出来，单测也复现不了（连点那个尤其阴——
+顺序点击能过，必须**同一个 tick 突发点击**才暴露），而人眼扫一眼界面就能发现。
+
+用 `scripts/browser-probe.mjs`（零依赖，走 Node 内置 WebSocket 讲 CDP）驱动一个 headless
+Chrome，加载刚部署好的应用、在页面里执行脚本、回报结果并截图：
+
+```bash
+# 配额页工具栏 + 卡片：图标/标签是否一致、计数是否跟着过滤走、连点是否丢写
+node scripts/browser-probe.mjs http://localhost:20128/dashboard/quota \
+  --script scripts/probes/quota-toolbar.js --json probe.json --wait 9000
+
+# 只截图，不带脚本
+node scripts/browser-probe.mjs http://localhost:20128/dashboard/providers --out shot.png
+```
+
+`scripts/probes/` 下每个探针是一个自包含的 `async` IIFE，返回值即报告。写新探针时：
+
+- **突发点击要用 `forEach(click)`，不要 `await` 逐个点** —— 后者恰好掩盖本类 bug（见上）。
+- **探针要能自己复原状态**：视图开关会 PATCH `/api/settings` 持久化，跑完不还原会污染下次结果。
+- **报告里带上判定用的布尔值**（如 `allHidesApplied`），而不只是原始数字，便于一眼看出红绿。
+- 若用 PowerShell，`--json` 输出的文件自己写；**不要用 `>` 重定向**，PS 会写 UTF-16/BOM，
+  接着 `JSON.parse` 必失败。
+
+**④ 自加密自解密的测试等于没测。** 自定义加解密/线格式（wire format）类逻辑，测试助手必须
 **对齐对端实现，而不是对齐我们自己的解码器** —— 两边都按同一个错误假设写，测试必然全绿，
 而线上每一份真实数据都解不开（小米 MiMo 的授权码就因此白跑了 5 轮：载荷长度完全正常，
 只是我们把「临时公钥 + nonce」的顺序写反了）。做法：
@@ -260,10 +285,10 @@ INSTALL_CHANNEL=desktop DATA_DIR="/tmp/verify-data" "$INST/10Router.exe" custom-
 判断一个字段的编解码方式时也要注意：`base64url` 与标准 `base64` 的字母表不同（`-_` vs `+/`），
 用错会让严格解码器**静默跳过**这些字符、把数据毁掉。看官方用什么，就用什么。
 
-**④ 留一条「下次失败时能定位」的路。** 路径类失败（解不开、找不到、超时）要打日志说明
+**⑤ 留一条「下次失败时能定位」的路。** 路径类失败（解不开、找不到、超时）要打日志说明
 **长度 / 数量 / 尝试次数**，但**绝不记录载荷、密钥、token 本体** —— 那是凭据容器。
 
-**⑤ 收尾。** 杀掉临时进程 → `npm run test-version -- --revert` → 确认工作树只剩你真正要提交的改动。
+**⑥ 收尾。** 杀掉临时进程 → `npm run test-version -- --revert` → 确认工作树只剩你真正要提交的改动。
 若临时进程占着端口，先停再回退，否则容易误判「改动没生效」。
 
 ## 5. 测试报告索引
@@ -288,12 +313,16 @@ INSTALL_CHANNEL=desktop DATA_DIR="/tmp/verify-data" "$INST/10Router.exe" custom-
 | `Setup.exe /S` 返回 0 但版本没变 | 经 `cmd /c start /wait` 转手会让它静默空转；必须直接执行 exe（§2.5） |
 | 装完应用不会自己起来 | 静默安装跳过 `runAfterFinish`，按 §2.3 手动启动（§2.5） |
 | 新功能字段存不进去 / 去重键不生效 | 签名静默丢参：saveRequestUsage 曾丢 entry.meta、saveUsageStats 曾丢 usageKey——传参外观正常，只有断言"终点真有该字段"的测试能拦（[test-report-1.1.2-silent-data-drop.md](test-report-1.1.2-silent-data-drop.md)） |
+| 图标/标签看着矛盾，改一回还是反的 | 只看「图标画的是什么」会两种都说得通；要按**这一排按钮的约定**判：动作按钮排里图标=按钮做什么（`Only with balance` 藏行→闭眼），状态指示排里图标=当前状态。判错方向就会来回改（§4③） |
+| 多点几下反而少生效（点 5 个只恢复 2 个） | 同 tick 突发点击撞陈旧闭包：handler 从 render 闭包读 state，整批都按同一份点击前快照算，最后一次写覆盖其余。必须用 setState 更新式；单测/顺序点击都复现不了（§4③） |
 
 ## 7. 相关文件
 
 | 路径 | 用途 |
 |---|---|
 | `scripts/test-build-version.mjs` | 测试版本号盖章 / 检查 / 安全回退 |
+| `scripts/browser-probe.mjs` | headless Chrome（CDP，零依赖）驱动真机页面：执行脚本 + 截图（§4③） |
+| `scripts/probes/*.js` | 各页面的浏览器探针脚本（`quota-toolbar.js` 等） |
 | `scripts/sync-manifest-version.mjs` | `fnos-packaging/manifest` ← 根 `package.json` |
 | `cli/scripts/build-cli.js` | 构建 `cli/app`（sidecar 代码，平台无关） |
 | `desktop/main.js` | 托盘壳：单实例锁、健康预检、spawn sidecar |

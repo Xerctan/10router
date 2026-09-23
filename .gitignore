@@ -111,3 +111,13 @@ tmpwebapp-node-modulesprepare.log
 # npm pack artifacts (repo root, regenerable)
 *.tgz
 desktop/dist2/
+
+# local test-round artifacts (deploy log, vitest JSON report)
+/desktop-test-build.log
+/tests/results-current.json
+
+# browser-probe output (screenshots + JSON reports; the scripts themselves are
+# tracked under scripts/, only what a run emits is ignored)
+/browser-probe.png
+/probe-*.json
+/probe-*.png
