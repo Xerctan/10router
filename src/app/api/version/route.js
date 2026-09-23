@@ -60,20 +60,37 @@ function readDiskVersion() {
   }
 }
 
-async function getLatestVersionCached() {
-  if (versionCache.value && Date.now() - versionCache.fetchedAt < VERSION_CACHE_TTL_MS) {
-    return versionCache.value;
+// Non-blocking read for the GET handler: NEVER await the npm registry. doctor /
+// staleServer probe this endpoint with a ~2s timeout, but a cold getLatestVersion
+// Cached() awaits a 4s registry fetch — on a slow / firewalled network the probe
+// timed out and doctor flipped to RED (and staleServer failed to spot a leftover
+// server). Serve whatever "latest" we already cached (possibly stale, possibly
+// null on a cold start) and refresh once in the background; the fields the probes
+// actually read (currentVersion / diskVersion) are always instant.
+let bgLatestRefreshInFlight = false;
+function getLatestVersionNonBlocking() {
+  const fresh = versionCache.value && Date.now() - versionCache.fetchedAt < VERSION_CACHE_TTL_MS;
+  if (!fresh && !bgLatestRefreshInFlight) {
+    bgLatestRefreshInFlight = true;
+    fetchLatestVersion()
+      .then((latest) => {
+        if (latest) {
+          versionCache.value = latest;
+          versionCache.fetchedAt = Date.now();
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        bgLatestRefreshInFlight = false;
+      });
   }
-  const latest = await fetchLatestVersion();
-  if (latest) {
-    versionCache.value = latest;
-    versionCache.fetchedAt = Date.now();
-  }
-  return latest;
+  return versionCache.value || null;
 }
 
 export async function GET() {
-  const latestVersion = await getLatestVersionCached();
+  // Non-blocking: see getLatestVersionNonBlocking — the version probe must not
+  // hang on the npm registry.
+  const latestVersion = getLatestVersionNonBlocking();
   const currentVersion = pkg.version;
   const hasUpdate = latestVersion ? compareVersions(latestVersion, currentVersion) > 0 : false;
 

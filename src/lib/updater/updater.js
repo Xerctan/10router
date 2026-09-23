@@ -217,7 +217,15 @@ function runInstall() {
         finalize(false, code, message);
         return;
       }
-      pushLog(`[updater] verified installed version: ${installed || targetVersion}`);
+      if (installed) {
+        pushLog(`[updater] verified installed version: ${installed}`);
+      } else {
+        // npm exited 0 but readInstalledVersion() came back null — the install
+        // command succeeded, so report success, but do NOT claim a verification
+        // we did not actually perform (it used to print the TARGET version as if
+        // confirmed on disk).
+        pushLog(`[updater] npm exited 0 but the installed version could not be verified on disk`);
+      }
       finalize(true, code, null);
       return;
     }
