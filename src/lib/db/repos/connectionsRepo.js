@@ -2,7 +2,12 @@ import { v4 as uuidv4 } from "uuid";
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 import { getDisabledByProvider, disableModels } from "./disabledModelsRepo.js";
-import { encryptConnectionData, decryptConnectionData } from "../crypto/credentialCipher.js";
+import {
+  encryptConnectionData,
+  decryptConnectionData,
+  restoreUnreadableCredentials,
+  UNREADABLE_CREDENTIALS_KEY,
+} from "../crypto/credentialCipher.js";
 
 const OPTIONAL_FIELDS = [
   "displayName", "email", "globalPriority", "defaultModel",
@@ -21,13 +26,18 @@ const OPTIONAL_FIELDS = [
 function rowToConn(row) {
   if (!row) return null;
   const extra = parseJson(row.data, {});
-  const { data: decoded, error } = decryptConnectionData(extra);
+  const { data: decoded, error, unreadable } = decryptConnectionData(extra);
   if (error) {
     // Loud but not fatal: surface it on the row the dashboard already renders
     // instead of throwing from every read (which would take the whole app down
     // when a database is restored without its key file).
-    decoded.testStatus = "unavailable";
-    decoded.lastError = `Credentials unreadable: ${error}`;
+    const synthesized = { testStatus: "unavailable", lastError: `Credentials unreadable: ${error}` };
+    Object.assign(decoded, synthesized);
+    // …and NOT destructive: the ciphertext travels with the object so that any
+    // write built from it (startup cleanup, error-state updates, refresh
+    // merges) puts it back into the row instead of erasing it. See
+    // restoreUnreadableCredentials() — applied in connToRow.
+    decoded[UNREADABLE_CREDENTIALS_KEY] = { ...unreadable, synthesized };
   }
   return {
     ...decoded,
@@ -45,6 +55,12 @@ function rowToConn(row) {
 
 function connToRow(c) {
   const { id, provider, authType, name, email, priority, isActive, createdAt, updatedAt, ...rest } = c;
+  // Fold any ciphertext that could not be decrypted on read back into the row
+  // (and strip the reserved carrier key + the synthesized failure state) BEFORE
+  // encrypting. encryptSecret is idempotent on enc:v1: values, so a restored
+  // ciphertext passes through untouched — the row keeps the credential instead
+  // of losing it when the current key can't read it.
+  const restored = restoreUnreadableCredentials(rest);
   return {
     id,
     provider,
@@ -53,7 +69,7 @@ function connToRow(c) {
     email: email ?? null,
     priority: priority ?? null,
     isActive: isActive === false ? 0 : 1,
-    data: stringifyJson(encryptConnectionData(rest)),
+    data: stringifyJson(encryptConnectionData(restored)),
     createdAt,
     updatedAt,
   };

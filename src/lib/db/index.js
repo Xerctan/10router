@@ -1,7 +1,12 @@
 // Public API barrel — all DB functions
 import { getAdapter } from "./driver.js";
 import { stringifyJson, parseJson } from "./helpers/jsonCol.js";
-import { encryptConnectionData, decryptConnectionData } from "./crypto/credentialCipher.js";
+import {
+  encryptConnectionData,
+  decryptConnectionData,
+  restoreUnreadableCredentials,
+  UNREADABLE_CREDENTIALS_KEY,
+} from "./crypto/credentialCipher.js";
 
 // Settings
 export {
@@ -91,9 +96,24 @@ export async function exportDb() {
   const db = await getAdapter();
   const { exportSettings } = await import("./repos/settingsRepo.js");
 
+  // Connections decrypt to portable plaintext for the backup. A row we CANNOT
+  // decrypt (backup taken on a machine without its credential key) must not be
+  // silently emptied: fold the ciphertext back so the row stays faithful (a
+  // restore on the original-key machine recovers it; encryptSecret is idempotent
+  // on enc:v1: so import re-encrypts it to a no-op) and record the id so the
+  // caller can warn that those credentials are carried as-is, not in the clear.
+  const credentialErrors = [];
+  const providerConnections = db.all(`SELECT * FROM providerConnections`).map((r) => {
+    const { data, error, unreadable } = decryptConnectionData(parseJson(r.data, {}));
+    const conn = error ? restoreUnreadableCredentials({ ...data, [UNREADABLE_CREDENTIALS_KEY]: unreadable }) : data;
+    if (error) credentialErrors.push(r.id);
+    return { ...conn, id: r.id, provider: r.provider, authType: r.authType, name: r.name, email: r.email, priority: r.priority, isActive: r.isActive === 1, createdAt: r.createdAt, updatedAt: r.updatedAt };
+  });
+
   const out = {
     settings: await exportSettings(),
-    providerConnections: db.all(`SELECT * FROM providerConnections`).map((r) => ({ ...decryptConnectionData(parseJson(r.data, {})).data, id: r.id, provider: r.provider, authType: r.authType, name: r.name, email: r.email, priority: r.priority, isActive: r.isActive === 1, createdAt: r.createdAt, updatedAt: r.updatedAt })),
+    providerConnections,
+    credentialErrors,
     providerNodes: db.all(`SELECT * FROM providerNodes`).map((r) => ({ ...parseJson(r.data, {}), id: r.id, type: r.type, name: r.name, createdAt: r.createdAt, updatedAt: r.updatedAt })),
     proxyPools: db.all(`SELECT * FROM proxyPools`).map((r) => ({ ...parseJson(r.data, {}), id: r.id, isActive: r.isActive === 1, testStatus: r.testStatus, createdAt: r.createdAt, updatedAt: r.updatedAt })),
     apiKeys: db.all(`SELECT * FROM apiKeys`).map((r) => ({ id: r.id, key: r.key, name: r.name, machineId: r.machineId, isActive: r.isActive === 1, createdAt: r.createdAt })),

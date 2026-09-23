@@ -33,6 +33,7 @@ import path from "node:path";
 // dynamically, is stripped from that bundle — but an aliased import would break
 // the moment an entry that does reach us is added.
 import { DATA_DIR } from "../../dataDir.js";
+import { hardenOwnerOnly } from "../../fsPermissions.js";
 
 const PREFIX = "enc:v1:";
 const ALGORITHM = "aes-256-gcm";
@@ -87,6 +88,7 @@ export function getCredentialKey() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const generated = crypto.randomBytes(32).toString("hex");
   fs.writeFileSync(file, generated, { mode: 0o600 });
+  hardenOwnerOnly(file); // 0o600 is a no-op on Windows — restrict the ACL there too.
   cachedKey = crypto.createHash("sha256").update(generated).digest();
   return cachedKey;
 }
@@ -158,18 +160,45 @@ export function encryptConnectionData(data) {
   return out;
 }
 
-// Returns `{ data, error }`. A failed decryption must be loud but must not take
-// the whole dashboard down, so the caller stores the message on the connection
-// (testStatus/lastError) instead of throwing from the read path.
+// Reserved key under which a connection object carries ciphertext it could not
+// decrypt. It rides along with the object (so every read/merge/write path in the
+// repo keeps it without knowing) and is folded back into the row by
+// `restoreUnreadableCredentials()` on the way out. Never persisted as-is.
+export const UNREADABLE_CREDENTIALS_KEY = "__unreadableCredentials";
+
+export function hasUnreadableCredentials(conn) {
+  return Boolean(conn && typeof conn === "object" && conn[UNREADABLE_CREDENTIALS_KEY]);
+}
+
+// Returns `{ data, error, unreadable }`. A failed decryption must be loud but
+// must not take the whole dashboard down, so the caller stores the message on
+// the connection (testStatus/lastError) instead of throwing from the read path.
+//
+// The undecryptable values are REMOVED from `data` — a caller must never see
+// ciphertext where it expects a token (it would go upstream as a Bearer and
+// read as a bad credential) — but they are NOT lost: they come back in
+// `unreadable` so the caller can carry them through and write them back
+// unchanged. Dropping them here is how a database restored without its key file
+// used to be destroyed on first start: the startup cleanup and every
+// `updateProviderConnection` re-wrote the row from the decrypted object, minus
+// the fields that failed, and the ciphertext was gone for good even after the
+// right key was put back.
 export function decryptConnectionData(data) {
-  if (!data || typeof data !== "object") return { data, error: null };
+  if (!data || typeof data !== "object") return { data, error: null, unreadable: null };
   const out = { ...data };
   let error = null;
+  let unreadable = null;
+  const remember = (scope, key, ciphertext) => {
+    if (!unreadable) unreadable = {};
+    if (!unreadable[scope]) unreadable[scope] = {};
+    unreadable[scope][key] = ciphertext;
+  };
   for (const field of CONNECTION_SECRET_FIELDS) {
     if (!isEncrypted(out[field])) continue;
     try {
       out[field] = decryptSecret(out[field]);
     } catch (err) {
+      remember("fields", field, out[field]);
       delete out[field];
       error = err.message;
     }
@@ -183,13 +212,50 @@ export function decryptConnectionData(data) {
       try {
         psd[k] = decryptSecret(psd[k]);
       } catch (err) {
+        remember("providerSpecificData", k, psd[k]);
         delete psd[k];
         error = err.message;
       }
     }
     out.providerSpecificData = psd;
   }
-  return { data: out, error };
+  return { data: out, error, unreadable };
+}
+
+// Inverse of the removal above, applied right before a connection object is
+// serialised back into the row. For every ciphertext that could not be read:
+//   * if the outgoing object carries no value for that field (unchanged, or
+//     explicitly nulled by an error-state write) → put the ciphertext back, so
+//     the row still holds it for whenever the right key is available again;
+//   * if the outgoing object carries a NEW non-empty value → the user
+//     re-authorised / re-entered the credential; the new value wins and the
+//     stale ciphertext is dropped.
+// `synthesized` is the { testStatus, lastError } pair `rowToConn` invented to
+// make the failure visible; it is stripped again here unless a caller has
+// since written something else, so the invented state never becomes durable.
+// Returns a NEW object without the reserved key; the input is never mutated.
+export function restoreUnreadableCredentials(data) {
+  if (!data || typeof data !== "object" || !data[UNREADABLE_CREDENTIALS_KEY]) return data;
+  const { [UNREADABLE_CREDENTIALS_KEY]: stash, ...out } = data;
+  const isEmpty = (v) => v === undefined || v === null || v === "";
+
+  for (const [field, ciphertext] of Object.entries(stash.fields || {})) {
+    if (isEmpty(out[field])) out[field] = ciphertext;
+  }
+  const nested = stash.providerSpecificData || {};
+  if (Object.keys(nested).length) {
+    const psd = { ...(out.providerSpecificData || {}) };
+    for (const [k, ciphertext] of Object.entries(nested)) {
+      if (isEmpty(psd[k])) psd[k] = ciphertext;
+    }
+    out.providerSpecificData = psd;
+  }
+  const synth = stash.synthesized;
+  if (synth) {
+    if (out.testStatus === synth.testStatus) delete out.testStatus;
+    if (out.lastError === synth.lastError) delete out.lastError;
+  }
+  return out;
 }
 
 // Does this connection still hold anything in the clear? Used by the migration

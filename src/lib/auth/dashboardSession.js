@@ -5,6 +5,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { DATA_DIR } from "@/lib/dataDir";
 import { getSettings } from "@/lib/localDb";
+import { hardenOwnerOnly } from "@/lib/fsPermissions";
 
 // There is deliberately no hardcoded fallback password. A fresh install used to
 // accept the literal "123456", and because the launcher binds 0.0.0.0 by
@@ -80,6 +81,7 @@ function loadJwtSecret() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const generated = crypto.randomBytes(32).toString("hex");
   fs.writeFileSync(file, generated, { mode: 0o600 });
+  hardenOwnerOnly(file); // 0o600 is a no-op on Windows — restrict the ACL there too.
   return generated;
 }
 

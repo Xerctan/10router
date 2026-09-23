@@ -390,3 +390,169 @@ describe("003-encrypt-credentials migration", () => {
     expect(raw2.data).toBe(raw.data);
   });
 });
+
+describe("wrong key must never destroy the stored ciphertext (issue #9 item 1 — data loss)", () => {
+  // The failure the fix closes: a database restored onto a machine without its
+  // key file. rowToConn used to DELETE the undecryptable fields, and every write
+  // built from that object (startup cleanup, an error-state update, a refresh
+  // merge) then rewrote the row without them — the ciphertext was gone for good,
+  // so putting the right key back later recovered nothing.
+  it("survives startup cleanup + an error-state write made under the wrong key", async () => {
+    const { getAdapter } = await import("@/lib/db/driver.js");
+    const {
+      createProviderConnection,
+      getProviderConnectionById,
+      updateProviderConnection,
+      cleanupProviderConnections,
+    } = await import("@/lib/db/repos/connectionsRepo.js");
+    const { resetCredentialKeyCache } = await import("@/lib/db/crypto/credentialCipher.js");
+    const db = await getAdapter();
+
+    const created = await createProviderConnection({
+      provider: "qoder-cn",
+      authType: "oauth",
+      email: "u@example.com",
+      accessToken: "AT-ORIGINAL",
+      refreshToken: "RT-ORIGINAL",
+      providerSpecificData: { mimoPassToken: "PASS-ORIGINAL", userId: "u1" },
+    });
+
+    // Capture the real key, then simulate a restore without it.
+    const keyFile = path.join(tempDir, "credential-key");
+    const originalKey = fs.readFileSync(keyFile, "utf8");
+    fs.writeFileSync(keyFile, "a-totally-different-key", { mode: 0o600 });
+    resetCredentialKeyCache();
+
+    // Read surfaces the failure without handing back ciphertext.
+    const unreadable = await getProviderConnectionById(created.id);
+    expect(unreadable.accessToken).toBeUndefined();
+    expect(unreadable.testStatus).toBe("unavailable");
+    expect(unreadable.lastError).toContain("unreadable");
+
+    // Writes that really happen under a wrong key on boot: the cleanup pass and
+    // an error-state update. Neither may erase the row's ciphertext.
+    await cleanupProviderConnections();
+    await updateProviderConnection(created.id, {
+      lastError: "runtime failure",
+      lastErrorAt: new Date().toISOString(),
+    });
+
+    // The column still holds three encrypted values (2 top-level + 1 nested).
+    const raw = db.get(`SELECT data FROM providerConnections WHERE id = ?`, [created.id]).data;
+    expect((raw.match(/enc:v1:/g) || []).length).toBe(3);
+    expect(raw).not.toContain("AT-ORIGINAL");
+
+    // Put the real key back — everything is recoverable, exactly what the old
+    // code made impossible.
+    fs.writeFileSync(keyFile, originalKey, { mode: 0o600 });
+    resetCredentialKeyCache();
+    const recovered = await getProviderConnectionById(created.id);
+    expect(recovered.accessToken).toBe("AT-ORIGINAL");
+    expect(recovered.refreshToken).toBe("RT-ORIGINAL");
+    expect(recovered.providerSpecificData.mimoPassToken).toBe("PASS-ORIGINAL");
+    expect(recovered.providerSpecificData.userId).toBe("u1");
+    // The synthesized failure state did not become durable.
+    expect(recovered.testStatus).not.toBe("unavailable");
+  });
+
+  it("re-authorising under the current key wins over the stale ciphertext", async () => {
+    const { getAdapter } = await import("@/lib/db/driver.js");
+    const { createProviderConnection, getProviderConnectionById, updateProviderConnection } = await import(
+      "@/lib/db/repos/connectionsRepo.js"
+    );
+    const { resetCredentialKeyCache } = await import("@/lib/db/crypto/credentialCipher.js");
+    await getAdapter();
+
+    const created = await createProviderConnection({
+      provider: "qoder-cn",
+      authType: "oauth",
+      email: "u@example.com",
+      accessToken: "AT-OLD",
+    });
+
+    const keyFile = path.join(tempDir, "credential-key");
+    fs.writeFileSync(keyFile, "new-machine-key", { mode: 0o600 });
+    resetCredentialKeyCache();
+
+    // User re-authorises: a fresh token arrives and is encrypted under the key
+    // that is actually present now.
+    await updateProviderConnection(created.id, { accessToken: "AT-REAUTHED", resetErrorState: true });
+
+    const conn = await getProviderConnectionById(created.id);
+    expect(conn.accessToken).toBe("AT-REAUTHED");
+    expect(conn.testStatus).not.toBe("unavailable");
+  });
+
+  it("export preserves undecryptable ciphertext and flags it, never silently dropping it", async () => {
+    const { getAdapter } = await import("@/lib/db/driver.js");
+    const { createProviderConnection } = await import("@/lib/db/repos/connectionsRepo.js");
+    const { exportDb } = await import("@/lib/db/index.js");
+    const { resetCredentialKeyCache } = await import("@/lib/db/crypto/credentialCipher.js");
+    await getAdapter();
+
+    const created = await createProviderConnection({
+      provider: "qoder-cn",
+      authType: "oauth",
+      email: "backup-wrongkey@example.com",
+      accessToken: "AT-BACKUP",
+      providerSpecificData: { mimoPassToken: "PASS-BACKUP", userId: "u9" },
+    });
+
+    // Back up on a machine that no longer has the credential key.
+    const keyFile = path.join(tempDir, "credential-key");
+    fs.writeFileSync(keyFile, "wrong-key-for-export", { mode: 0o600 });
+    resetCredentialKeyCache();
+
+    const payload = await exportDb();
+    const exported = payload.providerConnections.find((c) => c.email === "backup-wrongkey@example.com");
+    expect(exported).toBeTruthy();
+    // The credential is NOT dropped — it rides along as ciphertext (a same-key
+    // restore recovers it) instead of vanishing from the backup.
+    expect(exported.accessToken).toContain("enc:v1:");
+    expect(exported.providerSpecificData.mimoPassToken).toContain("enc:v1:");
+    // ...and the row is flagged so the UI can warn the backup holds unreadable creds.
+    expect(payload.credentialErrors).toContain(created.id);
+  });
+});
+
+describe("restoreUnreadableCredentials (pure)", () => {
+  it("restores ciphertext for absent fields, keeps new values, strips the carrier + synth state", async () => {
+    const { restoreUnreadableCredentials, UNREADABLE_CREDENTIALS_KEY } = await cipher();
+    const stash = {
+      fields: { accessToken: "enc:v1:AAA", refreshToken: "enc:v1:BBB" },
+      providerSpecificData: { mimoPassToken: "enc:v1:CCC" },
+      synthesized: { testStatus: "unavailable", lastError: "Credentials unreadable: x" },
+    };
+    const out = restoreUnreadableCredentials({
+      [UNREADABLE_CREDENTIALS_KEY]: stash,
+      accessToken: "AT-NEW", // re-authorised → new value wins
+      // refreshToken absent → ciphertext restored
+      providerSpecificData: {}, // mimoPassToken absent → ciphertext restored
+      testStatus: "unavailable", // still the synthesized value → stripped
+      lastError: "Credentials unreadable: x",
+    });
+    expect(out.accessToken).toBe("AT-NEW");
+    expect(out.refreshToken).toBe("enc:v1:BBB");
+    expect(out.providerSpecificData.mimoPassToken).toBe("enc:v1:CCC");
+    expect(out[UNREADABLE_CREDENTIALS_KEY]).toBeUndefined();
+    expect(out.testStatus).toBeUndefined();
+    expect(out.lastError).toBeUndefined();
+  });
+
+  it("keeps a caller-written status that differs from the synthesized one", async () => {
+    const { restoreUnreadableCredentials, UNREADABLE_CREDENTIALS_KEY } = await cipher();
+    const out = restoreUnreadableCredentials({
+      [UNREADABLE_CREDENTIALS_KEY]: { fields: {}, synthesized: { testStatus: "unavailable", lastError: "old" } },
+      testStatus: "error",
+      lastError: "a new real error",
+    });
+    expect(out.testStatus).toBe("error");
+    expect(out.lastError).toBe("a new real error");
+  });
+
+  it("is a no-op without the carrier key", async () => {
+    const { restoreUnreadableCredentials } = await cipher();
+    const input = { accessToken: "at" };
+    expect(restoreUnreadableCredentials(input)).toBe(input);
+  });
+});
