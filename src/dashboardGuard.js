@@ -327,6 +327,13 @@ export async function proxy(request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Read-only provider quota overview for external dashboards (e.g. CreditDaddy):
+  // a dashboard virtual key (sk-…) is enough, the same trust level as the
+  // usage-import self-serve path. GET only; the route returns no credentials.
+  if (request.method === "GET" && pathname === "/api/usage/quotas" && (await hasValidApiKey(request))) {
+    return NextResponse.next();
+  }
+
   // Deny-by-default for /api/* — public allow-list bypasses, everything else requires auth.
   if (pathname.startsWith("/api/")) {
     if (isPublicApi(pathname)) return NextResponse.next();

@@ -121,18 +121,32 @@ export async function refreshAndUpdateCredentials(connection, force = false, pro
  * GET /api/usage/[connectionId] - Get usage data for a specific connection
  */
 export async function GET(request, { params }) {
+  const { connectionId } = await params;
+  const force = new URL(request.url).searchParams.get("force") === "1";
+
+  // Get connection from database
   let connection;
   try {
-    const { connectionId } = await params;
-    const force = new URL(request.url).searchParams.get("force") === "1";
-
-
-    // Get connection from database
     connection = await getProviderConnectionById(connectionId);
-    if (!connection) {
-      return Response.json({ error: "Connection not found" }, { status: 404 });
-    }
+  } catch (error) {
+    console.warn(`[Usage] unknown: ${error.message}`);
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+  if (!connection) {
+    return Response.json({ error: "Connection not found" }, { status: 404 });
+  }
+  const { status, body } = await computeConnectionUsage(connection, { force });
+  return Response.json(body, status === 200 ? undefined : { status });
+}
 
+/**
+ * Usage for one connection (refresh credentials if needed → provider usage API →
+ * persist earliest package expiry). Shared by GET /api/usage/[connectionId] and the
+ * aggregated GET /api/usage/quotas. Returns { status, body } — body is exactly what
+ * the per-connection endpoint has always returned.
+ */
+export async function computeConnectionUsage(connection, { force = false } = {}) {
+  try {
     // Allow OAuth connections, plus whitelisted apikey providers (glm/minimax/kiro/...)
     // Kiro's headless api-key flow persists authType "api_key" (underscore) while
     // generic apikey providers persist "apikey" — accept both spellings here.
@@ -143,7 +157,7 @@ export async function GET(request, { params }) {
       isApikeyAuth && USAGE_APIKEY_PROVIDERS.includes(connection.provider);
 
     if (!isOAuth && !isApikeyEligible) {
-      return Response.json({ message: "Usage not available for this connection" });
+      return { status: 200, body: { message: "Usage not available for this connection" } };
     }
 
     // Resolve connection proxy config; force strictProxy=false so quota/refresh fall back to direct on failure
@@ -163,9 +177,7 @@ export async function GET(request, { params }) {
         connection = result.connection;
       } catch (refreshError) {
         console.error("[Usage API] Credential refresh failed:", refreshError);
-        return Response.json({
-          error: `Credential refresh failed: ${refreshError.message}`
-        }, { status: 401 });
+        return { status: 401, body: { error: `Credential refresh failed: ${refreshError.message}` } };
       }
     }
 
@@ -204,10 +216,10 @@ export async function GET(request, { params }) {
       console.warn(`[Usage API] Failed to update package expiry for ${connection.id}:`, e.message);
     }
 
-    return Response.json(usage);
+    return { status: 200, body: usage };
   } catch (error) {
     const provider = connection?.provider ?? "unknown";
     console.warn(`[Usage] ${provider}: ${error.message}`);
-    return Response.json({ error: error.message }, { status: 500 });
+    return { status: 500, body: { error: error.message } };
   }
 }

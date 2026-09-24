@@ -88,6 +88,18 @@ describe("audit: guard behavior for new sensitive paths (requireLogin=false)", (
     }
   });
 
+  it("usage/quotas: GET with a valid virtual key passes from anywhere; no/invalid key stays 401", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: true });
+    mocks.validateApiKey.mockImplementation(async (k) => k === "sk-good");
+    const get = (ip, extra) => ({ ...req("/api/usage/quotas", ip, extra), method: "GET" });
+    expect(await proxy(get("10.0.0.5", { authorization: "Bearer sk-good" }))).toBe(mocks.nextResponse);
+    expect((await proxy(get("10.0.0.5", { authorization: "Bearer sk-bad" }))).status).toBe(401);
+    expect((await proxy(get("10.0.0.5"))).status).toBe(401);
+    // POST is not part of the key exemption
+    const post = { ...req("/api/usage/quotas", "10.0.0.5", { authorization: "Bearer sk-good" }), method: "POST" };
+    expect((await proxy(post)).status).toBe(401);
+  });
+
   it("verify-password: public (like login) — reachable without auth, remote too", async () => {
     const r = await proxy(req("/api/auth/verify-password", "10.0.0.5"));
     expect(r).toBe(mocks.nextResponse);
