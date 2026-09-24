@@ -71,8 +71,9 @@ const ALWAYS_PROTECTED = [
   "/api/oauth/xiaomi-mimo/auto-import",
   // OAuth credentials transfer: export dumps live tokens (encrypted by a
   // user passphrase AFTER the guard), import writes them. Even with
-  // requireLogin=false these must demand credentials (route re-checks the
-  // dashboard password again inside).
+  // requireLogin=false these must demand credentials (export re-checks the
+  // dashboard password inside). Only exception: a same-machine import, see the
+  // transfer-import branch in proxy().
   "/api/oauth/transfer/",
 ];
 
@@ -273,6 +274,22 @@ export async function proxy(request) {
     request.method === "POST" &&
     pathname === "/api/settings/database/import-usage" &&
     (request.headers.get("x-9r-password") || extractApiKey(request))
+  ) {
+    return NextResponse.next();
+  }
+
+  // OAuth transfer IMPORT from the machine itself. Inside the route the transfer
+  // passphrase is the real authorization (GCM tag proves possession of the export
+  // passphrase). With requireLogin=false the local operator has no JWT to present,
+  // so the ALWAYS_PROTECTED match below would lock them out of importing their own
+  // file (e.g. a CreditDaddy / 10router export). Loopback peer + loopback Origin
+  // (isLocalRequest) keeps tunnels, LAN and cross-site pages out; EXPORT stays
+  // fully protected because it dumps live tokens.
+  if (
+    request.method === "POST" &&
+    pathname === "/api/oauth/transfer/import" &&
+    isLocalRequest(request) &&
+    (await isAuthenticated(request))
   ) {
     return NextResponse.next();
   }

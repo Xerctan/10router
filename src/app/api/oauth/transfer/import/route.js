@@ -9,8 +9,9 @@ import { importAccounts } from "@/lib/oauth/accountTransfer";
  *
  * Authorization = the transfer passphrase itself: correct decryption (GCM tag)
  * proves possession of the export passphrase, so no dashboard password is
- * required on top of it. The guard still requires JWT/CLI for the route
- * (ALWAYS_PROTECTED), so anonymous/免密 deployments can't reach it at all.
+ * required on top of it. The guard requires JWT/CLI for the route
+ * (ALWAYS_PROTECTED), except for a same-machine request on an authenticated
+ * (incl. requireLogin=false) dashboard — remote anonymous callers can't reach it.
  *
  * The provider in the body wins over the blob's stored provider — the operator
  * decides which provider the credentials land on (cross-recovery use case).

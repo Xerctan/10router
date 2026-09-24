@@ -53,14 +53,29 @@ describe("audit: guard behavior for new sensitive paths (requireLogin=false)", (
     mocks.verifyDashboardAuthToken.mockResolvedValue(false);
   });
 
-  it("transfer export/import: ALWAYS_PROTECTED — anonymous 401 both remote and local", async () => {
+  it("transfer export/import: ALWAYS_PROTECTED — anonymous remote 401; local export 401", async () => {
     // Remote is 401 (not 403): transfer deliberately has NO local-only gate —
     // remote dashboards (NAS) use it with JWT/CLI credentials.
     for (const p of ["/api/oauth/transfer/export", "/api/oauth/transfer/import"]) {
       expect((await proxy(req(p, "10.0.0.5"))).status).toBe(401);
-      const local = await proxy(req(p, "127.0.0.1"));
-      expect(local.status).toBe(401); // 免密 catch-all blocked by ALWAYS_PROTECTED
     }
+    // Export dumps live tokens: 免密 catch-all stays blocked even from loopback.
+    expect((await proxy(req("/api/oauth/transfer/export", "127.0.0.1"))).status).toBe(401);
+  });
+
+  it("transfer import: same-machine request on a requireLogin=false dashboard passes (passphrase authorizes inside)", async () => {
+    expect(await proxy(req("/api/oauth/transfer/import", "127.0.0.1"))).toBe(mocks.nextResponse);
+    // Loopback peer but a cross-site Origin (CSRF) is not a local request.
+    const csrf = await proxy(req("/api/oauth/transfer/import", "127.0.0.1", { origin: "https://evil.example" }));
+    expect(csrf.status).toBe(401);
+    // Arrived through a reverse proxy / tunnel: not local either.
+    const viaProxy = await proxy(req("/api/oauth/transfer/import", "127.0.0.1", { "x-10r-via-proxy": "1" }));
+    expect(viaProxy.status).toBe(401);
+  });
+
+  it("transfer import: local but requireLogin=true without a session stays 401", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: true });
+    expect((await proxy(req("/api/oauth/transfer/import", "127.0.0.1"))).status).toBe(401);
   });
 
   it("transfer routes pass with CLI token", async () => {
