@@ -282,11 +282,45 @@ async function buildQoderRequestBody({ model, body, credentials, log, proxyOptio
  * Check if a qoder error message indicates a billing/quota block.
  * Signatures: code 112 (quota exhausted), code 10605 (queue throttle), pricingUrl field.
  */
+// The signature code is often nested one JSON level deep inside a generic
+// envelope, so its quotes arrive escaped — NAS 2026-09-26:
+//   {"code":"403","message":"{\"code\":\"10605\",\"message\":\"{\\\"isQueued\\\":true,…
+// `\\*` before each quote accepts any escaping depth.
+const QODER_BLOCK_CODE_RE = /\\*"code\\*"\s*:\s*\\*"(112|10605)\\*"/;
+const QODER_RETRY_AFTER_RE = /\\*"retryAfterSeconds\\*"\s*:\s*(\d+)/;
+
+function billingBlockCode(inner) {
+  if (!inner || typeof inner !== "string") return null;
+  const m = inner.match(QODER_BLOCK_CODE_RE);
+  if (m) return m[1];
+  return inner.toLowerCase().includes("pricingurl") ? "pricingUrl" : null;
+}
+
 function isBillingBlock(inner) {
-  if (!inner || typeof inner !== "string") return false;
-  const lowerMsg = inner.toLowerCase();
-  // Match: {"code":"112",...}, {"code":"10605",...}, or pricingUrl field
-  return /\"code\"\s*:\s*\"(112|10605)\"/.test(inner) || lowerMsg.includes("pricingurl");
+  return billingBlockCode(inner) !== null;
+}
+
+/**
+ * Turn a detected block into the HTTP error chatCore acts on.
+ * 10605 is a queue throttle ("isQueued", "retryAfterSeconds":30), not an
+ * exhausted account: answer 429 and restate the wait in words
+ * extractRetrySeconds understands, so the account cools for the time the
+ * upstream asked for instead of the 2-minute 403 lock.
+ * 112 / pricingUrl stay 403 (quota gone → long cooldown, fall through).
+ */
+function billingBlockResponse(code, statusVal, message) {
+  if (code === "10605") {
+    const retry = message.match(QODER_RETRY_AFTER_RE);
+    const hint = retry ? `, retry after ${retry[1]} seconds` : "";
+    return new Response(
+      JSON.stringify({ error: { message: `qoder queue throttle (10605)${hint}: ${message}`, code: statusVal } }),
+      { status: 429, headers: { "Content-Type": "application/json" } }
+    );
+  }
+  return new Response(
+    JSON.stringify({ error: { message, code: statusVal } }),
+    { status: 403, headers: { "Content-Type": "application/json" } }
+  );
 }
 
 /**
@@ -317,8 +351,9 @@ async function peekFirstQoderFrame(reader, decoder) {
     const statusVal = typeof envelope.statusCodeValue === "number" ? envelope.statusCodeValue : 200;
     const inner = typeof envelope.body === "string" ? envelope.body : "";
 
-    if (statusVal !== 200 && isBillingBlock(inner)) {
-      return { isBilling: true, statusVal, message: inner || `qoder billing block (${statusVal})` };
+    const code = statusVal !== 200 ? billingBlockCode(inner) : null;
+    if (code) {
+      return { isBilling: true, code, statusVal, message: inner || `qoder billing block (${statusVal})` };
     }
     return { isBilling: false, consumed };
   }
@@ -339,9 +374,10 @@ async function peekFirstQoderFrame(reader, decoder) {
  * response.text() which hangs until the socket closes — so on terminal
  * events we cancel the upstream reader and close our stream immediately.
  *
- * NEW: Peek first frame to detect billing blocks (code 112/10605/pricingUrl).
- * If detected, return 403 response so chatCore marks connection unavailable
- * and triggers combo fallback instead of leaking error text into chat.
+ * Peek first frame to detect billing blocks (code 112/10605/pricingUrl).
+ * If detected, return an HTTP error (403, or 429 for the 10605 queue
+ * throttle) so chatCore cools the connection down and falls back instead of
+ * leaking error text into chat.
  */
 async function wrapQoderSSE(response, model) {
   if (!response.ok || !response.body) return response;
@@ -352,12 +388,9 @@ async function wrapQoderSSE(response, model) {
   // Peek first frame to detect billing block
   const peek = await peekFirstQoderFrame(reader, decoder);
   if (peek?.isBilling) {
-    // Billing block detected — return 403 so chatCore fails this connection
+    // Billing block detected — fail this connection so chatCore falls back
     await reader.cancel().catch(() => {});
-    return new Response(
-      JSON.stringify({ error: { message: peek.message, code: peek.statusVal } }),
-      { status: 403, headers: { "Content-Type": "application/json" } }
-    );
+    return billingBlockResponse(peek.code, peek.statusVal, peek.message);
   }
 
   // Normal flow: re-process every byte the peek consumed, then continue.
