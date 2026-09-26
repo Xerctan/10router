@@ -67,7 +67,7 @@ flowchart LR
     end
 
     subgraph Router["10Router 本地智能路由网关"]
-        GUARD["dashboardGuard 统一鉴权面<br/>Host校验 · 面板口令 · 虚拟Key (sk-...)"]
+        GUARD["dashboardGuard 统一鉴权面<br/>Host 校验 · 面板口令 · 虚拟 Key (sk-...)"]
 
         subgraph Endpoints["网关服务接口面"]
             API["模型调用端点<br/>/v1/* · /v1beta/* · /responses"]
@@ -83,6 +83,7 @@ flowchart LR
         P1["OAuth 供应商<br/>Claude / Codex / Gemini / Qwen / MiMo"]
         P2["API Key 供应商<br/>OpenAI / Anthropic / DeepSeek / 智谱 GLM"]
         P3["自定义兼容端点<br/>OneAPI / NewAPI / 本地 Ollama"]
+        PAD["&nbsp;<br/>&nbsp;"]
     end
 
     C1 --> GUARD
@@ -102,6 +103,9 @@ flowchart LR
     CORE --> P1
     CORE --> P2
     CORE --> P3
+    P3 ~~~ PAD
+
+    style PAD fill:transparent,stroke:none,color:transparent
 ```
 
 ---
