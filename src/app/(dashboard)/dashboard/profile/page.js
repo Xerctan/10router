@@ -36,6 +36,7 @@ export default function ProfilePage() {
   // goes through a confirmation the way "require API key" already does.
   const [loginOffConfirmOpen, setLoginOffConfirmOpen] = useState(false);
   const [bannerHideConfirmOpen, setBannerHideConfirmOpen] = useState(false);
+  const [updateCheckStatus, setUpdateCheckStatus] = useState({ loading: false, message: "", type: "" });
   const [isShuttingDown, setIsShuttingDown] = useState(false);
   const [settings, setSettings] = useState({ fallbackStrategy: "fill-first" });
   const [loading, setLoading] = useState(true);
@@ -398,6 +399,40 @@ export default function ProfilePage() {
       }
     } catch (err) {
       console.error("Failed to update require login:", err);
+    }
+  };
+
+  const updateAutoUpdateCheck = async (autoUpdateCheck) => {
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ autoUpdateCheck }),
+      });
+      if (res.ok) {
+        setSettings(prev => ({ ...prev, autoUpdateCheck }));
+        setUpdateCheckStatus({ loading: false, message: "", type: "" });
+      }
+    } catch (err) {
+      console.error("Failed to update automatic update check:", err);
+    }
+  };
+
+  // Explicit check — works with automatic checks off (?check=1 asks the registry now).
+  const checkForUpdatesNow = async () => {
+    setUpdateCheckStatus({ loading: true, message: "", type: "" });
+    try {
+      const res = await fetch("/api/version?check=1", { cache: "no-store" });
+      const data = res.ok ? await res.json() : null;
+      if (!data?.latestVersion) {
+        setUpdateCheckStatus({ loading: false, type: "error", message: translate("Could not reach the update server. Try again later.") });
+      } else if (data.hasUpdate) {
+        setUpdateCheckStatus({ loading: false, type: "info", message: translate("New version available: v${latest} (installed v${current})").replace("${latest}", data.latestVersion).replace("${current}", data.currentVersion) });
+      } else {
+        setUpdateCheckStatus({ loading: false, type: "ok", message: translate("You are on the latest version (v${current}).").replace("${current}", data.currentVersion) });
+      }
+    } catch {
+      setUpdateCheckStatus({ loading: false, type: "error", message: translate("Could not reach the update server. Try again later.") });
     }
   };
 
@@ -1169,6 +1204,34 @@ export default function ProfilePage() {
                 </div>
               </form>
             )}
+            {/* Automatic update checks. Off = nothing polls the npm registry on
+                its own (dashboard, tray balloon, CLI launcher); "Check now" and
+                the tray's "Check for updates" still ask on demand. */}
+            <div className="flex flex-col gap-2 pt-4 border-t border-border/50">
+              <div className="flex items-start sm:items-center justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm sm:text-base">{translate("Check for updates automatically")}</p>
+                  <p className="text-xs sm:text-sm text-text-muted">
+                    {translate("When OFF, 10Router no longer contacts the update server on its own or shows new-version notices — including security fixes. You can still check by hand.")}
+                  </p>
+                </div>
+                <Toggle
+                  checked={settings.autoUpdateCheck !== false}
+                  onChange={() => updateAutoUpdateCheck(settings.autoUpdateCheck === false)}
+                  disabled={loading}
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="button" variant="secondary" size="sm" onClick={checkForUpdatesNow} loading={updateCheckStatus.loading}>
+                  {translate("Check now")}
+                </Button>
+                {updateCheckStatus.message && (
+                  <p className={`text-xs sm:text-sm ${updateCheckStatus.type === "error" ? "text-red-500" : updateCheckStatus.type === "info" ? "text-primary" : "text-green-500"}`}>
+                    {updateCheckStatus.message}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </Card>
 

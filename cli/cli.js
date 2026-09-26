@@ -482,10 +482,18 @@ function isRestrictedEnvironment() {
   return null;
 }
 
+// Settings → Security → "Check for updates automatically" off. The launcher
+// runs before the server and cannot read the setting, so the server mirrors it
+// into this marker (src/lib/updateCheck.js — keep the name in sync).
+const UPDATE_CHECK_DISABLED_MARKER = "update-check-disabled";
+function autoUpdateCheckDisabled() {
+  try { return fs.existsSync(path.join(getDataDir(), UPDATE_CHECK_DISABLED_MARKER)); } catch { return false; }
+}
+
 // Check if new version available, return latest version or null
 function checkForUpdate() {
   return new Promise((resolve) => {
-    if (skipUpdate) {
+    if (skipUpdate || autoUpdateCheckDisabled()) {
       resolve(null);
       return;
     }

@@ -15,6 +15,7 @@ import {
 } from "@/lib/tunnel";
 import { getMitmStatus, startMitm, loadEncryptedPassword, initDbHooks, restoreToolDNS, sweepStaleDnsEntries, removeAllDNSEntriesSync } from "@/mitm/manager";
 import { repairAllImportedUsageCosts } from "@/lib/db/repos/usageRepo.js";
+import { isAutoUpdateCheckEnabled, syncUpdateCheckMarker } from "@/lib/updateCheck";
 import { syncToJson as syncMitmAliasCache } from "@/lib/mitmAliasCache";
 import { killAllBridges } from "@/lib/mcp/stdioSseBridge";
 
@@ -88,6 +89,9 @@ async function runHeavyStartup() {
   // tunnel / Tailscale / MITM auto-resume below.
   repairAllImportedUsageCosts().catch((e) => console.log("[InitApp] usage cost repair failed:", e.message));
   const settings = await getSettings();
+  // Re-derive the launcher's update-check marker from the database (it may have
+  // been restored or imported since the marker was written).
+  syncUpdateCheckMarker(isAutoUpdateCheckEnabled(settings));
 
   // Auto-resume tunnel (once per process)
   if (settings.tunnelEnabled && !g.tunnelAutoResumed) {

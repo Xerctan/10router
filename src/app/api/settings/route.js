@@ -3,6 +3,7 @@ import { getSettings, updateSettings } from "@/lib/localDb";
 import { applyOutboundProxyEnv } from "@/lib/network/outboundProxy";
 import { resetComboRotation } from "open-sse/services/combo.js";
 import bcrypt from "bcryptjs";
+import { isAutoUpdateCheckEnabled, syncUpdateCheckMarker } from "@/lib/updateCheck";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -84,6 +85,12 @@ export async function PATCH(request) {
     }
 
     const settings = await updateSettings(body);
+
+    // The CLI launcher checks for updates before the server exists; it reads a
+    // marker file, not the database.
+    if (Object.prototype.hasOwnProperty.call(body, "autoUpdateCheck")) {
+      syncUpdateCheckMarker(isAutoUpdateCheckEnabled(settings));
+    }
 
     // Apply outbound proxy settings immediately (no restart required)
     if (

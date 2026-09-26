@@ -4,6 +4,8 @@ import path from "node:path";
 import pkg from "../../../../package.json" with { type: "json" };
 import { UPDATER_CONFIG, GITHUB_CONFIG } from "@/shared/constants/config.js";
 import { getDataDir } from "@/lib/dataDir.js";
+import { getSettings } from "@/lib/localDb";
+import { isAutoUpdateCheckEnabled } from "@/lib/updateCheck";
 
 // Single source of truth with the updater and the Sidebar's install command —
 // a second copy here silently drifted to the wrong package once already.
@@ -87,10 +89,32 @@ function getLatestVersionNonBlocking() {
   return versionCache.value || null;
 }
 
-export async function GET() {
-  // Non-blocking: see getLatestVersionNonBlocking — the version probe must not
-  // hang on the npm registry.
-  const latestVersion = getLatestVersionNonBlocking();
+// Explicit check (?check=1 — the "Check now" button, the tray's "Check for
+// updates"): the user is waiting for an answer, so await the registry, bypass
+// the cache, and do it even when automatic checks are off.
+async function getLatestVersionNow() {
+  const latest = await fetchLatestVersion();
+  if (latest) {
+    versionCache.value = latest;
+    versionCache.fetchedAt = Date.now();
+  }
+  return latest;
+}
+
+export async function GET(request) {
+  const explicitCheck = request ? new URL(request.url).searchParams.get("check") === "1" : false;
+  let autoCheck = true;
+  try {
+    autoCheck = isAutoUpdateCheckEnabled(await getSettings());
+  } catch { /* unreadable settings: keep the default */ }
+
+  // Automatic checks off: no registry call at all, and no stale cached answer
+  // either — nothing may surface an update the operator opted out of hearing
+  // about. Otherwise non-blocking: see getLatestVersionNonBlocking — the version
+  // probe must not hang on the npm registry.
+  const latestVersion = explicitCheck
+    ? await getLatestVersionNow()
+    : autoCheck ? getLatestVersionNonBlocking() : null;
   const currentVersion = pkg.version;
   const hasUpdate = latestVersion ? compareVersions(latestVersion, currentVersion) > 0 : false;
 
@@ -105,5 +129,8 @@ export async function GET() {
     ? `${GITHUB_CONFIG.repoUrl}/releases/tag/v${latestVersion || currentVersion}`
     : null;
 
-  return Response.json({ currentVersion, latestVersion, hasUpdate, installChannel, releaseUrl, diskVersion: readDiskVersion() });
+  return Response.json({
+    currentVersion, latestVersion, hasUpdate, installChannel, releaseUrl, diskVersion: readDiskVersion(),
+    updateCheck: autoCheck,
+  });
 }

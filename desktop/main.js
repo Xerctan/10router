@@ -645,7 +645,8 @@ function fetchJson(url, timeoutMs = 8000) {
 async function checkForUpdates() {
     let info = null;
     try {
-        info = await fetchJson(`${BASE_URL}/api/version`);
+        // ?check=1:手动检查是明确操作,即使「设置 → 安全」关闭了自动检查更新也照常查询。
+        info = await fetchJson(`${BASE_URL}/api/version?check=1`);
     } catch { /* 服务未运行/网络失败 */ }
     if (!info || !info.currentVersion) {
         dialog.showMessageBox({ type: 'warning', title: tr('update.failedTitle'), message: tr('update.failedTitle'), detail: tr('update.failedBody'), buttons: [tr('dialog.ok')] });

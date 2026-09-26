@@ -35,6 +35,9 @@ const DEFAULT_SETTINGS = {
   // Operator opted out of the dashboard-wide "log-in check is off" banner.
   // Only meaningful while requireLogin is false; PATCH requireLogin=true clears it.
   hideLoginOffBanner: false,
+  // Settings → Security: poll the npm registry for new releases on our own.
+  // Off = only explicit checks (see src/lib/updateCheck.js).
+  autoUpdateCheck: true,
   requireApiKey: true,
   // Server-side auto-compaction of oversized conversations (clients that do
   // not compact locally would otherwise hard-fail on "prompt is too long").
