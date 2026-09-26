@@ -36,6 +36,9 @@ export default function ProfilePage() {
   // goes through a confirmation the way "require API key" already does.
   const [loginOffConfirmOpen, setLoginOffConfirmOpen] = useState(false);
   const [bannerHideConfirmOpen, setBannerHideConfirmOpen] = useState(false);
+  // Turning the log-in check on without a password of your own (issue #33): set
+  // one here and enable the check in the same request.
+  const [loginOnPassword, setLoginOnPassword] = useState({ open: false, value: "", confirm: "", error: "", loading: false });
   const [updateCheckStatus, setUpdateCheckStatus] = useState({ loading: false, message: "", type: "" });
   const [isShuttingDown, setIsShuttingDown] = useState(false);
   const [settings, setSettings] = useState({ fallbackStrategy: "fill-first" });
@@ -286,6 +289,10 @@ export default function ProfilePage() {
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
+    if (!passwords.new.trim()) {
+      setPassStatus({ type: "error", message: translate("Password cannot be empty") });
+      return;
+    }
     if (passwords.new !== passwords.confirm) {
       setPassStatus({ type: "error", message: "Passwords do not match" });
       return;
@@ -392,6 +399,13 @@ export default function ProfilePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ requireLogin }),
       });
+      if (!res.ok) {
+        // No password of your own yet: the server refuses rather than lock you out
+        // behind the hidden first-login password. Ask for one instead.
+        const data = await res.json().catch(() => ({}));
+        if (data?.code === "PASSWORD_REQUIRED") setLoginOnPassword({ open: true, value: "", confirm: "", error: "", loading: false });
+        return;
+      }
       if (res.ok) {
         // Server clears hideLoginOffBanner when the check goes back on — mirror it.
         setSettings(prev => ({ ...prev, requireLogin, ...(requireLogin ? { hideLoginOffBanner: false } : {}) }));
@@ -399,6 +413,36 @@ export default function ProfilePage() {
       }
     } catch (err) {
       console.error("Failed to update require login:", err);
+    }
+  };
+
+  const enableLoginWithPassword = async () => {
+    const { value, confirm } = loginOnPassword;
+    if (!value.trim()) {
+      setLoginOnPassword((s) => ({ ...s, error: translate("Password cannot be empty") }));
+      return;
+    }
+    if (value !== confirm) {
+      setLoginOnPassword((s) => ({ ...s, error: translate("Passwords do not match") }));
+      return;
+    }
+    setLoginOnPassword((s) => ({ ...s, loading: true, error: "" }));
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newPassword: value, requireLogin: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setLoginOnPassword((s) => ({ ...s, loading: false, error: data?.error || translate("Failed to update password") }));
+        return;
+      }
+      setSettings((prev) => ({ ...prev, requireLogin: true, hasPassword: true, hideLoginOffBanner: false }));
+      setLoginOnPassword({ open: false, value: "", confirm: "", error: "", loading: false });
+      window.dispatchEvent(new Event(SECURITY_STATUS_CHANGED));
+    } catch {
+      setLoginOnPassword((s) => ({ ...s, loading: false, error: translate("An error occurred") }));
     }
   };
 
@@ -2015,6 +2059,44 @@ export default function ProfilePage() {
         variant="danger"
         loading={isShuttingDown}
       />
+
+      <Modal
+        isOpen={loginOnPassword.open}
+        onClose={() => setLoginOnPassword({ open: false, value: "", confirm: "", error: "", loading: false })}
+        title={translate("Set a password to turn on the log-in check")}
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setLoginOnPassword({ open: false, value: "", confirm: "", error: "", loading: false })} disabled={loginOnPassword.loading}>
+              {translate("Cancel")}
+            </Button>
+            <Button variant="primary" onClick={enableLoginWithPassword} loading={loginOnPassword.loading}>
+              {translate("Set password and turn on")}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-text-muted mb-3 text-sm">
+          {translate("You have not set a dashboard password of your own yet. Choose one now — you will need it to sign in from then on.")}
+        </p>
+        <div className="flex flex-col gap-3">
+          <Input
+            type="password"
+            value={loginOnPassword.value}
+            onChange={(e) => setLoginOnPassword((s) => ({ ...s, value: e.target.value, error: "" }))}
+            placeholder={translate("New password")}
+            autoFocus
+          />
+          <Input
+            type="password"
+            value={loginOnPassword.confirm}
+            onChange={(e) => setLoginOnPassword((s) => ({ ...s, confirm: e.target.value, error: "" }))}
+            onKeyDown={(e) => { if (e.key === "Enter") enableLoginWithPassword(); }}
+            placeholder={translate("Confirm new password")}
+          />
+          {loginOnPassword.error && <p className="text-xs text-red-500">{loginOnPassword.error}</p>}
+        </div>
+      </Modal>
 
       <Modal
         isOpen={dbAuth.open}

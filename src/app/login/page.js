@@ -14,6 +14,9 @@ export default function LoginPage() {
   // password" (there is no default password any more; see
   // lib/auth/dashboardSession).
   const [status, setStatus] = useState(null);
+  // "Forgot your password?" — the recovery route (issue #33): a locked-out
+  // operator used to have no way back in short of reinstalling.
+  const [showRecovery, setShowRecovery] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -122,6 +125,27 @@ export default function LoginPage() {
               >
                 Login
               </Button>
+
+              <button
+                type="button"
+                className="text-xs text-text-muted underline self-center hover:text-text"
+                onClick={() => setShowRecovery((v) => !v)}
+              >
+                Forgot your password?
+              </button>
+              {showRecovery && (
+                <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-2 p-3 text-xs text-text-muted">
+                  {status?.installChannel === "fpk" && (
+                    <p>fnOS: open App Center → 10Router → Settings, enter a new dashboard password and save. Sign in with it right away.</p>
+                  )}
+                  <p>Any install: create a file named reset-password in the 10Router data folder with the new password inside, then sign in with it. The file is read once and deleted.</p>
+                  <p>Leave that file empty to remove the password and go back to the first-login password.</p>
+                  <p>Data folder — Windows: %APPDATA%\10router · macOS / Linux: ~/.10router · Docker: the mounted DATA_DIR · fnOS: @appdata/10router on the app&apos;s volume.</p>
+                  {status?.installChannel === "fpk" && status?.hasPassword === false && (
+                    <p>First sign-in on fnOS: the generated password is in the initial-password file in that folder.</p>
+                  )}
+                </div>
+              )}
             </form>
           )}
         </Card>

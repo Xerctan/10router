@@ -31,6 +31,8 @@ const patch = (body) =>
 describe("settings PATCH: the hidden banner never outlives its off-period", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // A stored password: since issue #33 the check cannot be turned on without one.
+    mocks.getSettings.mockResolvedValue({ password: "$2a$04$stored-hash" });
     mocks.updateSettings.mockImplementation(async (u) => ({ requireLogin: true, ...u }));
   });
 
@@ -93,7 +95,8 @@ describe("settings page: hiding takes a confirmation, showing is immediate", () 
   });
 
   it("both security switches tell the banner to refresh", () => {
-    expect(profile.match(/window\.dispatchEvent\(new Event\(SECURITY_STATUS_CHANGED\)\)/g)).toHaveLength(2);
+    // require-login, banner switch, and "set a password and turn on" (issue #33).
+    expect(profile.match(/window\.dispatchEvent\(new Event\(SECURITY_STATUS_CHANGED\)\)/g)).toHaveLength(3);
   });
 
   it("the dialog says the risk remains", () => {

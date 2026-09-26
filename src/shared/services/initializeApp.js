@@ -16,6 +16,7 @@ import {
 import { getMitmStatus, startMitm, loadEncryptedPassword, initDbHooks, restoreToolDNS, sweepStaleDnsEntries, removeAllDNSEntriesSync } from "@/mitm/manager";
 import { repairAllImportedUsageCosts } from "@/lib/db/repos/usageRepo.js";
 import { isAutoUpdateCheckEnabled, syncUpdateCheckMarker } from "@/lib/updateCheck";
+import { applyPasswordResetFile } from "@/lib/auth/passwordReset";
 import { syncToJson as syncMitmAliasCache } from "@/lib/mitmAliasCache";
 import { killAllBridges } from "@/lib/mcp/stdioSseBridge";
 
@@ -88,6 +89,8 @@ async function runHeavyStartup() {
   // resumable (watermark in _meta). Not awaited: it must never hold up the
   // tunnel / Tailscale / MITM auto-resume below.
   repairAllImportedUsageCosts().catch((e) => console.log("[InitApp] usage cost repair failed:", e.message));
+  // A reset-password file left while the server was down (issue #33 recovery).
+  await applyPasswordResetFile().catch((e) => console.log("[InitApp] password reset file failed:", e.message));
   const settings = await getSettings();
   // Re-derive the launcher's update-check marker from the database (it may have
   // been restored or imported since the marker was written).

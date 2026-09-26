@@ -5,6 +5,7 @@ import { isOidcConfigured } from "@/lib/auth/oidc";
 import { isSamlConfigured } from "@/lib/auth/saml.js";
 import { getDashboardAuthSession, isDashboardAuthConfigured, renewDashboardAuthCookie } from "@/lib/auth/dashboardSession";
 import { isLocalRequest } from "@/dashboardGuard";
+import { applyPasswordResetFile } from "@/lib/auth/passwordReset";
 
 // The guard's peer check needs a real request object; this route is also called
 // without one (tests, and the pre-flight probe path), and an unparsable request
@@ -19,6 +20,8 @@ function cameFromThisMachine(request) {
 
 export async function GET(request) {
   try {
+    // Apply a pending reset-password file first, so the login page reflects it.
+    await applyPasswordResetFile().catch(() => {});
     const settings = await getSettings();
     const cookieStore = await cookies();
     const session = await getDashboardAuthSession(cookieStore.get("auth_token")?.value);
@@ -70,6 +73,9 @@ export async function GET(request) {
       samlConfigured: isSamlConfigured(settings),
       samlLoginLabel: (settings.samlLoginLabel || "Sign in with SAML SSO").trim() || "Sign in with SAML SSO",
       hasPassword: !!settings.password,
+      // fpk / desktop / "" (npm, Docker) — lets the login page point a locked-out
+      // operator at the recovery route that exists for their install.
+      installChannel: process.env.INSTALL_CHANNEL || "",
       displayName,
       loginMethod,
       authenticated: !!session,

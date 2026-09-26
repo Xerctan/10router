@@ -32,8 +32,17 @@ export function getBootstrapPassword() {
 // module there would pull XML/crypto machinery into that graph for two key
 // reads.
 export function isDashboardAuthConfigured(settings) {
-  if (settings?.password) return true;
   if (getBootstrapPassword()) return true;
+  return hasOwnDashboardCredential(settings);
+}
+
+// A credential the OPERATOR chose: a stored password hash or a complete SSO
+// setup — deliberately NOT the bootstrap INITIAL_PASSWORD. On fnOS that one is
+// generated at install time into a file the user never sees, so turning the
+// log-in check on with nothing but it locked people out: every password they
+// tried got 401 (issue #33). Settings PATCH refuses requireLogin=true without one.
+export function hasOwnDashboardCredential(settings) {
+  if (settings?.password) return true;
   const oidcReady =
     String(settings?.oidcIssuerUrl || "").trim() &&
     String(settings?.oidcClientId || "").trim() &&

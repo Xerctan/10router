@@ -4,6 +4,7 @@ import { applyOutboundProxyEnv } from "@/lib/network/outboundProxy";
 import { resetComboRotation } from "open-sse/services/combo.js";
 import bcrypt from "bcryptjs";
 import { isAutoUpdateCheckEnabled, syncUpdateCheckMarker } from "@/lib/updateCheck";
+import { hasOwnDashboardCredential } from "@/lib/auth/dashboardSession";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -47,8 +48,31 @@ export async function PATCH(request) {
     // check back on forgets it, so a later switch-off warns again.
     if (body.requireLogin === true) body.hideLoginOffBanner = false;
 
+    // An empty / whitespace-only password is never valid (issue #33). Checked on
+    // the key's presence, not its truthiness: `if (body.newPassword)` used to let
+    // "" slip through silently while the rest of the request still applied.
+    const settingPassword = Object.prototype.hasOwnProperty.call(body, "newPassword");
+    if (settingPassword && (typeof body.newPassword !== "string" || !body.newPassword.trim())) {
+      return NextResponse.json({ error: "Password cannot be empty", code: "PASSWORD_EMPTY" }, { status: 400 });
+    }
+
+    // Turning the log-in check on needs a credential the operator actually knows:
+    // a stored password (existing or set in this same request) or SSO. The
+    // bootstrap INITIAL_PASSWORD does not count — on fnOS it is generated at
+    // install time into a file the user never sees, and enabling the check on it
+    // alone locked people out with every password rejected (issue #33).
+    if (body.requireLogin === true && !settingPassword) {
+      const current = await getSettings();
+      if (!hasOwnDashboardCredential({ ...current, ...body })) {
+        return NextResponse.json(
+          { error: "Set a dashboard password before turning on the log-in check.", code: "PASSWORD_REQUIRED" },
+          { status: 400 },
+        );
+      }
+    }
+
     // If updating password, hash it
-    if (body.newPassword) {
+    if (settingPassword) {
       const settings = await getSettings();
       const currentHash = settings.password;
 
