@@ -96,6 +96,60 @@ function extractCustomToolInput(argumentsValue) {
   return argumentsText;
 }
 
+// Responses `response` object → Chat Completions. Mirrors the forced-SSE branch in
+// sseToJsonHandler (pickAssistantMessageForChatCompletion: the user-visible answer is
+// the last non-empty message item; cache counters fold into prompt_tokens).
+function responsesCompletionToOpenAICompletion(responseBody) {
+  if (!responseBody || typeof responseBody !== "object" || responseBody.object !== "response") return responseBody;
+  const output = Array.isArray(responseBody.output) ? responseBody.output : [];
+  const messages = output.filter((item) => item?.type === "message");
+  let textContent = "";
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const parts = Array.isArray(messages[i].content) ? messages[i].content : [];
+    const text = parts.filter((c) => typeof c?.text === "string").map((c) => c.text).join("");
+    if (text.length > 0) { textContent = text; break; }
+    if (i === 0) textContent = text;
+  }
+  const funcCallItems = output.filter((item) => item.type === "function_call");
+  const toolCalls = funcCallItems.map((item, idx) => ({
+    id: item.call_id || `call_${item.name}_${Date.now()}_${idx}`,
+    type: "function",
+    function: {
+      name: item.name,
+      arguments: typeof item.arguments === "string" ? item.arguments : JSON.stringify(item.arguments || {}),
+    },
+  }));
+  const hasToolCalls = toolCalls.length > 0;
+  const usage = responseBody.usage || {};
+  const cacheRead = usage.input_tokens_details?.cached_tokens || 0;
+  const cacheCreate = usage.cache_creation_input_tokens || 0;
+  const inTokens = (usage.input_tokens || 0) + cacheRead + cacheCreate;
+  const outTokens = usage.output_tokens || 0;
+  const incomplete = responseBody.status === "incomplete";
+  const responseDone = responseBody.status === "completed" || responseBody.status === "done";
+  const message = { role: "assistant", content: textContent || (hasToolCalls ? null : "") };
+  if (hasToolCalls) message.tool_calls = toolCalls;
+  const result = {
+    id: responseBody.id || `chatcmpl-${Date.now()}`,
+    object: "chat.completion",
+    created: responseBody.created_at || Math.floor(Date.now() / 1000),
+    model: responseBody.model || "unknown",
+    choices: [{
+      index: 0,
+      message,
+      finish_reason: hasToolCalls ? "tool_calls" : (incomplete ? "length" : (responseDone ? "stop" : (responseBody.status || "stop"))),
+    }],
+    usage: { prompt_tokens: inTokens, completion_tokens: outTokens, total_tokens: inTokens + outTokens },
+  };
+  if (cacheRead > 0 || cacheCreate > 0) {
+    result.usage.prompt_tokens_details = {
+      ...(cacheRead > 0 ? { cached_tokens: cacheRead } : {}),
+      ...(cacheCreate > 0 ? { cache_creation_tokens: cacheCreate } : {}),
+    };
+  }
+  return result;
+}
+
 function openAICompletionToResponses(responseBody, customToolNames = null) {
   const choice = responseBody?.choices?.[0];
   if (!choice) return responseBody;
@@ -166,6 +220,13 @@ export function translateNonStreamingResponse(responseBody, targetFormat, source
   // Responses API — convert so tool_calls/text surface as Responses `output`.
   if (targetFormat === FORMATS.OPENAI && sourceFormat === FORMATS.OPENAI_RESPONSES) {
     return openAICompletionToResponses(responseBody, customToolNames);
+  }
+  // Mirror case: provider spoke the Responses API (openai-responses target —
+  // opencode-go's responses-only ids, grok-4.x / gpt-*-luna) but the client is a
+  // Chat Completions speaker. Without this the raw Responses body fell through
+  // and was served as-is: no `choices`, empty content, no usage.
+  if (targetFormat === FORMATS.OPENAI_RESPONSES && sourceFormat === FORMATS.OPENAI) {
+    return responsesCompletionToOpenAICompletion(responseBody);
   }
   if (targetFormat === FORMATS.OPENAI && sourceFormat === FORMATS.CLAUDE) {
     return openAICompletionToClaudeMessage(responseBody);

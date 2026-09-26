@@ -214,3 +214,57 @@ describe("forced-SSE JSON path for a Claude client behind a chat upstream", () =
     expect(json.object).toBe("chat.completion");
   });
 });
+
+describe("non-stream Responses upstream for a Chat client (opencode-go responses-only ids)", () => {
+  const RESPONSES_BODY = {
+    id: "resp_x",
+    object: "response",
+    created_at: 1790439371,
+    completed_at: 1790439372,
+    status: "completed",
+    model: "gpt-6-luna",
+    output: [
+      { id: "rs_1", type: "reasoning", encrypted_content: "xx", content: [], summary: [] },
+      { id: "msg_1", type: "message", status: "completed", role: "assistant", content: [{ type: "output_text", text: "pong", annotations: [] }] },
+    ],
+    usage: { input_tokens: 11, input_tokens_details: { cached_tokens: 3 }, output_tokens: 15, total_tokens: 26 },
+  };
+
+  it("converts the Responses body into a chat.completion with content and cache-aware usage", () => {
+    const out = translateNonStreamingResponse(RESPONSES_BODY, FORMATS.OPENAI_RESPONSES, FORMATS.OPENAI);
+    expect(out.object).toBe("chat.completion");
+    expect(out.choices[0].message.content).toBe("pong");
+    expect(out.choices[0].finish_reason).toBe("stop");
+    expect(out.usage.prompt_tokens).toBe(14); // 11 input + 3 cached
+    expect(out.usage.completion_tokens).toBe(15);
+    expect(out.usage.prompt_tokens_details.cached_tokens).toBe(3);
+  });
+
+  it("maps incomplete (budget exhausted) to finish_reason length", () => {
+    const body = {
+      ...RESPONSES_BODY,
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      output: [{ id: "rs_1", type: "reasoning", content: [], summary: [] }],
+      usage: { input_tokens: 10, output_tokens: 0, total_tokens: 10 },
+    };
+    const out = translateNonStreamingResponse(body, FORMATS.OPENAI_RESPONSES, FORMATS.OPENAI);
+    expect(out.choices[0].finish_reason).toBe("length");
+  });
+
+  it("passes non-`response` bodies through untouched (safety)", () => {
+    const chatBody = { object: "chat.completion", choices: [] };
+    const out = translateNonStreamingResponse(chatBody, FORMATS.OPENAI_RESPONSES, FORMATS.OPENAI);
+    expect(out).toBe(chatBody);
+  });
+
+  it("converts function_call output into tool_calls", () => {
+    const body = {
+      ...RESPONSES_BODY,
+      output: [{ type: "function_call", call_id: "call_9", name: "shell", arguments: '{"cmd":"ls"}' }],
+    };
+    const out = translateNonStreamingResponse(body, FORMATS.OPENAI_RESPONSES, FORMATS.OPENAI);
+    expect(out.choices[0].finish_reason).toBe("tool_calls");
+    expect(out.choices[0].message.tool_calls[0].function.name).toBe("shell");
+  });
+});
