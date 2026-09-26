@@ -5,7 +5,7 @@
 // Ids mirror the provider's public catalog — `GET https://opencode.ai/zen/go/v1/models`
 // (no auth), which their docs call "the full list of available models". Endpoints follow
 // the endpoint table in https://opencode.ai/docs/go/; ids that table does not cover
-// inherit their family's endpoint. Snapshot taken 2026-09-10: 37 ids, none of ours stale.
+// inherit their family's endpoint. Snapshot taken 2026-09-26: 43 ids, none of ours stale.
 import { describe, expect, it } from "vitest";
 import { PROVIDER_MODELS, getModelSupportedFormats, getModelTargetFormat } from "../../open-sse/config/providerModels.js";
 import { PROVIDERS } from "../../open-sse/config/providers.js";
@@ -14,14 +14,14 @@ import { resolveTransport } from "../../open-sse/services/provider.js";
 // /v1/responses only: /chat/completions would 4xx, so every other client format is
 // translated to the responses format instead.
 const RESPONSES_ONLY = [
-  "grok-4.6", "gpt-5.6-luna", "muse-spark-1.3-contributor", "muse-spark-1.2-contributor", "grok-4.5",
+  "grok-4.7", "grok-4.6", "gpt-6-luna", "gpt-5.6-luna", "muse-spark-1.3-contributor", "muse-spark-1.2-contributor", "grok-4.5",
 ];
 // /chat/completions only (no /messages, no /responses support on opencode-go).
 const CHAT_ONLY = [
   "glm-5.3-flash", "glm-5.3", "glm-5.2", "glm-5.1", "glm-5",
   "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "kimi-k2.5",
-  "longcat-2.0",
-  "mimo-v2.5", "mimo-v2.5-pro", "mimo-v2-pro", "mimo-v2-omni",
+  "longcat-2.0", "longcat-2.5-preview-free", "space-bunny-free",
+  "mimo-v2.6-flash", "mimo-v2.6-pro", "mimo-v2.5", "mimo-v2.5-pro", "mimo-v2-pro", "mimo-v2-omni",
   "hy4-preview", "hy3", "hy3-preview",
 ];
 // Also expose the Anthropic /messages endpoint.

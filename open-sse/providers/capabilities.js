@@ -161,7 +161,9 @@ export const MODEL_CAPABILITIES = {
   "step-router-v1":     { reasoning: true, thinkingFormat: "step", contextWindow: 256000 }, // Step Plan 专属智能路由模型；官方未标注窗口，与 step-3.x 同档（否则 `*step-*` 兜底给 128K）
   "grok-4.5":       { vision: true, pdf: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 500000, maxOutput: 500000 }, // xai：输出上限等于窗口，与 `*grok-4.6*` 同值
   "grok-4.6":       { vision: true, pdf: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 500000, maxOutput: 500000 }, // xai：与 `*grok-4.6*` 同值，仅补 pdf
+  "grok-4.7":       { vision: true, pdf: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 500000, maxOutput: 500000 }, // xai 第一方（2026-09-26）：与 grok-4.6 同规格（500000/500000，text+image+pdf）；opencode-go 端点表将其列入 /responses
   "gpt-5.6-luna":   { vision: true, pdf: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 1050000, maxOutput: 128000 }, // openai（第一方）；`*gpt-5*` 给的 400000 是 codex 系列的保守值
+  "gpt-6-luna":     { vision: true, pdf: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 1050000, maxOutput: 128000 }, // openai（2026-09-26）：与 gpt-5.6-luna 同规格（azure/aihubmix/opencode-go 条目一致，1050000/128000，text+image+pdf）
   "kimi-k2.6":      { vision: true, videoInput: true, reasoning: true, thinkingFormat: "kimi", contextWindow: 262144, maxOutput: 262144 }, // moonshotai：与 `*kimi*k2*` 同值，仅补 videoInput
 
   // Kimi flagship + coding (platform + Kimi Code ids) — vision/video native
@@ -243,6 +245,13 @@ export const MODEL_CAPABILITIES = {
   // opencode-go 的目录用小写 longcat-2.0，而 canonical 查表区分大小写 → 必须单独一行
   // （同值，来源同上；models.dev 的 opencode-go 条目 1000000/131072 与第一方一致）。
   "longcat-2.0":                { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 131072 }, // 同上，小写 id
+  // LongCat 2.5 Preview 免费档（2026-09-26）：models.dev 的 opencode-go/opencode 条目
+  // 一致报 text+image、1M/131072 —— 比 2.0 多了图像输入。
+  "longcat-2.5-preview-free":   { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 131072 },
+  // opencode-go 的免费 id：models.dev（opencode-go/opencode 两处条目一致）报
+  // text+image+video、1048576 窗口、输入/输出各 524288。名字读不出多模态，
+  // 必须显式声明，否则 vision 落 false 图片被剥。
+  "space-bunny-free":           { vision: true, videoInput: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 524288 },
   "sensenova-6.8-flash-lite":   { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 262144, maxOutput: 65536 }, // sensenova（第一方）
   "venice-uncensored-1-2":      { vision: true, contextWindow: 128000, maxOutput: 8192 }, // venice（第一方）；无 reasoning
   // Morph：第一方明说纯文本且 **不支持工具调用**（tools:false 必须显式写，
