@@ -5,16 +5,9 @@ import { OAUTH_ENDPOINTS, ANTIGRAVITY_HEADERS, AG_DEFAULT_TOOLS, AG_TOOL_SUFFIX,
 import { HTTP_STATUS } from "../config/runtimeConfig.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
-import { cleanJSONSchemaForAntigravity } from "../translator/formats/gemini.js";
+import { toGeminiParameters, normalizeGeminiContents } from "../translator/formats/gemini.js";
+import { sanitizeGeminiToolName } from "../translator/concerns/geminiTools.js";
 import { DEFAULT_THINKING_AG_SIGNATURE } from "../config/defaultThinkingSignature.js";
-
-// Sanitize function name: Gemini requires [a-zA-Z_][a-zA-Z0-9_.:\-]{0,63}
-function sanitizeFunctionName(name) {
-  if (!name) return "_unknown";
-  let s = name.replace(/[^a-zA-Z0-9_.:\-]/g, "_");
-  if (!/^[a-zA-Z_]/.test(s)) s = "_" + s;
-  return s.substring(0, 64);
-}
 
 const MAX_RETRY_AFTER_MS = 10000;
 const ANTIGRAVITY_TRANSIENT_RETRY_MAX_MS = 15000;
@@ -189,7 +182,7 @@ export class AntigravityExecutor extends BaseExecutor {
 
     // ─── Standard (non-image) request ───
     // Fix contents for Claude models via Antigravity
-    const contents = body.request?.contents?.map(c => {
+    const rawContents = body.request?.contents?.map(c => {
       let role = c.role;
       // functionResponse must be role "user" for Claude models
       if (c.parts?.some(p => p.functionResponse)) {
@@ -217,8 +210,13 @@ export class AntigravityExecutor extends BaseExecutor {
       }
       return c;
     });
+    // Merge/strip, then make sure the turn order is one Antigravity accepts.
+    const contents = rawContents && normalizeGeminiContents(rawContents, { guardTurns: true });
 
     // Sanitize tool schemas and function names before sending to Antigravity.
+    // Translated requests arrive already renamed (the translator records the
+    // renames for the response side); sanitizing again is a no-op for them and
+    // still covers native Antigravity bodies.
     let tools = body.request?.tools;
 
     if (tools && tools.length > 0) {
@@ -227,16 +225,10 @@ export class AntigravityExecutor extends BaseExecutor {
       const allDeclarations = [];
       for (const group of tools) {
         for (const fn of group.functionDeclarations || []) {
-          const name = sanitizeFunctionName(fn.name);
+          const name = sanitizeGeminiToolName(fn.name);
           if (seenToolNames.has(name)) continue;
           seenToolNames.add(name);
-          allDeclarations.push({
-            ...fn,
-            name,
-            parameters: fn.parameters
-              ? cleanJSONSchemaForAntigravity(structuredClone(fn.parameters))
-              : { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
-          });
+          allDeclarations.push({ ...fn, name, parameters: toGeminiParameters(fn.parameters) });
         }
       }
       tools = allDeclarations.length > 0 ? [{ functionDeclarations: allDeclarations }] : [];
@@ -275,6 +267,12 @@ export class AntigravityExecutor extends BaseExecutor {
     // Strip blacklisted thinking fields from top-level body (set by thinkingUnified.js at root, not body.request)
     stripBlacklisted(body);
 
+    // The official client sends no requestType on the agent (chat) path; with
+    // requestType:"agent" Google answers a detail-free 429 RESOURCE_EXHAUSTED
+    // even when quota is left. Drop it here too so an inbound envelope can't
+    // leak it through the spread below. image_gen keeps its own requestType.
+    delete body.requestType;
+
     this._lastSessionId = transformedRequest.sessionId; // cached for buildHeaders (base.execute order)
 
     return {
@@ -282,7 +280,6 @@ export class AntigravityExecutor extends BaseExecutor {
       project: projectId,
       model: body.model || model,
       userAgent: "antigravity",
-      requestType: "agent",
       requestId: buildIdeRequestId({ body, request: transformedRequest, credentials, model, requestType: "agent" }),
       request: transformedRequest
     };

@@ -4,6 +4,19 @@
 
 ## v1.2.2 (未发布)
 
+### 🐛 修复
+
+- **反重力（Antigravity）请求：工具清洗升级 + 去掉 `requestType:"agent"`**（对照 9router v0.5.91 与 OmniRoute 的同类修复，按本仓风格重写，未合入上游代码）。
+  - **不再发 `requestType:"agent"`**：官方客户端在 agent（对话）路径上根本不带这个字段，带上后 Google 会把请求归入另一个桶，**有额度也回无详情的 429 RESOURCE_EXHAUSTED**。翻译器两处信封不再写入，执行器再兜底删除（防止入站信封经 `...body` 展开带出）；`image_gen` 保留自己的 requestType。
+  - **空字符串工具结果被丢 → 400**：openai→gemini 用 `if (!toolResponses[fid])` 判断有无结果，`""` 是假值被跳过——无输出的命令（`mkdir`、写文件）照样触发；更糟的是本仓自己的 `fixMissingToolResponses` 给未应答调用补的占位就是 `content: ""`，于是这道修复对 Gemini / 反重力**从来没生效过**，留下没有 functionResponse 的 functionCall，Gemini 直接 400。改为按 `undefined` 判定。对 gemini / vertex / gemini-cli 同样生效。
+  - **改名的工具名会映射回原名**：Gemini 要求函数名匹配 `[a-zA-Z_][a-zA-Z0-9_.:\-]{0,63}`，数字开头（`1password_get`）、含 `/` 或空格、超 64 字符的名字此前被改名后**不还原**，模型调用的是客户端从没声明过的名字。新增 `translator/concerns/geminiTools.js`：每个请求一个命名器，声明与历史里的同一原名保证同一新名，改名记入 `_toolNameMap`，流式（`emitFunctionCall` 既有通道）与非流式（`translateNonStreamingResponse` 新增参数）都还原。`_toolNameMap` 以**不可枚举属性**挂出——Zed 执行器直接把翻译结果发上游，可枚举的话会序列化成未知字段。超 64 字符由截断改为「可读前缀 + 原名哈希」：以前两个前 64 字符相同的 MCP 工具截断后同名，执行器去重时**静默丢掉第二个**。
+  - **schema 清洗按结构遍历，属性名不再被当关键字删**：旧实现把 `properties` 映射的键（属性名）当 schema 关键字比对，名为 `title` / `format` / `default` 的参数被整个删掉，名为 `properties` 的参数会被写入 `type` 字段。改为识别 `properties` / `$defs` / `definitions` / `patternProperties` / `dependentSchemas` 只下钻其值，`enum` / `default` / `examples` / `required` 等数据键不下钻。这是加新关键字的前提（否则名为 `strict`、`tags` 的参数会跟着消失）。
+  - **新增剥离**：`strict`（OpenAI strict 模式塞进 parameters，RubyLLM 等默认如此）、`encrypted`（Codex 多 agent 工具）、`~` 前缀键（Zod 4 / Valibot 的 `~optional` 等 Standard Schema 元数据）、`$id` / `$anchor` / `$dynamicRef` / `$dynamicAnchor` / `$vocabulary`、`minContains` / `maxContains`、Copilot 注入的 `markdownDescription` / `markdownEnumDescriptions` / `enumItemLabels`——均为 Gemini「Unknown name … Cannot find field」整请求 400。数值类型（integer / number）上的 `enum` 改为删除（Gemini 只接受字符串 enum，旧逻辑转成字符串 enum 挂在 integer 上）。
+  - **本地 `$ref` 内联**：pydantic / FastMCP 生成的工具 schema 把模型都放进 `$defs`，旧逻辑直接剥掉 `$ref` 留下 `{}`，再被补成 `{reason}` 占位——模型拿不到真实参数结构。现先按 JSON Pointer 内联（支持 `~0` / `~1` 转义，`$ref` 同级的 description 等覆盖目标），循环引用断在第二层，内联预算 256 次防菱形引用膨胀；外部 / 无法解析的引用仍按旧逻辑剥离。可空 `anyOf` 展平时保留字段自身的 description。清洗改为**不修改入参**（Claude 模型路径此前会原地改写客户端请求体里的 `input_schema`）。
+  - **parameters 根节点强制 object**：Gemini 要求 `functionDeclaration.parameters` 为 OBJECT，Copilot 的 `terminal_last_command` 等只给 `{properties}` 不带 `type`，或给标量 / 数组根。无 `type` 补 `object`（保留其余关键字，union 仍可展平），标量 / 数组根替换为空 object（只留 description）。
+  - **反重力路径的对话轮次兜底**（仅执行器，gemini / vertex 共享翻译器不受影响）：首轮不是 user 时补一个 user 轮；以 model 轮结尾时追加 `Continue.` user 轮，结尾有未应答的 functionCall 则补对应 functionResponse。同时剔除空 part、合并相邻同角色轮次。
+  - 用例 `antigravity-tool-sanitize.test.js` 26 例（关键字剥离 / 属性名同名保留 / `$ref` 内联含循环与转义 / 根节点强制 / 命名器与冲突 / 流式与非流式还原 / 空结果配对 / requestType / 轮次兜底）；`stop-sequence-wiring.test.js` 的调用签名断言随 `translateNonStreamingResponse` 新参数更新。全量回归门禁 0 回归，三份注册表基线逐字节一致。
+
 ### 🔧 其他
 
 - **发版面订正：v1.2.1 块的 10router-sync 插件版本号 v1.5.0 → v1.5.1**。插件功能开发于 v1.5.0（`a6b5591d`），但发版时随 mirasim 两笔订正（`21bae482` / `ca20e946`）折叠为 **1.5.1** 发布——插件三处版本位（`.zcode-plugin/plugin.json` + 根 / 子 `marketplace.json`）均为 1.5.1，v1.2.1 主题句写对、条目标题没跟上（v1.2.1 发版后全量审查揪出）。只订正本文件；用户侧 `public/i18n/changelog/` 的 v1.2.1 段保持已发布形态不动（非 tag 提交不动用户端 changelog，且该段已随 v1.2.1 资产定形）。

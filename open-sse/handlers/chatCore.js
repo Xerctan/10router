@@ -517,7 +517,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // injected rather than imported there, which would be a cycle.
   const translateToClientFormat = (rawBody) =>
     needsTranslation(providerResponseFormat, sourceFormat)
-      ? translateNonStreamingResponse(rawBody, providerResponseFormat, sourceFormat, customToolNames)
+      ? translateNonStreamingResponse(rawBody, providerResponseFormat, sourceFormat, customToolNames, toolNameMap)
       : rawBody;
 
   const sharedCtx = { provider, model, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, pxpipe: pxpipeSummary, reqTag, log };

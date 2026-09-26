@@ -58,7 +58,7 @@ describe("issue #18: chatCore stop-sequence enforcement is wired", () => {
 
   it("injects the client-format translator into the forced-SSE path", () => {
     expect(chatCore).toMatch(/needsTranslation\(providerResponseFormat, sourceFormat\)/);
-    expect(chatCore).toMatch(/translateNonStreamingResponse\(rawBody, providerResponseFormat, sourceFormat, customToolNames\)/);
+    expect(chatCore).toMatch(/translateNonStreamingResponse\(rawBody, providerResponseFormat, sourceFormat, customToolNames, toolNameMap\)/);
     expect(chatCore).toMatch(/translateToClientFormat,\s*trackDone, appendLog/);
   });
 });
