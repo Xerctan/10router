@@ -5,7 +5,8 @@
  *  - 以子进程方式拉起/停止/重启 10Router standalone 服务(cli/app 产物,纯 Node)
  *  - 轮询 /api/health 判断服务就绪
  *  - 托盘图标 + 菜单(打开控制台 / 启动 / 重启 / 停止 / 开机自启 / 数据目录 / 退出)
- *  - 内嵌 BrowserWindow 展示 Web 控制台,外链一律走系统默认浏览器
+ *  - 内嵌 BrowserWindow 展示 Web 控制台;尺寸型弹窗就地开窗(同源共享会话,跨域
+ *    用一次性无痕分区承载账号授权,参考 CreditDaddy),普通外链走系统默认浏览器
  *
  * 与参考实现(inspection-visualizer)的差异:
  *  - sidecar 是 Node 而非 Python:用 process.execPath + ELECTRON_RUN_AS_NODE=1 运行
@@ -20,8 +21,9 @@
  *  - 端口: ROUTER_PORT > 20128(与 CLI 默认一致)
  *  - 界面语言: 跟随系统(与 npm CLI 的 i18n 同规则),TENROUTER_LANG 可覆盖
  */
-const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, shell, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, shell, dialog, ipcMain, session } = require('electron');
 const { spawn, spawnSync } = require('child_process');
+const crypto = require('crypto');
 const http = require('http');
 const fs = require('fs');
 const os = require('os');
@@ -63,6 +65,7 @@ const STRINGS = {
         'err.startFailedBody': 'Failed to launch the service process:\n{message}',
         'win.notReadyTitle': 'Service not ready',
         'win.notReadyBody': 'Please use the tray icon menu "Start Service" and try again.',
+        'win.authWindowTitle': 'Account Authorization',
         'menu.checkUpdate': 'Check for Updates',
         'menu.about': 'About 10Router',
         'update.failedTitle': 'Update check failed',
@@ -144,6 +147,7 @@ const STRINGS = {
         'err.startFailedBody': '服务进程启动失败:\n{message}',
         'win.notReadyTitle': '服务未就绪',
         'win.notReadyBody': '请从托盘图标菜单「启动服务」后重试。',
+        'win.authWindowTitle': '账号授权',
         'menu.checkUpdate': '检查更新',
         'menu.about': '关于 10Router',
         'update.failedTitle': '检查更新失败',
@@ -225,6 +229,7 @@ const STRINGS = {
         'err.startFailedBody': '服務程序啟動失敗:\n{message}',
         'win.notReadyTitle': '服務未就緒',
         'win.notReadyBody': '請從系統列圖示選單「啟動服務」後重試。',
+        'win.authWindowTitle': '帳號授權',
         'menu.checkUpdate': '檢查更新',
         'menu.about': '關於 10Router',
         'update.failedTitle': '檢查更新失敗',
@@ -539,6 +544,71 @@ async function restartServer() {
 // ──────────────────────── 窗口 ────────────────────────
 let pendingUrl = null;   // 「前往→打开网址/最近」首开时带入的目标 URL(createWindow 首载用一次)
 
+// ──────────────────────── 授权/弹窗窗体（参考 CreditDaddy） ────────────────────────
+// 界面里 window.open 弹出的尺寸型窗口(features 带 width/height)就地开子窗:
+//  - 同源(与发起页同 origin)→ 普通子窗,继承发起页 session——仪表盘 cookie 罐共享,
+//    MiMo 服务端登录页(/mimo-login/*)依赖这一点,绝不能隔离;
+//  - 跨域 → 一次性「账号授权」无痕窗:随机内存态 session 分区(不带 persist: 前缀
+//    =不落盘,进程退出即消失),关窗即清存储——供应商登录态不进主窗、多账号互不串;
+//    同一登录流程里站点自弹的子窗(第三方账号选择/二次验证)复用同一分区(CreditDaddy
+//    的 openIncognitoWindow 语义);
+//  - 无尺寸的 _blank(文档/验证页等普通链接)保持原语义:丢系统默认浏览器。
+// 渲染层拿到的都是真 WindowProxy(window.open 返回值与 .closed 照常可用),仪表盘零改动。
+function sameOriginUrl(a, b) {
+    try { return new URL(a).origin === new URL(b).origin; } catch { return false; }
+}
+
+function attachWindowOpenRouting(openerContents, fixedSession) {
+    openerContents.setWindowOpenHandler(({ url, features }) => {
+        if (!/^https?:/i.test(url)) return { action: 'deny' };
+        // 只有真正带尺寸的弹窗才进壳内;普通 _blank 链接维持系统浏览器
+        if (!/(?:^|,)\s*width\s*=/.test(features || '')) {
+            shell.openExternal(url);
+            return { action: 'deny' };
+        }
+        if (fixedSession) {
+            // 无痕授权流程内站点自弹的子窗:复用同一分区;不清存储(随顶层授权窗关闭统一清)
+            openerContents.once('did-create-window', (child) => {
+                attachWindowOpenRouting(child.webContents, fixedSession);
+            });
+            return {
+                action: 'allow',
+                overrideBrowserWindowOptions: {
+                    autoHideMenuBar: true,
+                    webPreferences: { session: fixedSession, contextIsolation: true, nodeIntegration: false, sandbox: true },
+                },
+            };
+        }
+        let openerUrl = '';
+        try { openerUrl = openerContents.getURL(); } catch { /* 读不到就当跨域处理 */ }
+        const childSession = sameOriginUrl(openerUrl, url)
+            ? undefined
+            : session.fromPartition('auth-' + crypto.randomUUID());
+        openerContents.once('did-create-window', (child) => {
+            attachWindowOpenRouting(child.webContents, childSession);
+            if (childSession) {
+                // 顶层无痕授权窗关闭 = 本次登录流程结束:清掉该分区的全部存储
+                child.on('closed', () => {
+                    try { childSession.clearStorageData().catch(() => { }); } catch { }
+                });
+            }
+        });
+        return {
+            action: 'allow',
+            overrideBrowserWindowOptions: {
+                autoHideMenuBar: true,
+                ...(childSession ? { title: tr('win.authWindowTitle') } : {}),
+                webPreferences: {
+                    ...(childSession ? { session: childSession } : {}),
+                    contextIsolation: true,
+                    nodeIntegration: false,
+                    sandbox: true,
+                },
+            },
+        };
+    });
+}
+
 function createWindow() {
     if (win && !win.isDestroyed()) {
         win.show();
@@ -567,10 +637,7 @@ function createWindow() {
         },
     });
     win.once('ready-to-show', () => win.show());
-    win.webContents.setWindowOpenHandler(({ url }) => {
-        if (/^https?:/i.test(url)) shell.openExternal(url);   // 外链走系统浏览器
-        return { action: 'deny' };
-    });
+    attachWindowOpenRouting(win.webContents, null);
     win.webContents.on('will-navigate', (e, url) => {
         // 主窗体当通用视图用:http(s) 一律放行(「前往→打开网址」的既有语义);
         // 其余 scheme(file: 等)拦下,已知外部协议丢系统浏览器。
