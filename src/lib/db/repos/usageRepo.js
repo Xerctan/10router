@@ -3,6 +3,7 @@ import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 import { getMeta, setMeta } from "../helpers/metaStore.js";
 import { maskApiKey, hashApiKey } from "../crypto/apiKeyIdentity.js";
+import { APP_CONFIG } from "../../../shared/constants/config.js";
 
 const PENDING_TIMEOUT_MS = 60 * 1000;
 const RING_CAP = 50;
@@ -1449,22 +1450,45 @@ export async function importUsageRows(rows) {
  * plugin's offline `--import` — which bypasses every import function here.
  *
  * Only rows already stamped imported/gatewaySync with token counts are touched,
- * and the estimate is the same single pricing source live writes use. Repaired
- * rows drop out of the scan afterwards, so re-runs are no-ops — safe on every
- * boot, bounded per run.
+ * and the estimate is the same single pricing source live writes use.
+ *
+ * Progress is a watermark in _meta ({ version, lastId }), not "rows still at
+ * zero": a row whose model has no price stays at zero forever, and a scan that
+ * keyed on zero cost kept re-reading the same oldest unpriceable rows — once
+ * `limit` of them piled up, newer priceable rows were never reached. Each run
+ * now scans the next `limit` rows after the watermark along the primary key and
+ * advances it past everything it looked at, priced or not. A new app version
+ * resets the watermark once (price tables ship with releases), so rows that
+ * became priceable are picked up; re-imports still reprice through the dedup
+ * path in importUsageEntries.
  */
-export async function repairImportedUsageCosts({ limit = 20000 } = {}) {
+const COST_REPAIR_META_KEY = "usageCostRepair";
+
+export async function repairImportedUsageCosts({ limit = 20000, version = APP_CONFIG.version } = {}) {
   const db = await getAdapter();
+  const mark = parseJson(await getMeta(COST_REPAIR_META_KEY), null);
+  const afterId = mark && mark.version === version ? Number(mark.lastId) || 0 : 0;
+
+  const scanned = db.all(
+    `SELECT id FROM usageHistory WHERE id > ? ORDER BY id ASC LIMIT ?`,
+    [afterId, limit],
+  );
+  if (!scanned.length) {
+    if (!mark || mark.version !== version) await setMeta(COST_REPAIR_META_KEY, stringifyJson({ version, lastId: afterId }));
+    return { scanned: 0, repaired: 0 };
+  }
+  const lastId = scanned[scanned.length - 1].id;
+
   const candidates = db.all(
     `SELECT id, timestamp, provider, model, connectionId, apiKeyHash, endpoint, tokens,
             promptTokens, completionTokens
      FROM usageHistory
-     WHERE (cost IS NULL OR cost = 0)
+     WHERE id > ? AND id <= ?
+       AND (cost IS NULL OR cost = 0)
        AND (meta LIKE '%"imported":true%' OR meta LIKE '%"gatewaySync":true%')
        AND (promptTokens + completionTokens) > 0
-     ORDER BY id ASC
-     LIMIT ?`,
-    [limit],
+     ORDER BY id ASC`,
+    [afterId, lastId],
   );
 
   const updates = [];
@@ -1487,5 +1511,6 @@ export async function repairImportedUsageCosts({ limit = 20000 } = {}) {
     });
     scheduleStatsEvent("update", 250);
   }
-  return { scanned: candidates.length, repaired: updates.length };
+  await setMeta(COST_REPAIR_META_KEY, stringifyJson({ version, lastId }));
+  return { scanned: scanned.length, candidates: candidates.length, repaired: updates.length };
 }

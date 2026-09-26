@@ -83,10 +83,10 @@ export async function initializeApp() {
 async function runHeavyStartup() {
   await cleanupProviderConnections();
   // Price zero-cost usage rows left by older imports and by the sync plugin's
-  // offline --import (which writes straight into the DB). Idempotent and
-  // bounded — repaired rows drop out of the scan, so this is a cheap no-op
-  // after the first boot.
-  await repairImportedUsageCosts().catch((e) => console.log("[InitApp] usage cost repair failed:", e.message));
+  // offline --import (which writes straight into the DB). Bounded per run and
+  // resumable (watermark in _meta). Not awaited: it must never hold up the
+  // tunnel / Tailscale / MITM auto-resume below.
+  repairImportedUsageCosts().catch((e) => console.log("[InitApp] usage cost repair failed:", e.message));
   const settings = await getSettings();
 
   // Auto-resume tunnel (once per process)

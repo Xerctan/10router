@@ -161,6 +161,44 @@ describe("boot sweep repairImportedUsageCosts", () => {
     await repairImportedUsageCosts();
     expect(historyRow(ts).cost).toBe(0);
   });
+
+  const insertImported = (ts, model) => adapter.run(
+    `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, apiKeyHash, endpoint, promptTokens, completionTokens, cost, status, tokens, meta)
+     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [ts, PROVIDER, model, null, null, null, null, 5_000_000, 1_000_000, 0, "ok",
+      JSON.stringify({ prompt_tokens: 5_000_000, completion_tokens: 1_000_000 }),
+      JSON.stringify({ imported: true })],
+  );
+
+  it("unpriceable rows no longer block newer priceable ones (scan keeps moving)", async () => {
+    const version = "t-block";
+    await repairImportedUsageCosts({ version }); // watermark past everything above
+    for (let i = 0; i < 3; i++) insertImported(`2026-08-03T10:00:0${i}.000Z`, "no-such-model-without-price");
+    const priceable = "2026-08-03T11:00:00.000Z";
+    insertImported(priceable, MODEL);
+
+    // limit 3 = exactly the unpriceable rows. The old zero-cost scan re-read
+    // those same three on every run and never reached the priceable row.
+    const first = await repairImportedUsageCosts({ limit: 3, version });
+    expect(first).toMatchObject({ scanned: 3, repaired: 0 });
+    const second = await repairImportedUsageCosts({ limit: 3, version });
+    expect(second.repaired).toBe(1);
+    expect(historyRow(priceable).cost).toBeGreaterThan(0);
+    expect(await repairImportedUsageCosts({ limit: 3, version })).toMatchObject({ scanned: 0, repaired: 0 });
+  });
+
+  it("a new app version re-scans once, so rows priced by new tables get picked up", async () => {
+    await repairImportedUsageCosts({ version: "t-v1" });
+    const ts = "2026-08-04T10:00:00.000Z";
+    insertImported(ts, MODEL);
+    await repairImportedUsageCosts({ version: "t-v1" });
+    // Stand-in for "was unpriceable under the old tables": back to zero.
+    adapter.run(`UPDATE usageHistory SET cost = 0 WHERE timestamp = ?`, [ts]);
+
+    expect((await repairImportedUsageCosts({ version: "t-v1" })).repaired).toBe(0); // same version: already scanned
+    expect((await repairImportedUsageCosts({ version: "t-v2" })).repaired).toBe(1); // new release: once more
+    expect(historyRow(ts).cost).toBeGreaterThan(0);
+  });
 });
 
 describe("boot wiring", () => {
@@ -172,5 +210,7 @@ describe("boot wiring", () => {
     );
     expect(src).toContain("repairImportedUsageCosts()");
     expect(src).toMatch(/repairImportedUsageCosts\(\)[\s\S]{0,20}\.catch\(/);
+    // Background only — awaiting it delayed tunnel / Tailscale / MITM auto-resume.
+    expect(src).not.toMatch(/await\s+repairImportedUsageCosts\(/);
   });
 });
