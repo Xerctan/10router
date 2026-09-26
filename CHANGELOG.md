@@ -2,6 +2,12 @@
 
 > 面向用户的精简更新见 [`public/i18n/changelog/`](https://github.com/techysy/10router/tree/main/public/i18n/changelog)（`en.md` / `zh-CN.md` / `zh-TW.md`，仪表盘「Change Log」按界面语言加载对应文件）。本文件为完整开发日志，按版本从上往下排列。
 
+## v1.2.2 (未发布)
+
+### 🔧 其他
+
+- **发版面订正：v1.2.1 块的 10router-sync 插件版本号 v1.5.0 → v1.5.1**。插件功能开发于 v1.5.0（`a6b5591d`），但发版时随 mirasim 两笔订正（`21bae482` / `ca20e946`）折叠为 **1.5.1** 发布——插件三处版本位（`.zcode-plugin/plugin.json` + 根 / 子 `marketplace.json`）均为 1.5.1，v1.2.1 主题句写对、条目标题没跟上（v1.2.1 发版后全量审查揪出）。只订正本文件；用户侧 `public/i18n/changelog/` 的 v1.2.1 段保持已发布形态不动（非 tag 提交不动用户端 changelog，且该段已随 v1.2.1 资产定形）。
+
 ## v1.2.1 (2026-09-26)
 
 > 本版主题：**CreditDaddy 接入 + 导入用量计价 + 启动与运维加固**。额度总览只读接口、导入用量预估计价、服务启动即初始化（重启后远程访问不再等人打开页面）、可关闭自动检查更新 / 可隐藏登录关闭横幅；修复 qoder 排队限流被当成回复、mirasim 口径与订正脚本、开机成本修复卡死。并修复 **#33 开启登录校验后被锁死**（拒绝在没有自己密码时开启 + 新增找回密码入口，fnOS 可在应用设置里重置）。鉴权请求头改名向后兼容，无破坏性变更，走 patch。同批插件 10router-sync v1.5.1。
@@ -12,7 +18,7 @@
 
 ### ✨ 新功能 / 修复
 
-- **10router-sync 插件 v1.5.0：ZCode 大版本套餐渠道 id 适配 + mirasim 输入口径全量订正 + 10r 同步链路加固**（原错位于 v1.1.2 块，随本次订正归位）。
+- **10router-sync 插件 v1.5.1：ZCode 大版本套餐渠道 id 适配 + mirasim 输入口径全量订正 + 10r 同步链路加固**（功能开发于 v1.5.0，发版折叠为 1.5.1；原条目错位于 v1.1.2 块，随 v1.2.1 发版归位）。
   - **套餐渠道 id 适配**：ZCode 大版本把套餐/赠送配额渠道（智谱 Start Plan）的 provider id 从 `builtin:bigmodel-start-plan` 改为 `account:bigmodel-start-plan`，插件的官方判据从「仅 `builtin:`」扩为「`builtin:` 或 `account:`」，剥前缀规则同步扩展（新旧行在目标侧同名合并为 `zcode-bigmodel-start-plan`）。旧判据把新形态当自定义渠道跳过，导致 09-18 起套餐流量漏同步——本机实测补导 343 行到 NAS。教训入库：ZCode 大版本会改官方渠道 id 形态，漏判表现是「某渠道突然没新数据」，先看跳过计数列表里的新前缀。
   - **mirasim 输入口径全量订正**：mirasim 账本的 `input` 是**净新增输入**（不含缓存，三协议腿实测：anthropic 110K vs 缓存读 4.71 亿、openai-chat 1651 万 vs 1.23 亿、openai-responses 584 万 vs 1.45 亿），旧转换器原样落库导致仪表盘出现「输入 638、缓存 1.13 亿」的失真口径。转换器改为 `prompt = input + cacheRead + cacheWrite`；新工具 `scripts/normalize-mirasim-input.mjs`（dry-run 默认 / `--apply` 写入 / `meta.mirasimInputNormalized` 幂等）对已导入行原地订正 **usageHistory 行 + usageDaily 日桶 delta 打补丁**（刻意不做全量重建——只动 promptTokens，其余字节不动）。双库实测：本机 20 行（delta 115 万 / 2 桶）、NAS 2998 行（delta **7.86 亿** / 12 桶 / 77 计数器），`verify-usage-db` 双库 **PASS（23/23、65/65 天全对）**；终局证明：订正后重同步 `imported 18（纯新行）/ skipped 2998（历史行签名逐条命中，零重复）`。备份 `data.sqlite.bak-*-mirasim` 留存于两库目录。
   - **运维工具预存分叉修复（#9 连带）**：服务端 `9826b8c3`（#9 第 5 项，usage 日志不再存完整 key）后，`usageHistory.apiKey` 列存 **mask** 而桶键是 sha256(原始 key)——原始 key 已不入库，插件侧**结构上无法复现**非空 key 的桶键（09-12「56/56 PASS」是导入库全 `local-no-key` 键未撞上）。`usage-daily.mjs` 镜像 meta 对齐（`apiKeyMasked` 替代 raw `apiKey`），`verify-usage-db.mjs` 的 byApiKey 维度改为**聚合比对**（数值总量仍精确，键身份对非空 key 不可验证）——修后本机 verify 从 16 例失败回到全绿。
