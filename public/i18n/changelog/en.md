@@ -4,6 +4,10 @@ User-facing highlights per release. See [CHANGELOG.md](https://github.com/techys
 
 ## v1.2.1 (2026-09-26)
 
+### 🔒 Security
+
+- **[Important] Locked out after turning on the log-in check (#33)**: with no password of your own, switching "Require login" on left only the hidden first-login password (on fnOS it is generated at install time into a file you never see), so every password you tried was rejected. The log-in check can no longer be turned on before you set a password, empty passwords are refused, and there is now a way back in: **"Forgot your password?"** on the login page. On fnOS, just enter a new password in **App Center → 10Router → Settings**; on any install, drop a `reset-password` file into the data folder.
+
 ### ✨ New
 
 - **CreditDaddy integration: read-only quota overview for external dashboards**: `GET /api/usage/quotas` returns every quota-capable connection in one call, normalized the same way as the dashboard's Provider Limits, and accepts a dashboard virtual key (`sk-…`). Results are cached for 5 minutes; a forced refresh (`?force=1`) is limited to once per connection every 30 seconds, and simultaneous requests share one upstream call. No credentials are returned — note that account emails are visible to anyone holding a virtual key.
