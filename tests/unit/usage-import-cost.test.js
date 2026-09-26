@@ -165,8 +165,9 @@ describe("boot sweep repairImportedUsageCosts", () => {
 
 describe("boot wiring", () => {
   it("initializeApp runs the cost sweep on startup without letting it break boot", async () => {
+    // Resolve from this file, not cwd: CI runs vitest from tests/, local runs may start at the root.
     const src = fs.readFileSync(
-      path.join(process.cwd(), "../src/shared/services/initializeApp.js"),
+      new URL("../../src/shared/services/initializeApp.js", import.meta.url),
       "utf8",
     );
     expect(src).toContain("repairImportedUsageCosts()");
