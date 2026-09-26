@@ -54,20 +54,29 @@
 
 ```mermaid
 flowchart LR
-    subgraph Clients["开发者客户端 / 宿主"]
+    subgraph Clients["开发者客户端 / AI 编码工具"]
         C1["Claude Code"]
         C2["Codex CLI"]
         C3["OpenClaw / Droid / Cline"]
         C4["自定义 OpenAI 兼容客户端"]
-        ZP["10router-sync 插件<br/>(ZCode / MiMo / OpenCode)"]
+    end
+
+    subgraph Ecosystem["外部协同与同步生态"]
+        CD["CreditDaddy 本地助手<br/>(多账号管理 · 额度总览 · 健康检查 · 用量同步)"]
+        SYNC["多源用量同步 (10router-sync / 脚本)<br/>(ZCode · MiMo · OpenCode · mirasim)"]
     end
 
     subgraph Router["10Router 本地智能路由网关"]
-        GUARD["dashboardGuard 鉴权面<br/>Host校验 / 口令 / 虚拟Key"]
-        API["API 接入面<br/>/v1/* · /v1beta/* · /responses"]
-        RTK["RTK Token Saver<br/>长上下文切削 / 格式双向翻译"]
+        GUARD["dashboardGuard 统一鉴权面<br/>Host校验 · 面板口令 · 虚拟Key (sk-...)"]
+
+        subgraph Endpoints["网关服务接口面"]
+            API["模型调用端点<br/>/v1/* · /v1beta/* · /responses"]
+            MGMT["协同与状态接口<br/>额度总览 /api/usage/quotas<br/>健康检查 /api/health<br/>用量入库 .../import-usage"]
+        end
+
+        RTK["RTK Token Saver<br/>长上下文切削 · 格式双向翻译"]
         CORE["调度引擎<br/>账号故障熔断 · 自动轮换 · 峰谷时段"]
-        DB[("SQLite 账本<br/>用量统计 · 精准计价 · 日志")]
+        DB[("SQLite 统一账本<br/>用量统计 · 精准计价 · 日志")]
     end
 
     subgraph Upstreams["上游模型生态 (85+ 供应商 · 1000+ 模型)"]
@@ -80,12 +89,15 @@ flowchart LR
     C2 --> GUARD
     C3 --> GUARD
     C4 --> GUARD
-    ZP -. "同步用量 (Bearer sk-)" .-> GUARD
+    CD -. "额度总览 / 健康检测 / 用量回传" .-> GUARD
+    SYNC -. "本地用量导入 (Bearer sk-...)" .-> GUARD
 
     GUARD --> API
+    GUARD --> MGMT
     API --> RTK
     RTK --> CORE
     CORE --> DB
+    MGMT <--> DB
 
     CORE --> P1
     CORE --> P2
@@ -280,6 +292,18 @@ npm test
 # 校验用量数据库完整性
 node scripts/verify-usage-db.mjs
 ```
+
+---
+
+## 🔗 相关项目与链接
+
+- [🐣 CreditDaddy](https://github.com/techysy/CreditDaddy) — AI 编程工具多账号本地管理 + 每日积分自动领取（领鸡蛋）助手，与 10Router 额度总览及用量同步深度协同
+- [GitHub 仓库](https://github.com/techysy/10router) — 主仓库
+- [Gitee 镜像](https://gitee.com/techysy/10router) — 国内镜像
+- [📚 技术文档](https://github.com/techysy/10router/tree/main/docs) — 架构 + 工程专题（中英双语导航）
+- [上游项目 9Router](https://github.com/decolua/9router)
+- [9Router 文档](https://9router.com)
+- [9Router fnOS 应用包](https://github.com/techysy/9router-fnos)
 
 ---
 
