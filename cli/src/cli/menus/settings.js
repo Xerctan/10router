@@ -106,7 +106,7 @@ async function showSettingsMenu(breadcrumb = []) {
 
 /**
  * Reset authMode to "password" via API. Used when OIDC is misconfigured
- * and user is locked out of dashboard. CLI bypasses auth via x-9r-cli-token.
+ * and user is locked out of dashboard. CLI bypasses auth via x-10r-cli-token.
  */
 async function resetAuthMode() {
   const ok = await confirm(t("menus.settings.resetAuthConfirm"));

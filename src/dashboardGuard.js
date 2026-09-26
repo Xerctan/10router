@@ -3,8 +3,8 @@ import { getSettings, validateApiKey } from "@/lib/localDb";
 import { getConsistentMachineId } from "@/shared/utils/machineId";
 import { verifyDashboardAuthToken, isDashboardAuthConfigured } from "@/lib/auth/dashboardSession";
 import { hasTrustedPeerHeaders } from "@/lib/auth/trustedPeer";
+import { readCliToken, readDashboardPassword } from "@/lib/auth/authHeaders";
 
-const CLI_TOKEN_HEADER = "x-9r-cli-token";
 const CLI_TOKEN_SALT = "9r-cli-auth";
 
 let cachedCliToken = null;
@@ -14,7 +14,7 @@ async function getCliToken() {
 }
 
 async function hasValidCliToken(request) {
-  const token = request.headers.get(CLI_TOKEN_HEADER);
+  const token = readCliToken(request);
   if (!token) return false;
   return token === await getCliToken();
 }
@@ -273,7 +273,7 @@ export async function proxy(request) {
   if (
     request.method === "POST" &&
     pathname === "/api/settings/database/import-usage" &&
-    (request.headers.get("x-9r-password") || extractApiKey(request))
+    (readDashboardPassword(request) || extractApiKey(request))
   ) {
     return NextResponse.next();
   }

@@ -719,7 +719,7 @@ export default function ProfilePage() {
     setDbStatus({ type: "", message: "" });
     try {
       const res = await fetch("/api/settings/database", {
-        headers: { "x-9r-password": password },
+        headers: { "x-10r-password": password },
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -801,7 +801,7 @@ export default function ProfilePage() {
     try {
       const isJson = isJsonFile(file) && !isSqliteFile(file);
       const headers = {};
-      if (password) headers["x-9r-password"] = password;
+      if (password) headers["x-10r-password"] = password;
 
       let body;
       if (isJson) {

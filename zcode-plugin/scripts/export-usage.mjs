@@ -360,7 +360,8 @@ function convertRow(row) {
 async function importBatch(entries, { endpoint, key, password }) {
   const headers = { "Content-Type": "application/json" };
   if (key) headers["Authorization"] = `Bearer ${key}`;
-  if (password) headers["x-9r-password"] = password;
+  // x-10r-password is the current name; x-9r-password keeps pre-rename servers working.
+  if (password) Object.assign(headers, { "x-10r-password": password, "x-9r-password": password });
   const res = await fetch(`${endpoint.replace(/\/$/, "")}/api/settings/database/import-usage`, {
     method: "POST",
     headers,

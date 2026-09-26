@@ -126,9 +126,13 @@ async function loginForCookie(endpoint, password) {
   return pair || null;
 }
 
+// Server renamed x-9r-cli-token → x-10r-cli-token and accepts both; send both so
+// the command also works against an instance older than the rename.
+const cliTokenHeaders = (token) => ({ "x-10r-cli-token": token, "x-9r-cli-token": token });
+
 async function resolveAuth(args) {
   // 1. Explicit CLI token wins.
-  if (args.cliToken) return { headers: { "x-9r-cli-token": args.cliToken }, mode: "cli-token" };
+  if (args.cliToken) return { headers: cliTokenHeaders(args.cliToken), mode: "cli-token" };
 
   // 2. Password → JWT cookie.
   if (args.password) {
@@ -140,7 +144,7 @@ async function resolveAuth(args) {
   // 3. Loopback endpoint: derive the local CLI token, zero config.
   if (isLoopbackEndpoint(args.endpoint)) {
     const token = deriveLocalCliToken();
-    if (token) return { headers: { "x-9r-cli-token": token }, mode: "cli-token (auto)" };
+    if (token) return { headers: cliTokenHeaders(token), mode: "cli-token (auto)" };
     throw new Error("未能自动推导本地 CLI token（找不到 machine-id / auth/cli-secret）——请用 --password 或 --cli-token 指定");
   }
 

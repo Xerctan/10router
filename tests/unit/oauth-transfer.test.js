@@ -254,18 +254,23 @@ describe("export route — dashboard password header contract", () => {
       body: JSON.stringify(body),
     }));
 
-  it("rejects an export without the x-9r-password header (401)", async () => {
+  it("rejects an export without the x-10r-password header (401)", async () => {
     const res = await post({}, { provider: "gemini", passphrase: "abcd-1234" });
     expect(res.status).toBe(401);
   });
 
   it("rejects a wrong dashboard password", async () => {
-    const res = await post({ "x-9r-password": "nope" }, { provider: "gemini", passphrase: "abcd-1234" });
+    const res = await post({ "x-10r-password": "nope" }, { provider: "gemini", passphrase: "abcd-1234" });
     expect(res.status).toBe(401);
   });
 
-  it("with the right dashboard password: seals a blob the passphrase reopens", async () => {
+  it("still accepts the legacy x-9r-password header (pre-rename clients)", async () => {
     const res = await post({ "x-9r-password": "dash-pw-test" }, { provider: "gemini", passphrase: "abcd-1234" });
+    expect(res.status).toBe(200);
+  });
+
+  it("with the right dashboard password: seals a blob the passphrase reopens", async () => {
+    const res = await post({ "x-10r-password": "dash-pw-test" }, { provider: "gemini", passphrase: "abcd-1234" });
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.count).toBeGreaterThanOrEqual(1);
@@ -276,7 +281,7 @@ describe("export route — dashboard password header contract", () => {
 
 describe("export wiring — provider page must hand the verified password to the modal", () => {
   // Regression guard: ce2c5a54 moved the password check to a preflight dialog
-  // but dropped the prop wiring, so the modal posted an EMPTY x-9r-password
+  // but dropped the prop wiring, so the modal posted an EMPTY password
   // header and every export died with "Invalid password" — no matter how
   // correct the typed password was. The route still requires the header.
   it("passes dashboardPassword to OAuthTransferModal and captures it on preflight success", () => {
@@ -292,7 +297,7 @@ describe("export wiring — provider page must hand the verified password to the
       new URL("../../src/app/(dashboard)/dashboard/providers/[id]/OAuthTransferModal.js", import.meta.url),
       "utf8",
     );
-    expect(modal).toMatch(/"x-9r-password":\s*dashboardPassword\s*\|\|/);
+    expect(modal).toMatch(/"x-10r-password":\s*dashboardPassword\s*\|\|/);
     // Success is terminal: both flows must auto-dismiss (with a readable
     // delay) instead of parking the user in a spent dialog.
     expect(modal).toContain("scheduleAutoClose(1200)");

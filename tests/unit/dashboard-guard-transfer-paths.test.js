@@ -80,11 +80,9 @@ describe("audit: guard behavior for new sensitive paths (requireLogin=false)", (
 
   it("transfer routes pass with CLI token", async () => {
     for (const p of ["/api/oauth/transfer/export", "/api/oauth/transfer/import"]) {
-      const r = await proxy(req(p, "10.0.0.5", { "x-9r-cli-token": "cli-token" }));
-      if (r !== mocks.nextResponse) {
-        console.log("CLI_FAIL", p, JSON.stringify(r), "machineIdCalls:", JSON.stringify(mocks.getConsistentMachineId.mock.calls), "headerSeen:", new Headers(Object.entries({"x-9r-cli-token":"cli-token"})).get("x-9r-cli-token"));
+      for (const header of ["x-10r-cli-token", "x-9r-cli-token"]) {
+        expect(await proxy(req(p, "10.0.0.5", { [header]: "cli-token" }))).toBe(mocks.nextResponse);
       }
-      expect(r).toBe(mocks.nextResponse);
     }
   });
 

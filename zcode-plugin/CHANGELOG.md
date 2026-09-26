@@ -7,6 +7,13 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 本插件尚未发布 1.0.0——0.3.0 之后直接进入 1.1.0（首次支持多数据源）。
 
+## [Unreleased]
+
+### 变更
+- **鉴权请求头对齐 10r 命名**：`status.mjs` 的 CLI token 与 `export-usage.mjs` 的仪表盘密码改为
+  新旧双发（`x-10r-cli-token` + `x-9r-cli-token`、`x-10r-password` + `x-9r-password`）——服务端
+  改名后新旧都认，双发让插件对改名前的老实例同样可用。token 派生 salt `9r-cli-auth` 不变。
+
 ## [1.5.0] — 2026-09-24
 
 ### 修复

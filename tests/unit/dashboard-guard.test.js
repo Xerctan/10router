@@ -284,10 +284,30 @@ describe("dashboard guard local-only access", () => {
   it("allows local-only route with valid CLI token", async () => {
     const response = await proxy(request("/api/mcp/filesystem/sse", {
       host: "router.example.com",
+      "x-10r-cli-token": "cli-token",
+    }));
+
+    expect(response).toBe(mocks.nextResponse);
+  });
+
+  // Installed CLI launchers / sync plugins that predate the x-10r rename still
+  // send only the old header — it must keep authenticating.
+  it("still accepts the legacy x-9r-cli-token header", async () => {
+    const response = await proxy(request("/api/mcp/filesystem/sse", {
+      host: "router.example.com",
       "x-9r-cli-token": "cli-token",
     }));
 
     expect(response).toBe(mocks.nextResponse);
+  });
+
+  it("validates the token value under either name (wrong legacy value is refused)", async () => {
+    const response = await proxy(request("/api/mcp/filesystem/sse", {
+      host: "router.example.com",
+      "x-9r-cli-token": "wrong",
+    }));
+
+    expect(response.status).toBe(403);
   });
 });
 
@@ -336,7 +356,7 @@ describe("dashboard guard xiaomi-mimo auto-import (credential-bearing, P1)", () 
   it("allows remote request with a valid CLI token", async () => {
     const response = await proxy(request("/api/oauth/xiaomi-mimo/auto-import", {
       host: "router.example.com",
-      "x-9r-cli-token": "cli-token",
+      "x-10r-cli-token": "cli-token",
     }));
 
     expect(response).toBe(mocks.nextResponse);

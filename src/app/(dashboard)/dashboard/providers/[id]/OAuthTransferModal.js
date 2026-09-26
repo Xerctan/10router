@@ -60,7 +60,7 @@ export default function OAuthTransferModal({ isOpen, mode, provider, providerNam
     onClose();
   };
 
-  const headers = { "Content-Type": "application/json", "x-9r-password": dashboardPassword || "" };
+  const headers = { "Content-Type": "application/json", "x-10r-password": dashboardPassword || "" };
 
   const handleExport = async () => {
     setError("");

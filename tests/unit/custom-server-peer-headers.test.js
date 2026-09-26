@@ -73,12 +73,14 @@ describe("custom-server peer header sanitizing", () => {
   it("keeps the peer token out of persisted request details", () => {
     const sanitized = requestDetails.sanitizeHeaders({
       "x-10r-peer-token": "secret",
+      "x-10r-cli-token": "secret",
       "x-9r-cli-token": "secret",
       "authorization": "Bearer sk-x",
       "x-10r-real-ip": "127.0.0.1",
     });
 
     expect(sanitized["x-10r-peer-token"]).toBeUndefined();
+    expect(sanitized["x-10r-cli-token"]).toBeUndefined();
     expect(sanitized["x-9r-cli-token"]).toBeUndefined();
     expect(sanitized["authorization"]).toBeUndefined();
     expect(sanitized["x-10r-real-ip"]).toBe("127.0.0.1");
