@@ -28,7 +28,7 @@ process.env.DATA_DIR = tempDir;
 const { initDb } = await import("@/lib/db/index.js");
 const repo = await import("@/lib/db/repos/usageRepo.js");
 
-const { importUsageRows, repairImportedUsageCosts } = repo;
+const { importUsageRows, repairImportedUsageCosts, repairAllImportedUsageCosts } = repo;
 
 let adapter;
 
@@ -187,6 +187,13 @@ describe("boot sweep repairImportedUsageCosts", () => {
     expect(await repairImportedUsageCosts({ limit: 3, version })).toMatchObject({ scanned: 0, repaired: 0 });
   });
 
+  it("the boot entry walks every batch in one go (a version reset needs no extra restarts)", async () => {
+    for (let i = 0; i < 5; i++) insertImported(`2026-08-05T10:00:0${i}.000Z`, MODEL);
+    const { repaired } = await repairAllImportedUsageCosts({ limit: 2 }); // 5+ new rows → 3+ batches
+    expect(repaired).toBeGreaterThanOrEqual(5);
+    for (let i = 0; i < 5; i++) expect(historyRow(`2026-08-05T10:00:0${i}.000Z`).cost).toBeGreaterThan(0);
+  });
+
   it("a new app version re-scans once, so rows priced by new tables get picked up", async () => {
     await repairImportedUsageCosts({ version: "t-v1" });
     const ts = "2026-08-04T10:00:00.000Z";
@@ -208,9 +215,9 @@ describe("boot wiring", () => {
       new URL("../../src/shared/services/initializeApp.js", import.meta.url),
       "utf8",
     );
-    expect(src).toContain("repairImportedUsageCosts()");
-    expect(src).toMatch(/repairImportedUsageCosts\(\)[\s\S]{0,20}\.catch\(/);
+    expect(src).toContain("repairAllImportedUsageCosts()");
+    expect(src).toMatch(/repairAllImportedUsageCosts\(\)[\s\S]{0,20}\.catch\(/);
     // Background only — awaiting it delayed tunnel / Tailscale / MITM auto-resume.
-    expect(src).not.toMatch(/await\s+repairImportedUsageCosts\(/);
+    expect(src).not.toMatch(/await\s+repair\w*ImportedUsageCosts\(/);
   });
 });

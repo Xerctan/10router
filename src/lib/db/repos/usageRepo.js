@@ -1514,3 +1514,20 @@ export async function repairImportedUsageCosts({ limit = 20000, version = APP_CO
   await setMeta(COST_REPAIR_META_KEY, stringifyJson({ version, lastId }));
   return { scanned: scanned.length, candidates: candidates.length, repaired: updates.length };
 }
+
+/**
+ * Boot entry: run repairImportedUsageCosts batch after batch until the watermark
+ * reaches the newest row, so a version reset covers a large history in one boot
+ * instead of one batch per restart. Yields between batches; call it without
+ * awaiting.
+ */
+export async function repairAllImportedUsageCosts({ limit = 20000, maxBatches = 100 } = {}) {
+  let repaired = 0;
+  for (let i = 0; i < maxBatches; i++) {
+    const r = await repairImportedUsageCosts({ limit });
+    repaired += r.repaired;
+    if (r.scanned < limit) break;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  return { repaired };
+}

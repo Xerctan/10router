@@ -14,7 +14,7 @@ import {
   WATCHDOG_INTERVAL_MS, NETWORK_CHECK_INTERVAL_MS, VIRTUAL_IFACE_REGEX,
 } from "@/lib/tunnel";
 import { getMitmStatus, startMitm, loadEncryptedPassword, initDbHooks, restoreToolDNS, sweepStaleDnsEntries, removeAllDNSEntriesSync } from "@/mitm/manager";
-import { repairImportedUsageCosts } from "@/lib/db/repos/usageRepo.js";
+import { repairAllImportedUsageCosts } from "@/lib/db/repos/usageRepo.js";
 import { syncToJson as syncMitmAliasCache } from "@/lib/mitmAliasCache";
 import { killAllBridges } from "@/lib/mcp/stdioSseBridge";
 
@@ -86,7 +86,7 @@ async function runHeavyStartup() {
   // offline --import (which writes straight into the DB). Bounded per run and
   // resumable (watermark in _meta). Not awaited: it must never hold up the
   // tunnel / Tailscale / MITM auto-resume below.
-  repairImportedUsageCosts().catch((e) => console.log("[InitApp] usage cost repair failed:", e.message));
+  repairAllImportedUsageCosts().catch((e) => console.log("[InitApp] usage cost repair failed:", e.message));
   const settings = await getSettings();
 
   // Auto-resume tunnel (once per process)
