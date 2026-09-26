@@ -1,90 +1,137 @@
 <div align="center">
 
-<img width="2048" height="1265" alt="image" src="https://github.com/user-attachments/assets/d8ef9bb4-e965-4ab8-8965-08f064232271" />
+<img src="desktop/icon.png" width="96" alt="10Router">
 
+# 10Router
 
-# 🚀 10Router
+**本地智能 AI 路由网关与用量仪表盘：单一端点统一接入 85+ 供应商 · 1000+ 模型，内置 RTK 智能压缩、多格式实时翻译、故障自动降级与用量精准计价**
 
-[![10Router](https://img.shields.io/badge/10Router-v1.2.1-orange.svg)](https://github.com/techysy/10router/releases)
-[![Downloads](https://img.shields.io/github/downloads/techysy/10router/total?label=Downloads&color=green)](https://github.com/techysy/10router/releases)
+[![Release](https://img.shields.io/github/v/release/techysy/10router?label=%E7%89%88%E6%9C%AC&color=2563eb)](https://github.com/techysy/10router/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/techysy/10router/test.yml?branch=main&label=CI)](https://github.com/techysy/10router/actions/workflows/test.yml)
+[![Downloads](https://img.shields.io/github/downloads/techysy/10router/total?label=%E4%B8%8B%E8%BD%BD&color=16a34a)](https://github.com/techysy/10router/releases)
+[![npm](https://img.shields.io/npm/v/@techysy/10router?label=npm&color=cb3837)](https://www.npmjs.com/package/@techysy/10router)
 [![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Ftechysy%2F10router-blue?logo=docker)](https://github.com/techysy/10router/pkgs/container/10router)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/techysy/10router?style=flat&logo=github)](https://github.com/techysy/10router/stargazers)
+[![Platform](https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20fnOS%20%7C%20Docker-6b7280)](#下载)
+[![Node](https://img.shields.io/badge/Node.js-%E2%89%A5%2018-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![License](https://img.shields.io/github/license/techysy/10router?label=%E8%AE%B8%E5%8F%AF&color=f59e0b)](LICENSE)
 
-基于 [decolua/9router](https://github.com/decolua/9router) v0.5.55 的本地优化快照
+[下载](#下载) · [功能](#功能) · [架构](#架构) · [快速开始](#快速开始) · [用量同步插件](#用量同步插件10router-sync) · [同步上游](#同步上游) · [项目结构](#项目结构) · [更新日志](CHANGELOG.md)
 
-**✨ 单一 commit 历史，无上游提交污染；上游新功能一律学习后自行重写。**
+<img width="2048" height="1265" alt="10Router 仪表盘" src="https://github.com/user-attachments/assets/d8ef9bb4-e965-4ab8-8965-08f064232271" />
 
 </div>
 
+> 基于 [decolua/9router](https://github.com/decolua/9router) v0.5.55 的本地优化快照。  
+> 保持单一干净 commit 历史，无上游提交污染；上游新功能一律学习理解后自行重写落地。
+
 ---
 
-## 📖 简介
+## 下载
 
-10Router 是 [9Router](https://github.com/decolua/9router) 的精简优化版本。在上游 v0.5.55 基础上合并了若干本地验证过的修复，排除未完成的实验性功能，保持干净的 git 历史便于持续同步上游。
+从 [**Releases**](https://github.com/techysy/10router/releases/latest) 下载对应平台的安装包与二进制产物：
 
+| 平台 | 文件名模式 | 说明 |
+| --- | --- | --- |
+| Windows | `10Router.Setup.<版本>.exe` | 安装版（推荐），自带桌面托盘 |
+| Windows | `10Router-Portable-<版本>.exe` | 便携版，免安装双击运行 |
+| Windows | `10Router-Web-Setup-<版本>.exe` | 在线安装器微端（轻量分发） |
+| macOS（Apple Silicon） | `10Router-<版本>-arm64.dmg` | M1 / M2 / M3 / M4 芯片 |
+| macOS（Intel） | `10Router-<版本>-x64.dmg` | Intel 处理器机型 |
+| 飞牛 fnOS（x86） | `10router-<版本>-x86.fpk` | URL 模式桌面图标（打开浏览器） |
+| 飞牛 fnOS（x86） | `10router-<版本>-iframe-x86.fpk` | 内嵌桌面窗口模式（推荐桌面体验） |
+| 飞牛 fnOS（ARM） | `10router-<版本>-arm.fpk` | ARM 架构 URL 模式 |
+| 飞牛 fnOS（ARM） | `10router-<版本>-iframe-arm.fpk` | ARM 架构内嵌窗口模式 |
+| Linux / 通用 Server | `10router-server.tar.gz` | Standalone 服务端归档（Node 运行时部署） |
+| Docker 镜像 | `ghcr.io/techysy/10router:latest` | 支持 `linux/amd64` 与 `linux/arm64` |
+
+> 💡 **安全与系统提示**：
+> - **macOS**：安装包暂未购买开发者证书签名。首次打开若提示无法验证开发者，请在「系统设置 → 隐私与安全性」中点击「仍要打开」，或在终端执行 `xattr -cr /Applications/10Router.app`。
+> - **飞牛 fnOS**：应用中心支持「应用设置」直接重置登录密码，防止误触开启登录验证被锁死。
+
+---
+
+## 架构
+
+```mermaid
+flowchart LR
+    subgraph Clients["开发者客户端 / 宿主"]
+        C1["Claude Code"]
+        C2["Codex CLI"]
+        C3["OpenClaw / Droid / Cline"]
+        C4["自定义 OpenAI 兼容客户端"]
+        ZP["10router-sync 插件<br/>(ZCode / MiMo / OpenCode)"]
+    end
+
+    subgraph Router["10Router 本地智能路由网关"]
+        GUARD["dashboardGuard 鉴权面<br/>Host校验 / 口令 / 虚拟Key"]
+        API["API 接入面<br/>/v1/* · /v1beta/* · /responses"]
+        RTK["RTK Token Saver<br/>长上下文切削 / 格式双向翻译"]
+        CORE["调度引擎<br/>账号故障熔断 · 自动轮换 · 峰谷时段"]
+        DB[("SQLite 账本<br/>用量统计 · 精准计价 · 日志")]
+    end
+
+    subgraph Upstreams["上游模型生态 (85+ 供应商 · 1000+ 模型)"]
+        P1["OAuth 供应商<br/>Claude / Codex / Gemini / Qwen / MiMo"]
+        P2["API Key 供应商<br/>OpenAI / Anthropic / DeepSeek / 智谱 GLM"]
+        P3["自定义兼容端点<br/>OneAPI / NewAPI / 本地 Ollama"]
+    end
+
+    C1 --> GUARD
+    C2 --> GUARD
+    C3 --> GUARD
+    C4 --> GUARD
+    ZP -. "同步用量 (Bearer sk-)" .-> GUARD
+
+    GUARD --> API
+    API --> RTK
+    RTK --> CORE
+    CORE --> DB
+
+    CORE --> P1
+    CORE --> P2
+    CORE --> P3
 ```
-┌─────────────┐
-│  Your CLI   │  Claude Code · Codex · Cursor · Cline · OpenCode ...
-│   Tool      │
-└──────┬──────┘
-       │ http://localhost:20128/v1
-       ↓
-┌─────────────────────────────────────────┐
-│            10Router (Smart Router)       │
-│  • RTK Token Saver (cut tool_result)    │
-│  • Format translation (OpenAI ↔ Claude) │
-│  • Quota tracking                       │
-│  • Auto fallback & token refresh        │
-│  • Regional currency display            │
-└──────────┬──────────────────────────────┘
-           ↓
-┌──────────────────────────────────────────┐
-│     85+ Providers · 1000+ Models         │
-│  Free ──→ Cheap ──→ Subscription         │
-└──────────────────────────────────────────┘
-```
 
-## 🧾 版本历程
+---
 
-| 版本 | 核心要点 |
-|------|----------|
-| **v1.2.1** | 修复 #33 开启登录校验后被锁死并新增找回密码入口（fnOS 可在应用设置里重置）；CreditDaddy 接入：额度总览只读接口（虚拟 key 访问、缓存与强制刷新节流）；插件 / CreditDaddy 同步的用量开始显示预估成本；服务启动即初始化，重启后隧道 / 远程访问不再等人打开页面；可关闭自动检查更新、可隐藏登录关闭横幅；修复 qoder 排队限流被当成模型回复 |
-| **v1.2.0** | 小米 MiMo 拆三张卡（云端 / 桌面版 / Token Plan）各管各的账；V2.6 上线、V2.5 退役并声明真实上下文窗口；修复错钥启动销毁凭据密文、stop 守卫 SSE 帧边界、纯工具调用被误判为空并重复计费、`sfcn` 别名劫持；逐个测试连接可选模型；会话绝对上限与 Windows 密钥 ACL 收紧 |
-| **v1.1.3** | Qoder 国内版完整恢复与每日 Credits 自动领取；按模型钉住上下文窗口/最大输出；超长上下文服务端自动压缩；Provider 卡片拖拽排序且模型列表同步；严格端点工具 schema 降级（#27）；额度重置徽章持久显示 |
-| **v1.1.2** | 用量仪表盘（热力图 / 节点健康度 / 生涯统计）；CodeBuddy 11128 渠道级熔断；Cline/ClinePass 凭据自动刷新修复；小米 Token Plan 出口节点匹配 |
-| **v1.1.1** | 跨账号「配额包到期优先」调度；Command Code 配额追踪；全供应商 OAuth 加密导出/导入；用量国际化与官方图标补齐 |
-| **v1.1.0** | 小米 MiMo 桌面版（Desktop 专属模型与会话）；opencode-go 供应商；Codex 图片工具化；Windows 数据目录迁移 |
-| **v1.0.6 – v1.0.8** | ZCode 用量同步；桌面单色托盘与 Web 安装器；CodeBuddy 每日自动签到；仪表盘与模型端点多语言 |
-| **v1.0.0 – v1.0.5** | 桌面托盘版（Win / macOS）；多币种配额追踪与连接隔离；三层 SSRF 防护与安全加固；85+ 供应商模型生态扩充 |
+## 功能
 
-👉 完整开发日志见 **[CHANGELOG.md](CHANGELOG.md)**；本地打包发版流程见 [cli/PACKAGING.md](cli/PACKAGING.md)。
+**统一路由与协议抹平**
+- **全格式双向翻译**：统一暴露出标准的 OpenAI 兼容端点（`/v1/chat/completions`、`/v1/models`、`/v1/embeddings`），Claude / Anthropic 原生请求同端口无缝识别并自动互转。
+- **85+ 供应商与 1000+ 模型**：开箱支持官方 Claude、OpenAI、DeepSeek、智谱 GLM、MiniMax、Kimi、通义千问、小米 MiMo、SiliconFlow 等主流生态。
+- **RTK 智能 Token 节省引擎**：智能压缩裁剪冗余上下文及高频 `tool_result`，大幅降低大模型对话与 Agent 连续调用消耗。
+- **超长上下文自动处理**：针对模型设定真实的上下文上限与最大输出值，服务端自动实施滑动窗口切削与上下文压缩。
 
-## 🚀 快速开始
+**多账号轮换与高可用熔断**
+- **双重故障降级（Fallback）**：支持同供应商多账号轮询与主备无缝切换；支持配置跨供应商多模型降级链，遇到上游 429 限流或服务不可用时秒级自动下摆。
+- **渠道级智能熔断**：捕获上游错误码（如 Qoder `10605` 排队限流、渠道失效等）并映射为标准限流语义，触发冷却退避，防止任务盲目重试产生无效账单。
+- **OAuth 会话无缝管理**：支持全供应商 OAuth 凭据的安全导入与加密导出（AES-GCM），账号状态、Token 自动刷新全后台静默托管。
+- **跨账号「配额包到期优先」调度**：自动按活动额度过期日排序分发请求，避免赠送积分过期浪费。
 
-### 💻 npm 全局安装（桌面推荐）
+**精准用量统计与生态协同**
+- **多维度计费与成本热力图**：内置全系主流模型官方精确标价表（Qwen 旗舰、MiMo 等），自动计算输入、输出与缓存命中成本，展示多维热力图、健康度与生涯报表。
+- **CreditDaddy 深度协同**：原生暴露只读额度总览接口（`GET /api/usage/quotas`，支持仪表盘虚拟 Key 免明文鉴权），支持向 CreditDaddy 统一反馈配额水位。
+- **ZCode 插件（10router-sync）跨宿主同步**：打通 ZCode、OpenCode、mirasim、小米 MiMo 与外部 10Router 实例的本地用量，支持断点续传、自动计价估算与重复数据签名拦截。
+
+---
+
+## 快速开始
+
+### 方式一：npm 全局安装（命令行推荐）
+
+要求 **Node.js ≥ 18**：
 
 ```bash
 npm i -g @techysy/10router
 10router
 ```
 
-装完后可执行命令是 `10router`，仪表盘默认在 `http://localhost:20128`。
+启动成功后，管理仪表盘默认位于 `http://localhost:20128`。
 
-> ⚠️ 包名是 **`@techysy/10router`**，不是 `10router` —— 后者是 npm 上一个与本项目无关的 fork。
+> ⚠️ 注意：npm 官方包名为 **`@techysy/10router`**（带组织作用域），请勿安装无作用域的同名第三方包。  
+> 💡 若 npm 11+ 提示 `allow-scripts` 警告，可通过 `npm install -g --allow-scripts=@techysy/10router` 消除，跳过此提示亦不影响使用（启动时会自动按需补全 SQLite 驱动）。
 
-> ℹ️ **npm 11+ 的 `allow-scripts` 提示**：新版本 npm 会拦截本包的 `postinstall` 脚本并警告
-> `Run npm install -g --allow-scripts=@techysy/10router to allow these scripts once...`。
-> **这是可选的，不影响使用**——该脚本只是把 SQLite 引擎「预暖」到 `~/.10router/runtime`，
-> 跳过它首次启动时会自动补装。想消除提示：
->
-> ```bash
-> npm install -g --allow-scripts=@techysy/10router
-> # 或永久允许：
-> npm config set allow-scripts=@techysy/10router --location=user
-> ```
-
-### 🐳 Docker 部署
+### 方式二：Docker 容器部署
 
 ```bash
 docker pull ghcr.io/techysy/10router:latest
@@ -95,28 +142,22 @@ docker run -d \
   ghcr.io/techysy/10router:latest
 ```
 
-支持 `linux/amd64` 和 `linux/arm64`。
+支持 `linux/amd64` 和 `linux/arm64` 架构。
 
-> 💡 **自托管内网 / 容器互联（Issue #25）**：
-> 若在 Docker 内部网络需要连接同网络下的其他容器或私网端点（如 `http://cli-proxy-api-plus:8317/v1`），默认会被 SSRF 防护拦截。可通过注入环境变量按需放行：
-> - `ALLOW_PRIVATE_HOSTS=1`：总开关，放行全部内网私有地址。
-> - `PRIVATE_HOST_ALLOWLIST=cli-proxy-api-plus,host.docker.internal`：精细主机白名单（精确匹配）。
-> ⚠️ *注意：仅建议在受信任的内网/自托管环境中使用，请勿将开启此开关的实例直接无保护暴露在公网。*
+> 💡 **内网容器互联（Issue #25）**：  
+> 默认开启 SSRF 私网拦截。若需要在 Docker 内部打通其他私网代理服务，可注入环境变量放行：
+> - `ALLOW_PRIVATE_HOSTS=1`：放行全部内网私有地址；
+> - `PRIVATE_HOST_ALLOWLIST=cli-proxy-api-plus,host.docker.internal`：指定内网域名白名单。
 
-### 📦 fnOS fpk 安装
+### 方式三：飞牛 fnOS 应用包安装
 
-从 [Releases](https://github.com/techysy/10router/releases) 下载对应架构的 `.fpk` 文件：
+1. 从 [Releases](https://github.com/techysy/10router/releases/latest) 下载对应架构的 `.fpk` 文件（推荐内嵌窗口版 `10router-<版本>-iframe-<架构>.fpk`）。
+2. 在飞牛 fnOS「应用中心」点击「手动安装」，选定文件按引导完成安装。
+3. 忘记面板密码时，可在 fnOS「应用中心 → 10Router → 应用设置」直接输入新密码重置保存。
 
-| 文件 | 说明 |
-|------|------|
-| `10router-<版本>-x86.fpk` | x86 URL 版 |
-| `10router-<版本>-iframe-x86.fpk` | x86 IFRAME 版 |
-| `10router-<版本>-arm.fpk` | ARM URL 版 |
-| `10router-<版本>-iframe-arm.fpk` | ARM IFRAME 版 |
+### 方式四：Standalone 服务包部署
 
-安装：App Center → 手动安装 → 选择 fpk。
-
-### 💻 Standalone Server
+适用于无需完整构建源码的轻量 Linux 服务器：
 
 ```bash
 tar xzf 10router-server.tar.gz -C /opt/10router
@@ -124,144 +165,155 @@ cd /opt/10router
 node custom-server.js --port 20128
 ```
 
-### 🛠 源码开发
+### 方式五：从源码开发与构建
 
 ```bash
 git clone https://github.com/techysy/10router.git
 cd 10router
 cp .env.example .env
 npm install
-PORT=20128 npm run dev        # 开发模式
+PORT=20128 npm run dev        # 启动热重载开发模式
 ```
 
-生产部署：
+生产打包：
 
 ```bash
 npm run build
 PORT=20128 HOSTNAME=0.0.0.0 npm run start
 ```
 
-- Dashboard: `http://localhost:20128/dashboard`
-- API endpoint: `http://localhost:20128/v1`
-- 初始密码: **无内置默认值**。首次启动未设密码（且未配置 SSO）时，仪表盘仅本机可访问 —— 请在同一台机器上打开仪表盘，在侧边栏「设置」页设置密码；无头部署（Docker / fnOS）用 `INITIAL_PASSWORD` 指定初始口令，登录后请在「设置」页修改
+---
 
-### ⚙️ 数据目录与驱动诊断
+## 客户端接入示例
 
-- **`DATA_DIR`** 指定数据目录（默认 Windows `%APPDATA%\10router`，其余平台 `~/.10router`）：数据库、日志与运行时依赖（如 better-sqlite3 副本）都在这里。
-- **`GET /api/health`** 额外返回 `driver`（当前生效的 SQLite 驱动）与 `lastDriverError`（某个后备驱动被跳过的原因，例如全局 node_modules 里存在损坏的 better-sqlite3 副本）。两者只读取已初始化的状态，**不会**为此触发数据库初始化。
+启动 10Router 后，直接在各类 CLI、插件或 Agent 中配置网关地址：
+
+### Claude Code CLI
+```bash
+export ANTHROPIC_BASE_URL="http://localhost:20128"
+export ANTHROPIC_API_KEY="sk-any-key"  # 10Router 仪表盘配置的 Key 或虚拟 Key
+claude
+```
+
+### OpenAI 兼容客户端（Cursor / Cline / Roo Code / OpenClaw 等）
+- **Base URL**: `http://localhost:20128/v1`
+- **API Key**: 仪表盘创建的访问密钥（支持按渠道细粒度授权）
+- **Model**: 直接填写模型 ID 或 10Router 自定义的别名组合名（如 `my-fast-model`）
+
+---
 
 ## 🔌 用量同步插件（10router-sync）
 
-10Router 附带一个**用量同步插件**（`zcode-plugin/`，插件名 `10router-sync`），把本机 AI 编码工具的调用用量一键导入 10Router 统计——幂等可重复执行，自动防双重计数。
+10Router 仓库附带官方用量同步插件（位于 `zcode-plugin/`），能够把本机其它 AI 编码客户端的调用日志一键同步至 10Router 账本进行统一计费与审计，具备幂等去重与断点续传能力。
 
-支持 **5 个数据源**：
+### 支持的数据源
 
-| 数据源 | `--source` | 读取位置 |
-|--------|-----------|----------|
-| ZCode | `zcode`（默认） | `~/.zcode/cli/db/db.sqlite` |
-| OpenCode | `opencode` | `~/.local/share/opencode/opencode.db` |
-| mirasim | `mirasim` | `~/.mirasim/insights/usage-*.ndjson` |
-| 小米 MiMo | `mimo` | `~/.local/share/mimocode/mimocode.db` |
-| 10Router/9Router 实例 | `10r` | 另一个实例的 `data.sqlite` |
+| 数据源 | `--source` 标识 | 默认账本路径 |
+| --- | --- | --- |
+| **ZCode** | `zcode`（默认） | `~/.zcode/cli/db/db.sqlite` |
+| **OpenCode** | `opencode` | `~/.local/share/opencode/opencode.db` |
+| **mirasim** | `mirasim` | `~/.mirasim/insights/usage-*.ndjson` |
+| **小米 MiMo** | `mimo` | `~/.local/share/mimocode/mimocode.db` |
+| **跨实例 10r** | `10r` | 目标实例的 `data.sqlite` |
 
-还提供 **`/10router-sync:status`** 命令：不打开仪表盘，一条命令查看目标 10Router 实例的运行状态（渠道熔断 / 账号健康 / 今日用量）。
-
-### 安装
-
-ZCode → Settings → Plugin Management → Discover 页 → 点 `+` 添加市场，填 GitHub 仓库 `techysy/10router` → 找到 **10router-sync** 点 Get 安装。
-
-### 使用
+### 同步命令示例
 
 ```bash
-# 同步 ZCode 用量（默认）
-node scripts/export-usage.mjs --endpoint http://127.0.0.1:20127 --key sk-…
+# 同步 ZCode 本机用量（默认）
+node scripts/export-usage.mjs --endpoint http://127.0.0.1:20128 --key sk-…
 
-# 同步 OpenCode / mirasim / MiMo / 10r 实例
-node scripts/export-usage.mjs --source opencode --endpoint <URL> --key sk-…
-node scripts/export-usage.mjs --source mirasim --endpoint <URL> --key sk-…
-node scripts/export-usage.mjs --source mimo --endpoint <URL> --key sk-…
-node scripts/export-usage.mjs --source 10r --endpoint <URL> --key sk-…
+# 指定同步 mirasim 或 OpenCode 数据
+node scripts/export-usage.mjs --source mirasim --endpoint http://127.0.0.1:20128 --key sk-…
+node scripts/export-usage.mjs --source opencode --endpoint http://127.0.0.1:20128 --key sk-…
 
-# 查看实例状态
-node scripts/status.mjs --endpoint <URL> --password <面板密码>
+# 命令行免打开浏览器查看 10Router 运行健康度
+node scripts/status.mjs --endpoint http://127.0.0.1:20128 --password <面板密码>
 ```
 
-离线模式：本机 `--export usage.json` 导出，带到能连通的机器 `--import` 灌回。
+> 详细配置与离线导出灌回流程参见 [zcode-plugin/README.md](zcode-plugin/README.md)。
 
-详见 [zcode-plugin/README.md](zcode-plugin/README.md)。
+---
 
 ## 🔄 同步上游
 
-上游新增功能时，**先学习、再自己写**：阅读上游对应实现理解思路，然后在本仓库用自己的代码和提交重写，移植后跑 `npx vitest run` + 三条 registry 基线确认无回归，并在 CHANGELOG.md 记录。
-
-> ⚠️ 不要直接 merge / cherry-pick 上游分支，也不要用 tarball 覆盖文件 —— 那会把上游提交和未验证的代码带进这条干净的单提交历史（contributor 目录就是这么被污染的）。
-
-上游 remote 仅用于阅读源码：
+本仓库奉行**「单一干净历史，上游重写融合」**的维护原则。上游有新特性发布时，阅读对应实现理清机制，而后在本仓库重写并验证：
 
 ```bash
 git remote add upstream https://github.com/decolua/9router.git
 git fetch upstream
-git show upstream/master:<path>    # 阅读某文件的上游实现
+git show upstream/master:<path>    # 检视上游对应实现
 ```
+
+> ⚠️ **规范警示**：请勿直接执行 `git merge`、`git cherry-pick` 或使用 tarball 覆盖代码，以避免引入上游未经验证的分支提交及脏依赖。改动后运行 `npm test` 确保基线全量通过。
+
+---
 
 ## 📁 项目结构
 
 ```
 10router/
-├── src/                    # Next.js app + Dashboard
-│   ├── app/                # 路由 + API
-│   ├── lib/                # DB / Auth / Usage
-│   └── shared/             # 组件 / 工具函数
-├── open-sse/               # 路由/翻译引擎（可独立使用）
-│   ├── executors/          # 每个 provider 的执行器
-│   ├── translator/         # 格式翻译（OpenAI ↔ Claude）
-│   ├── providers/          # Provider 注册 + 配置
-│   └── rtk/                # Token Saver 压缩引擎
-├── cli/                    # CLI launcher（npm: @techysy/10router）
-├── zcode-plugin/           # ZCode 用量同步插件（marketplace.json 在仓库根）
-├── tests/                  # 测试（vitest）
-├── docs/                   # 架构文档
-└── .github/workflows/      # CI（Docker GHCR 构建）
+├── src/                    # Next.js Web 仪表盘与管理服务
+│   ├── app/                # App Router 路由与 API 端点 (/api/v1/*, /api/*)
+│   ├── lib/                # SQLite 存储、Auth 鉴权、定价表与用量统计
+│   └── shared/             # 前端公共 UI 组件与工具库
+├── open-sse/               # 独立路由与协议翻译核心引擎
+│   ├── executors/          # 85+ 供应商底层执行器
+│   ├── translator/         # OpenAI ↔ Claude 双向格式翻译器
+│   ├── providers/          # 供应商配置声明与模型映射表
+│   └── rtk/                # RTK 智能 Token 节省与上下文压缩切削引擎
+├── cli/                    # CLI 命令行启动器 (@techysy/10router)
+├── desktop/                # 跨平台桌面壳与托盘图标资源
+├── zcode-plugin/           # 10router-sync 跨宿主用量同步插件
+├── tests/                  # 单元测试与接口集成测试套件 (vitest)
+├── docs/                   # 架构设计与双语工程专题文档
+└── .github/workflows/      # 自动化打包与发布工作流 (Docker / Desktop / fpk)
 ```
 
-## 🔗 相关链接
+---
 
-- [GitHub 仓库](https://github.com/techysy/10router) — 主仓库
-- [Gitee 镜像](https://gitee.com/techysy/10router) — 国内镜像
-- [📚 技术文档](https://github.com/techysy/10router/tree/main/docs) — 架构 + 工程专题（中英双语导航）
-- [上游项目 9Router](https://github.com/decolua/9router)
-- [9Router 文档](https://9router.com)
-- [9Router fnOS 应用包](https://github.com/techysy/9router-fnos)
+## 🧪 测试
 
-## 👥 交流群
+```bash
+# 运行单元测试
+npm test
 
-**9+1 Router 飞书交流群** — 扫码加入：
+# 校验用量数据库完整性
+node scripts/verify-usage-db.mjs
+```
 
-![飞书交流群二维码](assets/feishu-qr.png)
+---
 
-## 👥 贡献者
+## 👥 交流群与致谢
 
-<!-- 头像列表：主要维护者在前，其余按「PR + issue 数」降序。名单由 issue / PR 的创建者汇总而来，
-     改动时请一并更新（头像取自 GitHub 公开头像，链接即个人主页）。 -->
+欢迎加入 **9+1 Router 交流群** 交流使用体验与反馈 issue：
+
+<div align="center">
+<img src="assets/feishu-qr.png" width="280" alt="交流群二维码">
+</div>
+
+### 贡献者致谢
+
 <p>
   <a href="https://github.com/techysy" title="techysy — 主要维护者"><img src="https://github.com/techysy.png?size=80" width="48" height="48" alt="techysy" /></a>
   <a href="https://github.com/shiyangyuda" title="shiyangyuda — 代码优化"><img src="https://github.com/shiyangyuda.png?size=80" width="48" height="48" alt="shiyangyuda" /></a>
-  <a href="https://github.com/monkey2jack" title="monkey2jack — arm64 Docker 支持（PR #1 #8 #20 #22）"><img src="https://github.com/monkey2jack.png?size=80" width="48" height="48" alt="monkey2jack" /></a>
-  <a href="https://github.com/IOPQWE51" title="IOPQWE51 — PR #5 #23"><img src="https://github.com/IOPQWE51.png?size=80" width="48" height="48" alt="IOPQWE51" /></a>
+  <a href="https://github.com/monkey2jack" title="monkey2jack — arm64 Docker 支持"><img src="https://github.com/monkey2jack.png?size=80" width="48" height="48" alt="monkey2jack" /></a>
+  <a href="https://github.com/IOPQWE51" title="IOPQWE51 — PR 贡献"><img src="https://github.com/IOPQWE51.png?size=80" width="48" height="48" alt="IOPQWE51" /></a>
   <a href="https://github.com/lan5635" title="lan5635 — issue 反馈"><img src="https://github.com/lan5635.png?size=80" width="48" height="48" alt="lan5635" /></a>
-  <a href="https://github.com/RyuuzakiLu2023" title="RyuuzakiLu2023 — issue 反馈（安全审计）"><img src="https://github.com/RyuuzakiLu2023.png?size=80" width="48" height="48" alt="RyuuzakiLu2023" /></a>
+  <a href="https://github.com/RyuuzakiLu2023" title="RyuuzakiLu2023 — 安全审计反馈"><img src="https://github.com/RyuuzakiLu2023.png?size=80" width="48" height="48" alt="RyuuzakiLu2023" /></a>
   <a href="https://github.com/alchohol" title="alchohol — issue 反馈"><img src="https://github.com/alchohol.png?size=80" width="48" height="48" alt="alchohol" /></a>
   <a href="https://github.com/iMissNan" title="iMissNan — issue 反馈"><img src="https://github.com/iMissNan.png?size=80" width="48" height="48" alt="iMissNan" /></a>
   <a href="https://github.com/JasonXX89" title="JasonXX89 — issue 反馈"><img src="https://github.com/JasonXX89.png?size=80" width="48" height="48" alt="JasonXX89" /></a>
   <a href="https://github.com/nansheng365" title="nansheng365 — issue 反馈"><img src="https://github.com/nansheng365.png?size=80" width="48" height="48" alt="nansheng365" /></a>
   <a href="https://github.com/TIANXT97" title="TIANXT97 — issue 反馈"><img src="https://github.com/TIANXT97.png?size=80" width="48" height="48" alt="TIANXT97" /></a>
   <a href="https://github.com/weltyang1216" title="weltyang1216 — issue 反馈"><img src="https://github.com/weltyang1216.png?size=80" width="48" height="48" alt="weltyang1216" /></a>
-  <a href="https://github.com/anupamme" title="anupamme — PR #28"><img src="https://github.com/anupamme.png?size=80" width="48" height="48" alt="anupamme" /></a>
-  <a href="https://github.com/yet791080885-jpg" title="yet791080885-jpg — PR #11"><img src="https://github.com/yet791080885-jpg.png?size=80" width="48" height="48" alt="yet791080885-jpg" /></a>
+  <a href="https://github.com/anupamme" title="anupamme — PR 贡献"><img src="https://github.com/anupamme.png?size=80" width="48" height="48" alt="anupamme" /></a>
+  <a href="https://github.com/yet791080885-jpg" title="yet791080885-jpg — PR 贡献"><img src="https://github.com/yet791080885-jpg.png?size=80" width="48" height="48" alt="yet791080885-jpg" /></a>
 </p>
 
-<sub>名单汇总自 issue 与 PR 的创建者（含已关闭/未合入的反馈），头像与链接均指向其 GitHub 主页；若遗漏请联系维护者补上。</sub>
+<sub>名单由 issue 与 PR 的反馈者汇总，头像取自 GitHub 公开个人信息；若有遗漏请随时提 issue 补充。</sub>
 
-## 📄 License
+---
 
-MIT — 与 [decolua/9router](https://github.com/decolua/9router) 一致
+## 📄 许可证
+
+[MIT](LICENSE) — 与 [decolua/9router](https://github.com/decolua/9router) 保持一致
