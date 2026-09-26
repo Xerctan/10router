@@ -52,61 +52,14 @@
 
 ## 架构
 
-```mermaid
-flowchart LR
-    subgraph Clients["开发者客户端 / AI 编码工具"]
-        C1["Claude Code"]
-        C2["Codex CLI"]
-        C3["OpenClaw / Droid / Cline"]
-        C4["自定义 OpenAI 兼容客户端"]
-    end
+<div align="center">
 
-    subgraph Ecosystem["外部协同与同步生态"]
-        CD["CreditDaddy 本地助手<br/>(多账号管理 · 额度总览 · 健康检查 · 用量同步)"]
-        SYNC["多源用量同步 (10router-sync / 脚本)<br/>(ZCode · MiMo · OpenCode · mirasim)"]
-    end
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/architecture.svg">
+  <img src="assets/architecture-light.svg" width="920" alt="10Router 架构">
+</picture>
 
-    subgraph Router["10Router 本地智能路由网关"]
-        GUARD["dashboardGuard 统一鉴权面<br/>Host 校验 · 面板口令 · 虚拟 Key (sk-...)"]
-
-        subgraph Endpoints["网关服务接口面"]
-            API["模型调用端点<br/>/v1/* · /v1beta/* · /responses"]
-            MGMT["协同与状态接口<br/>额度总览 /api/usage/quotas<br/>健康检查 /api/health<br/>用量入库 .../import-usage"]
-        end
-
-        RTK["RTK Token Saver<br/>长上下文切削 · 格式双向翻译"]
-        CORE["调度引擎<br/>账号故障熔断 · 自动轮换 · 峰谷时段"]
-        DB[("SQLite 统一账本<br/>用量统计 · 精准计价 · 日志")]
-    end
-
-    subgraph Upstreams["上游模型生态 (85+ 供应商 · 1000+ 模型)"]
-        P1["OAuth 供应商<br/>Claude / Codex / Gemini / Qwen / MiMo"]
-        P2["API Key 供应商<br/>OpenAI / Anthropic / DeepSeek / 智谱 GLM"]
-        P3["自定义兼容端点<br/>OneAPI / NewAPI / 本地 Ollama"]
-        PAD["&nbsp;<br/>&nbsp;"]
-    end
-
-    C1 --> GUARD
-    C2 --> GUARD
-    C3 --> GUARD
-    C4 --> GUARD
-    CD -. "额度总览 / 健康检测 / 用量回传" .-> GUARD
-    SYNC -. "本地用量导入 (Bearer sk-...)" .-> GUARD
-
-    GUARD --> API
-    GUARD --> MGMT
-    API --> RTK
-    RTK --> CORE
-    CORE --> DB
-    MGMT <--> DB
-
-    CORE --> P1
-    CORE --> P2
-    CORE --> P3
-    P3 ~~~ PAD
-
-    style PAD fill:transparent,stroke:none,color:transparent
-```
+</div>
 
 ---
 
