@@ -9,7 +9,18 @@
  * this script brings ALREADY-IMPORTED rows to the same convention so that a
  * re-sync dedups instead of duplicating (signature includes promptTokens).
  *
- * What it changes per row (provider LIKE 'mirasim-%', not yet flagged):
+ * Which rows: provider LIKE 'mirasim-%' that are neither flagged nor already in
+ * the new convention. Rows written by a fixed converter (this plugin's
+ * export-usage ≥ v1.5.0, CreditDaddy's usage sync) already carry
+ * prompt = input + cache, and CreditDaddy never sets the flag — so the flag
+ * alone is not enough: adding the cache again would double-count it (a 638 +
+ * 113M row would become 638 + 226M). The data itself tells them apart: a
+ * new-convention row always has promptTokens >= cacheRead + cacheWrite. Such
+ * rows are skipped. Price: an OLD row whose net-new input already exceeded its
+ * cache is skipped too, undercounting it by at most its own input — against a
+ * double count of the whole cache.
+ *
+ * What it changes per normalized row:
  *   - usageHistory.promptTokens  += cache_read + cache_creation
  *   - usageHistory.tokens.prompt_tokens = same new value
  *   - usageHistory.meta.mirasimInputNormalized = true   (idempotency flag)
@@ -110,11 +121,14 @@ try {
 
 const pending = [];
 let alreadyFlagged = 0;
+let alreadyIncluded = 0;
 for (const r of rows) {
   const meta = parseJson(r.meta);
   if (meta[FLAG]) { alreadyFlagged++; continue; }
   const t = parseJson(r.tokens);
   const delta = (t.cache_read_input_tokens || 0) + (t.cache_creation_input_tokens || 0);
+  // Already prompt = input + cache (fixed converter, no flag) — see header.
+  if (delta > 0 && (r.promptTokens || 0) >= delta) { alreadyIncluded++; continue; }
   const newPrompt = (r.promptTokens || 0) + delta;
   pending.push({
     row: r,
@@ -126,7 +140,7 @@ for (const r of rows) {
 }
 
 if (pending.length === 0) {
-  log(`nothing to do (${rows.length} mirasim rows, all ${alreadyFlagged} already normalized)`);
+  log(`nothing to do (${rows.length} mirasim rows: ${alreadyFlagged} flagged, ${alreadyIncluded} already include cache)`);
   db.close();
   process.exit(0);
 }
@@ -163,7 +177,7 @@ if (missingDays.length > 0) {
 }
 
 log(`mirasim input normalization ${args.apply ? "APPLY" : "dry-run"} on ${args.dbPath}`);
-log(`  rows to normalize : ${pending.length}  (already flagged: ${alreadyFlagged}, total mirasim rows: ${rows.length})`);
+log(`  rows to normalize : ${pending.length}  (already flagged: ${alreadyFlagged}, already include cache: ${alreadyIncluded}, total mirasim rows: ${rows.length})`);
 log(`  promptTokens delta: ${totalDelta.toLocaleString("en-US")}`);
 log(`  days touched      : ${dayDeltas.size}`);
 for (const p of pending.slice(0, 3)) {

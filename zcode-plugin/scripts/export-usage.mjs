@@ -554,6 +554,9 @@ function convertMirasimRow(e) {
       repo: e.repo || null,
       workspace: e.workspace || null,
       planUsage: true,
+      // prompt_tokens already includes cache — normalize-mirasim-input.mjs
+      // must not add it again (it also detects unflagged rows, e.g. CreditDaddy's).
+      mirasimInputNormalized: true,
     },
   };
 }

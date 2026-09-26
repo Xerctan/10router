@@ -13,6 +13,11 @@
 - **鉴权请求头对齐 10r 命名**：`status.mjs` 的 CLI token 与 `export-usage.mjs` 的仪表盘密码改为
   新旧双发（`x-10r-cli-token` + `x-9r-cli-token`、`x-10r-password` + `x-9r-password`）——服务端
   改名后新旧都认，双发让插件对改名前的老实例同样可用。token 派生 salt `9r-cli-auth` 不变。
+- **`normalize-mirasim-input.mjs` 不再对已含缓存的行重复加缓存**：原先只认
+  `mirasimInputNormalized` 标记，而本插件 v1.5.0 起的转换器与 CreditDaddy 用量同步写入时已是
+  `prompt = input + cache` 却不打标记，同步后再跑会把缓存加第二遍。现按 `promptTokens ≥
+  cacheRead + cacheWrite` 识别已是新口径的行并跳过；`export-usage` 的 mirasim 转换器写入时补打标记
+  （服务端去重签名不含 meta，不会引发重导）。
 
 ## [1.5.0] — 2026-09-24
 
