@@ -99,6 +99,13 @@ export const MODEL_CAPABILITIES = {
   "claude-opus-4-8":   { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-opus-4.8-thinking": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-opus-4-8-thinking": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
+  // 4.6 的 thinking 变体必须显式列出（2026-09-26）：antigravity 的 id 是横杠形态
+  // `claude-opus-4-6-thinking`，点号 pattern `*claude*opus-4.6*` 匹配不上，会落到
+  // `*claude*opus*` → DEFAULT 200000/64000。第一方 1M/128000 三处一致（anthropic、
+  // google-vertex claude-opus-4-6@default、bedrock anthropic.claude-opus-4-6-v1）；
+  // antigravity 正是 vertex 中转（上游 400 报文里 req_vrtx 佐证）。
+  "claude-opus-4.6-thinking": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
+  "claude-opus-4-6-thinking": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-sonnet-4.6": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-sonnet-4-6": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-sonnet-5": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
