@@ -216,7 +216,9 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
     }
   }
 
-  result.contents = normalizeGeminiContents(result.contents);
+  // #4345：首/尾回合守卫 —— 以 model 轮收尾（含未响应的 functionCall）会被
+  // Google 拒绝 400 "Requests ending with a model turn are not supported"。
+  result.contents = normalizeGeminiContents(result.contents, { guardTurns: true });
   return attachToolNameMap(result, toolNamer.toolNameMap);
 }
 
@@ -404,7 +406,8 @@ function wrapInCloudCodeEnvelopeForClaude(model, claudeRequest, credentials = nu
     envelope.request.systemInstruction = { role: GEMINI_ROLE.USER, parts: systemParts };
   }
 
-  envelope.request.contents = normalizeGeminiContents(envelope.request.contents);
+  // #4345：同上，antigravity/gemini 端点都拒绝以 model 轮收尾的请求。
+  envelope.request.contents = normalizeGeminiContents(envelope.request.contents, { guardTurns: true });
   return attachToolNameMap(envelope, toolNamer.toolNameMap);
 }
 

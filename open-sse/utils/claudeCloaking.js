@@ -89,14 +89,27 @@ export function cloakClaudeTools(body) {
   };
 }
 
+// 最后手段：从带斗篷的名字上剥掉字面 CLAUDE_TOOL_SUFFIX —— name 不在
+// toolNameMap 里时兜底（map 在重试/重连后可能丢失）。绝不剥 decoy 名：
+// 它们本就该原样到达客户端，让客户端看到 "tool unavailable" 而不是被静默 no-op。
+export function stripCloakSuffix(name) {
+  if (typeof name !== "string" || !name.endsWith(CLAUDE_TOOL_SUFFIX)) return null;
+  const original = name.slice(0, -CLAUDE_TOOL_SUFFIX.length);
+  return original.length > 0 ? original : null;
+}
+
 // Decloak tool_use names in non-streaming Claude response body (INPUT side)
 export function decloakToolNames(body, toolNameMap) {
-  if (!toolNameMap?.size || !Array.isArray(body?.content)) return body;
+  if (!Array.isArray(body?.content)) return body;
   const content = body.content.map(block => {
-    if (block?.type === "tool_use" && toolNameMap.has(block.name)) {
+    if (block?.type !== "tool_use") return block;
+    if (toolNameMap?.has(block.name)) {
       return { ...block, name: toolNameMap.get(block.name) };
     }
-    return block;
+    // toolNameMap 对该名字缺失/过期 —— 回退到剥后缀，而不是把无法解析的
+    // "<tool>_cc" 原样转发给客户端（#4342）。
+    const fallback = stripCloakSuffix(block.name);
+    return fallback ? { ...block, name: fallback } : block;
   });
   return { ...body, content };
 }

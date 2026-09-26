@@ -5,6 +5,7 @@ import { buildChunk } from "../concerns/chunk.js";
 import { toOpenAIUsage } from "../concerns/usage.js";
 import { reasoningDelta } from "../concerns/reasoning.js";
 import { toOpenAIFinish } from "../concerns/finishReason.js";
+import { stripCloakSuffix } from "../../utils/claudeCloaking.js";
 
 // Create OpenAI chunk helper
 function createChunk(state, delta, finishReason = null) {
@@ -65,8 +66,9 @@ export function claudeToOpenAIResponse(chunk, state) {
         results.push(createChunk(state, { content: "<think>" }));
       } else if (block?.type === CLAUDE_BLOCK.TOOL_USE) {
         const toolCallIndex = state.toolCallIndex++;
-        // Restore original tool name from mapping (Claude OAuth)
-        const toolName = state.toolNameMap?.get(block.name) || block.name;
+        // Restore original tool name from mapping (Claude OAuth); strip the cloak
+        // suffix as a fallback when the map missed (lost across retry/reconnect).
+        const toolName = state.toolNameMap?.get(block.name) || stripCloakSuffix(block.name) || block.name;
         const toolCall = {
           index: toolCallIndex,
           id: block.id,
@@ -149,6 +151,12 @@ export function claudeToOpenAIResponse(chunk, state) {
 
       if (chunk.delta?.stop_reason) {
         state.finishReason = convertStopReason(chunk.delta.stop_reason);
+        // refusal 不会产生任何 content block。把 Anthropic 自己的解释作为消息文本
+        // 透出，客户端才知道这一轮为什么是空的，而不是收到一条空白回复。
+        const refusalNote = chunk.delta.stop_reason === "refusal" && chunk.delta.stop_details?.explanation;
+        if (refusalNote) {
+          results.push(createChunk(state, { content: refusalNote }));
+        }
         const finalChunk = createChunk(state, {}, state.finishReason);
 
         if (state.usage) {
