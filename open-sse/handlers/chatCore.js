@@ -99,6 +99,16 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   const useTransport = (!modelSupportedFormats || modelSupportedFormats.includes(sourceFormat)) ? runtimeTransport : null;
   const targetFormat = modelTargetFormat || useTransport?.format || getTargetFormat(provider, credentials);
   if (useTransport && credentials) credentials.runtimeTransport = useTransport;
+  // Translated request: the model's declarations excluded the sourceFormat, so the
+  // body gets translated to targetFormat — point runtimeTransport at the TARGET
+  // format's endpoint too, or the translated body lands on the sourceFormat baseUrl
+  // (opencode-go responses-only ids: a responses-format body sent to /chat/completions
+  // → upstream 400 ModelProtocolUnsupported). Models without a registry targetFormat
+  // (chat-only ids) stay on the default endpoint, which is their correct one.
+  if (!useTransport && modelTargetFormat && credentials) {
+    const translatedTransport = resolveTransport(provider, targetFormat);
+    if (translatedTransport) credentials.runtimeTransport = translatedTransport;
+  }
   const stripList = getModelStrip(alias, model);
   const upstreamModel = getModelUpstreamId(alias, model);
 

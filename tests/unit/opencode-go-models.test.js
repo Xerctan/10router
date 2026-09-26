@@ -37,11 +37,14 @@ const DEEPSEEK = ["deepseek-v4.1-flash", "deepseek-flash", "deepseek-v4-pro", "d
 const UNDECLARED = ["omen-alpha"];
 
 // Mirror of chatCore's per-model transport guard: use the sourceFormat-matched
-// transport only when the model declares support for that sourceFormat.
+// transport only when the model declares support for that sourceFormat; a translated
+// request (sourceFormat not declared) rides the TARGET format's transport when the
+// model declares a targetFormat, and keeps the default endpoint otherwise.
 function pickTransport(provider, sourceFormat, alias, model) {
   const supported = getModelSupportedFormats(alias, model);
-  const rt = resolveTransport(provider, sourceFormat);
-  return supported?.includes(sourceFormat) ? rt : null;
+  if (supported?.includes(sourceFormat)) return resolveTransport(provider, sourceFormat);
+  const tf = getModelTargetFormat(alias, model);
+  return tf ? resolveTransport(provider, tf) : null;
 }
 
 describe("OpenCode Go model catalog", () => {
@@ -126,14 +129,23 @@ describe("OpenCode Go per-model transport guard (chatCore logic)", () => {
     }
   });
 
-  it("does NOT route responses-only models to /chat/completions or /messages", () => {
-    // Translation to the responses format is what makes these reachable for other clients.
+  it("routes responses-only models to /responses for every client format (translate + target transport)", () => {
+    // Translation to the responses format plus the target-format transport is what
+    // makes these reachable for other clients. A regression here sends the translated
+    // body to /chat/completions → upstream 400 ModelProtocolUnsupported.
     for (const m of RESPONSES_ONLY) {
-      expect(pickTransport("opencode-go", "openai", "opencode-go", m), m).toBeNull();
+      for (const f of ["openai", "claude", "openai-responses"]) {
+        expect(pickTransport("opencode-go", f, "opencode-go", m)?.baseUrl, `${m} (${f})`).toBe(
+          "https://opencode.ai/zen/go/v1/responses"
+        );
+      }
+    }
+  });
+
+  it("keeps chat-only models on the default endpoint for other client formats (no targetFormat declared)", () => {
+    for (const m of CHAT_ONLY) {
       expect(pickTransport("opencode-go", "claude", "opencode-go", m), m).toBeNull();
-      expect(pickTransport("opencode-go", "openai-responses", "opencode-go", m)?.baseUrl, m).toBe(
-        "https://opencode.ai/zen/go/v1/responses"
-      );
+      expect(pickTransport("opencode-go", "openai-responses", "opencode-go", m), m).toBeNull();
     }
   });
 
