@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Card, Button, Toggle, Input } from "@/shared/components";
 import Modal, { ConfirmModal } from "@/shared/components/Modal";
+import { SECURITY_STATUS_CHANGED } from "@/shared/components/SecurityBanner";
 import LanguageSwitcher from "@/shared/components/LanguageSwitcher";
 import { useTheme } from "@/shared/hooks/useTheme";
 import { cn } from "@/shared/utils/cn";
@@ -34,6 +35,7 @@ export default function ProfilePage() {
   // credential to anyone who can route to this port (issue #9, item 4), so it
   // goes through a confirmation the way "require API key" already does.
   const [loginOffConfirmOpen, setLoginOffConfirmOpen] = useState(false);
+  const [bannerHideConfirmOpen, setBannerHideConfirmOpen] = useState(false);
   const [isShuttingDown, setIsShuttingDown] = useState(false);
   const [settings, setSettings] = useState({ fallbackStrategy: "fill-first" });
   const [loading, setLoading] = useState(true);
@@ -390,10 +392,28 @@ export default function ProfilePage() {
         body: JSON.stringify({ requireLogin }),
       });
       if (res.ok) {
-        setSettings(prev => ({ ...prev, requireLogin }));
+        // Server clears hideLoginOffBanner when the check goes back on — mirror it.
+        setSettings(prev => ({ ...prev, requireLogin, ...(requireLogin ? { hideLoginOffBanner: false } : {}) }));
+        window.dispatchEvent(new Event(SECURITY_STATUS_CHANGED));
       }
     } catch (err) {
       console.error("Failed to update require login:", err);
+    }
+  };
+
+  const updateHideLoginOffBanner = async (hideLoginOffBanner) => {
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hideLoginOffBanner }),
+      });
+      if (res.ok) {
+        setSettings(prev => ({ ...prev, hideLoginOffBanner }));
+        window.dispatchEvent(new Event(SECURITY_STATUS_CHANGED));
+      }
+    } catch (err) {
+      console.error("Failed to update login-off banner:", err);
     }
   };
 
@@ -1074,6 +1094,26 @@ export default function ProfilePage() {
                 disabled={loading}
               />
             </div>
+            {/* Only while the check is off: the banner it controls exists only then.
+                Hiding takes a confirmation; showing it again is immediate. */}
+            {settings.requireLogin === false && (
+              <div className="flex items-start sm:items-center justify-between gap-4 pl-3 border-l-2 border-red-500/40">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm sm:text-base">{translate("Show the log-in-off warning banner")}</p>
+                  <p className="text-xs sm:text-sm text-text-muted">
+                    {translate("The red banner at the top of every page while the log-in check is off. Turning log-in back on shows it again next time.")}
+                  </p>
+                </div>
+                <Toggle
+                  checked={settings.hideLoginOffBanner !== true}
+                  onChange={() => {
+                    if (settings.hideLoginOffBanner === true) updateHideLoginOffBanner(false);
+                    else setBannerHideConfirmOpen(true);
+                  }}
+                  disabled={loading}
+                />
+              </div>
+            )}
             {/* Default is ON — the server only treats an explicit `false` as off
                 (`requireLogin !== false` everywhere in the guard). Testing
                 `=== true` here hid the form on every install that never touched
@@ -1885,6 +1925,19 @@ export default function ProfilePage() {
         title={translate("Turn off the log-in check?")}
         message={translate("Anyone who can reach this port will be able to manage every provider, key and credential without a password. The dashboard keeps a warning banner while it is off.")}
         confirmText={translate("Turn it off")}
+        cancelText={translate("Cancel")}
+        variant="danger"
+      />
+      <ConfirmModal
+        isOpen={bannerHideConfirmOpen}
+        onClose={() => setBannerHideConfirmOpen(false)}
+        onConfirm={() => {
+          setBannerHideConfirmOpen(false);
+          updateHideLoginOffBanner(true);
+        }}
+        title={translate("Hide the log-in-off warning?")}
+        message={translate("The dashboard stays open to anyone who can reach this port — hiding the banner only removes the reminder, not the risk. It comes back automatically if you turn the log-in check on and off again.")}
+        confirmText={translate("Hide it")}
         cancelText={translate("Cancel")}
         variant="danger"
       />

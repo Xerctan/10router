@@ -15,21 +15,31 @@ import { translate } from "@/i18n/runtime";
 // Renders nothing while loading and on any error: /api/security/status is
 // auth-gated (a remote caller gets 403), and a failed probe must not turn into a
 // scary banner.
+//
+// The settings page fires SECURITY_STATUS_CHANGED after flipping a switch that
+// this banner reflects, so the banner updates in place instead of on next load.
+export const SECURITY_STATUS_CHANGED = "10r:security-status-changed";
+
 export default function SecurityBanner() {
   const [status, setStatus] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/security/status")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!cancelled) setStatus(data);
-      })
-      .catch(() => {
-        if (!cancelled) setStatus(null);
-      });
+    const load = () => {
+      fetch("/api/security/status")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!cancelled) setStatus(data);
+        })
+        .catch(() => {
+          if (!cancelled) setStatus(null);
+        });
+    };
+    load();
+    window.addEventListener(SECURITY_STATUS_CHANGED, load);
     return () => {
       cancelled = true;
+      window.removeEventListener(SECURITY_STATUS_CHANGED, load);
     };
   }, []);
 
@@ -38,6 +48,10 @@ export default function SecurityBanner() {
   const noPassword = !status.hasPassword && !status.bootstrapPassword && !status.ssoConfigured;
   const loginOff = status.requireLogin === false;
   if (!noPassword && !loginOff) return null;
+  // The operator explicitly dismissed the login-off warning (Settings → Security,
+  // behind a confirmation). The server clears that choice when login is turned
+  // back on, so it never outlives the off-period it was made for.
+  if (loginOff && status.hideLoginOffBanner) return null;
 
   // Login-off is the louder of the two: the port is open to whoever can route to
   // it. No-password only closes the dashboard to other machines.

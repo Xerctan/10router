@@ -42,6 +42,10 @@ export async function PATCH(request) {
     // Strip protected secrets before any internal handling sets them
     for (const key of PROTECTED_SETTING_KEYS) delete body[key];
 
+    // Hiding the login-off banner is a decision about THIS off-period. Turning the
+    // check back on forgets it, so a later switch-off warns again.
+    if (body.requireLogin === true) body.hideLoginOffBanner = false;
+
     // If updating password, hash it
     if (body.newPassword) {
       const settings = await getSettings();

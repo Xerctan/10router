@@ -32,6 +32,9 @@ const DEFAULT_SETTINGS = {
     videoInput: { enabled: false, roundRobin: false, models: [] },
   },
   requireLogin: true,
+  // Operator opted out of the dashboard-wide "log-in check is off" banner.
+  // Only meaningful while requireLogin is false; PATCH requireLogin=true clears it.
+  hideLoginOffBanner: false,
   requireApiKey: true,
   // Server-side auto-compaction of oversized conversations (clients that do
   // not compact locally would otherwise hard-fail on "prompt is too long").

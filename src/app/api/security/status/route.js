@@ -55,6 +55,7 @@ export async function GET(request) {
       // The switches themselves
       dashboardLocalOnly: settings?.dashboardLocalOnly === true,
       requireLogin: settings?.requireLogin !== false,
+      hideLoginOffBanner: settings?.hideLoginOffBanner === true,
       // Exposure facts
       hasPassword: !!settings?.password,
       bootstrapPassword: !!process.env.INITIAL_PASSWORD,
