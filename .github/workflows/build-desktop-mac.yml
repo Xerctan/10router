@@ -2,10 +2,11 @@ name: Build 10Router desktop (macOS)
 
 # macOS 桌面产物 (x64 + arm64 两个 dmg)。与 desktop/build.sh 同一流程:
 # 构建 cli/app (Next standalone) -> desktop npm install -> electron-builder --mac。
-# 没有 Apple 证书。electron-builder 25 找不到签名身份时**直接跳过签名**(不会自动回退
-# ad-hoc, 2026-09-26 首次 CI 实测) —— 改过的 Electron 包签名失效, 下载后 macOS 报
-# 「已损坏」, 右键打开也无效。所以这里显式 ad-hoc 签名 (identity "-", 仅经命令行传入,
-# 不影响本机有正式证书时的签名), 并在打包后校验两个 .app 都是 adhoc 签名, 否则失败。
+# 没有 Apple 证书。electron-builder 25 找不到签名身份时**直接跳过签名**, identity "-"
+# 也被当成证书名跳过 (2026-09-26 两轮 CI 实测) —— 改过的 Electron 包签名失效, 下载后
+# macOS 报「已损坏」, 右键打开也无效。所以用 afterPack 钩子 desktop/build/adhoc-sign.js
+# 在出 dmg 前对 .app 做 ad-hoc 签名 (仅经命令行挂上, 不影响本机有正式证书时的签名),
+# 并在打包后校验两个 .app 都是 adhoc 签名, 否则失败。
 # 未公证: 用户首次打开需右键 -> 打开。
 # better-sqlite3 (原生) 已由 build-cli.js 从 cli/app 剥离, sidecar 用 Electron 自带 Node
 # 走 node:sqlite / sql.js, 所以同一份 cli/app 装进 x64 与 arm64 两个包都能用。
@@ -44,7 +45,7 @@ jobs:
         working-directory: desktop
 
       - name: Package macOS artifacts (x64 + arm64 dmg, ad-hoc signed)
-        run: npx electron-builder --mac --publish never -c.mac.identity=-
+        run: npx electron-builder --mac --publish never -c.afterPack=build/adhoc-sign.js
         working-directory: desktop
 
       - name: Verify both apps carry an ad-hoc signature
