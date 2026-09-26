@@ -2,6 +2,28 @@
 
 User-facing highlights per release. See [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md) for the full developer log.
 
+## v1.2.1 (2026-09-26)
+
+### ✨ New
+
+- **CreditDaddy integration: read-only quota overview for external dashboards**: `GET /api/usage/quotas` returns every quota-capable connection in one call, normalized the same way as the dashboard's Provider Limits, and accepts a dashboard virtual key (`sk-…`). Results are cached for 5 minutes; a forced refresh (`?force=1`) is limited to once per connection every 30 seconds, and simultaneous requests share one upstream call. No credentials are returned — note that account emails are visible to anyone holding a virtual key.
+- **Imported usage now shows an estimated cost**: rows synced in by the 10router-sync plugin or CreditDaddy used to land at $0. New imports are priced on arrival, and existing history is repaired automatically at startup (a source-computed cost is never overwritten; models without a price stay at $0).
+- **The "log-in check is off" banner can be hidden**: Settings → Security gains a switch under *Require login*, shown only while the check is off. Hiding the banner takes a confirmation, and it comes back automatically once you turn log-in back on and off again.
+- **Automatic update checks can be turned off** (Settings → Security): for installs pinned to a version on purpose. When off, 10Router no longer contacts the update server on its own or shows new-version notices — the dashboard, the tray balloon and the CLI launcher all go quiet. "Check now" and the tray's "Check for updates" still work.
+- **Encrypted OAuth import/export on single-auth cards**: the transfer buttons now appear on OAuth-only cards as well — most importantly **MiMo Desktop**, whose signed-in session is the credential you move between machines.
+- **Official Qwen pricing**: new-generation Qwen flagships were priced at the cheap wildcard rate (e.g. qwen3.8-max billed at a quarter of its real price); they now use the official per-model rates.
+
+### 🐛 Fixes
+
+- **[Important] After a restart, remote access stayed down until someone opened the dashboard**: tunnel / Tailscale / MITM auto-resume and the other startup tasks only ran on the first page render — on a NAS used purely through `/v1` they could wait indefinitely. They now start with the server.
+- **Qoder's queue throttle was returned as the model's reply**: a queued request (`10605`) reached the client as `[qoder error 403: …]` text and was logged as a success. It now fails over to the next account and cools the throttled one for the time Qoder asks for (about 30 seconds).
+- **OAuth transfer import was blocked on passwordless dashboards** even from the machine itself; same-machine imports work again.
+- **10router-sync plugin v1.5.0**: follows ZCode's new plan-channel ids (Start Plan traffic had stopped syncing since 09-18), counts mirasim cache in input so dashboards stop showing "input 638, cache 113M", and the mirasim correction script no longer adds the cache twice.
+
+### 🔧 Other
+
+- **Auth header names aligned with 10Router**: `x-10r-cli-token` / `x-10r-password` replace the inherited `x-9r-*` names. The old names are still accepted, so existing CLI launchers, plugins and scripts keep working.
+
 ## v1.2.0 (2026-09-24)
 
 ### ✨ New

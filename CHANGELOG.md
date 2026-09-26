@@ -2,7 +2,9 @@
 
 > 面向用户的精简更新见 [`public/i18n/changelog/`](https://github.com/techysy/10router/tree/main/public/i18n/changelog)（`en.md` / `zh-CN.md` / `zh-TW.md`，仪表盘「Change Log」按界面语言加载对应文件）。本文件为完整开发日志，按版本从上往下排列。
 
-## v1.2.1 (unreleased)
+## v1.2.1 (2026-09-26)
+
+> 本版主题：**CreditDaddy 接入 + 导入用量计价 + 启动与运维加固**。额度总览只读接口、导入用量预估计价、服务启动即初始化（重启后远程访问不再等人打开页面）、可关闭自动检查更新 / 可隐藏登录关闭横幅；修复 qoder 排队限流被当成回复、mirasim 口径与订正脚本、开机成本修复卡死。鉴权请求头改名向后兼容，无破坏性变更，走 patch。同批插件 10router-sync v1.5.1。
 
 ### ✨ 新功能 / 修复
 

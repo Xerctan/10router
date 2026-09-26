@@ -7,7 +7,7 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 本插件尚未发布 1.0.0——0.3.0 之后直接进入 1.1.0（首次支持多数据源）。
 
-## [Unreleased]
+## [1.5.1] — 2026-09-26
 
 ### 变更
 - **鉴权请求头对齐 10r 命名**：`status.mjs` 的 CLI token 与 `export-usage.mjs` 的仪表盘密码改为
