@@ -471,11 +471,14 @@ export const PATTERN_CAPABILITIES = [
 
   // ── Gemini (all 2.0+ multimodal + google_search grounding, 1M ctx) ─
   { pattern: "*gemini*image*",  caps: { vision: true, imageOutput: true, contextWindow: 1048576 } },
-  { pattern: "*gemini-3.8*",    caps: { vision: true, audioInput: true, videoInput: true, reasoning: true, search: true, thinkingFormat: "gemini-level", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 65536 } },
-  { pattern: "*gemini-3.7*",    caps: { vision: true, audioInput: true, videoInput: true, reasoning: true, search: true, thinkingFormat: "gemini-level", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 65536 } },
-  { pattern: "*gemini-3*pro*",  caps: { vision: true, audioInput: true, videoInput: true, reasoning: true, search: true, thinkingFormat: "gemini-level", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 65535 } },
-  { pattern: "*gemini-3*",      caps: { vision: true, audioInput: true, videoInput: true, reasoning: true, search: true, thinkingFormat: "gemini-level", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 65536 } },
-  { pattern: "*gemini-2.5*",    caps: { vision: true, audioInput: true, videoInput: true, reasoning: true, search: true, thinkingFormat: "gemini-budget", thinkingRange: { min: 0, max: 24576 }, contextWindow: 1048576, maxOutput: 65536 } },
+  // pdf:true 按第一方数据补声明（models.dev google/google-vertex：Gemini 2.5 与 3.x
+  // Flash/Pro 全系 input 含 pdf）。透传层本就放行（未声明 ≠ false，modality 只剥显式
+  // false），这里补的是能力徽章的准确性——antigravity/gemini 的模型卡此前不显示 PDF。
+  { pattern: "*gemini-3.8*",    caps: { vision: true, audioInput: true, videoInput: true, pdf: true, reasoning: true, search: true, thinkingFormat: "gemini-level", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 65536 } },
+  { pattern: "*gemini-3.7*",    caps: { vision: true, audioInput: true, videoInput: true, pdf: true, reasoning: true, search: true, thinkingFormat: "gemini-level", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 65536 } },
+  { pattern: "*gemini-3*pro*",  caps: { vision: true, audioInput: true, videoInput: true, pdf: true, reasoning: true, search: true, thinkingFormat: "gemini-level", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 65535 } },
+  { pattern: "*gemini-3*",      caps: { vision: true, audioInput: true, videoInput: true, pdf: true, reasoning: true, search: true, thinkingFormat: "gemini-level", thinkingCanDisable: false, contextWindow: 1048576, maxOutput: 65536 } },
+  { pattern: "*gemini-2.5*",    caps: { vision: true, audioInput: true, videoInput: true, pdf: true, reasoning: true, search: true, thinkingFormat: "gemini-budget", thinkingRange: { min: 0, max: 24576 }, contextWindow: 1048576, maxOutput: 65536 } },
   { pattern: "*gemini-2*",      caps: { vision: true, audioInput: true, videoInput: true, search: true, contextWindow: 1048576, maxOutput: 65536 } },
   { pattern: "*gemini*",        caps: { vision: true, search: true, contextWindow: 1048576 } },
   { pattern: "*gemma*",         caps: { vision: true, contextWindow: 128000 } },
