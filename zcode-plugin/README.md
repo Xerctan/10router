@@ -192,7 +192,7 @@ Node 22 需加 `--experimental-sqlite`；Node 24+ 直接跑。
 | `scripts/verify-usage-db.mjs` | 10Router 用量库只读体检（见上节） |
 | `scripts/clean-usage-db.mjs` | 10Router 用量库删行 + 日聚合重建（见上节） |
 | `scripts/usage-daily.mjs` | 聚合契约共享实现，被上面两个工具引用 |
-| `scripts/normalize-mirasim-input.mjs` | 一次性订正 mirasim 行输入口径（2026-09-24 已在双库执行；新装实例不需要） |
+| `scripts/normalize-mirasim-input.mjs` | 订正旧 mirasim 行输入口径（2026-09-24 已在双库执行；新装实例不需要）。可安全重跑：新口径行（含 CreditDaddy 写入）自动跳过，重复对只报告不改动；默认 dry-run |
 
 ## 文档
 

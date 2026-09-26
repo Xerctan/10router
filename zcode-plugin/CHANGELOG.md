@@ -46,6 +46,14 @@
   「56/56 PASS」是导入库全 `local-no-key` 键未撞上）。镜像 meta 改带 `apiKeyMasked`
   （不再携带 key 字段），verify 的 byApiKey 维度改为**聚合比对**（数值总量仍精确；键身份
   对非空 key 不可验证）。修后本机 verify 从 16 例失败回到全绿。
+- **10r 源签名漂移重复行事故（2026-09-24 当日发现并清理）**：服务端 v1.2.0 签名改含
+  `hashApiKey(entry.apiKey)`（apiKeyHash 列），而 `10r` 源透传源库 apiKey——桌面 10r 库
+  apiKey 列格式漂移（raw→mask 迁移）+ 签名换代叠加，历史行签名对不上被整批重导
+  （单轮 imported 1313）。NAS 累计 **1258 组 / 2455 行重复**，已按「每组保 MAX(id)」用
+  `clean-usage-db --where` 删重 + 重建 16 日桶 + 计数器 57046→54591，verify PASS 65/65；
+  复跑五源稳定性 `10r imported 9（恰为清理后新写入行数）/ skipped 3099`，零重导。
+  **约定：apiKey 口径保持 mask 直传不再改动**；再遇重导潮的清理谓词与流程见 AGENTS.md
+  「apiKey 透传与签名漂移」。备份 `data.sqlite.bak-20260924-dedup`。
 
 ### 新增
 

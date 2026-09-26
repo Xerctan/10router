@@ -33,6 +33,25 @@
    cp -r ../../node_modules/{node-forge,sql.js,next,better-sqlite3} node_modules/
    ```
 
+### 1b. 构建机被其他分支占用时：隔离 worktree + 补丁
+
+构建机的 `~/projects/10router` 可能正被另一个会话用在别的分支上（2026-09-26：停在 `2.0.0`、带未提交的
+fnos-packaging 改动）。**不要在那个检出里 `git am` / `rm -rf .next` / 构建**，也不必为部署而推送 origin：
+
+```bash
+# 本机：把要部署的提交导成补丁（<base> = 构建机上已有的提交）
+git format-patch -q <base>..main -o /tmp/10r-patches && scp /tmp/10r-patches/*.patch arch:/tmp/10r-patches/
+
+# 构建机：独立 worktree 里构建，不碰主检出
+cd ~/projects/10router && git worktree add --detach ~/projects/10router-main-build <base>
+cd ~/projects/10router-main-build && git am /tmp/10r-patches/*.patch
+node scripts/test-build-version.mjs 1.2.1-test.N
+cp ../10router/package-lock.json . && npm ci        # 仓库没提交 lockfile；两分支依赖一致时复用
+npm run build                                        # 新 worktree 没有旧 .next，天然干净
+# … 按 §1 补拷外部目录、打包 …
+git -C ~/projects/10router worktree remove --force ~/projects/10router-main-build   # 用完即删
+```
+
 ## 2. 部署：预解包 → 原子交换 → 生命周期重启
 
 ```bash
@@ -50,7 +69,7 @@ BASE=/vol4/@appcenter/10router
 # ① 预解包（慢步骤，应用照跑；version/BUILD_ID 先验一遍再往下走）
 sudo rm -rf $BASE/server.new && sudo mkdir -p $BASE/server.new
 sudo tar xzf /tmp/10rf-server.tar.gz -C $BASE/server.new
-sudo cp -a $BASE/server/.env $BASE/server.new/.env     # ★ 不保留 = JWT_SECRET/INITIAL_PASSWORD 全丢
+[ -f $BASE/server/.env ] && sudo cp -a $BASE/server/.env $BASE/server.new/.env   # ★ 有就必须保留；31.101 的 fpk 没有 server/.env（密钥在数据目录 jwt-secret 等），跳过即可
 sudo chown -R 10router:10router $BASE/server.new       # 服务用户是 10router，属主不对起不来
 grep -o '"version": "[^"]*"' $BASE/server.new/package.json
 cat $BASE/server.new/.next/BUILD_ID
@@ -76,6 +95,8 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:20127/dashboard  # 200
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:20127/login      # 200
 curl -s http://127.0.0.1:20127/v1/models | head -c 200                     # 200 + 模型列表(本机免鉴权)
 cat $BASE/server/.next/BUILD_ID                                            # 与构建机一致
+sudo grep "BG_TOKEN_REFRESH\] Scheduler started" /var/log/apps/10router.log /vol4/@appdata/10router/logs/app-$(date +%F).log | tail -1
+                                                                           # ≥1.2.1：重启后数秒内出现，无需打开页面
 ```
 
 再从局域网另一台机器打一遍 health/dashboard（排除网络层问题）；换完代码但行为没变时，

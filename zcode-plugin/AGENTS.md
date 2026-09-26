@@ -191,8 +191,22 @@ node scripts/export-usage.mjs --import usage.json --endpoint <URL> --key sk-…
   评分对 `imported` 行默认排除，但网关同步行是源实例的真实观测（真实状态码），凭此标记豁免
   参与评分；源实例自己从客户端账本导入过的行**不打**标记，链式同步多远都保持排除。
   契约详见 [usage-import-rows.md](../docs/zh-CN/usage-import-rows.md) 的「gatewaySync 例外」节。
+  - ⚠️ **apiKey 透传与签名漂移**（2026-09-24 事故教训）：`10r` 源把源库 `apiKey` 原样透传，
+    而服务端签名含 `hashApiKey(entry.apiKey)`——源库 apiKey 列**格式一变**（raw→mask 迁移、
+    密钥轮换），历史行签名就对不上，**整批历史被当新行重导一遍**（实测 NAS 1258 组 /
+    2455 行重复）。当前 mask 直传自洽：**不要再改 apiKey 口径**（改 null 会引发新一轮漂移）。
+    再遇重导潮：每组保 `MAX(id)` 删其余（D 波副本带 gatewaySync+成本估算，且与服务端
+    `ORDER BY id DESC` 的 dedup 命中目标一致），用 `clean-usage-db.mjs --where "<窗口函数谓词>"
+    --apply` 忠实重建日桶，`verify-usage-db.mjs` 复检；先备份 `data.sqlite + -wal`。
+    谓词模板：`id IN (SELECT id FROM (SELECT id, MAX(id) OVER (PARTITION BY timestamp, provider,
+    model, promptTokens, completionTokens, COALESCE(apiKey,''), COALESCE(connectionId,''))
+    AS mid FROM usageHistory) WHERE id <> mid)`。
 - **cost 一律记 0**：这些渠道是订阅/套餐制，不按量计费；若某源有真实计费数据再另议。
   `10r` 源是唯一例外——源实例可能有真实计费行，cost 原样透传。
+  **注意端到端并不恒为 0**：10Router 服务端自 v1.2.1 起在导入时按实时定价表**补估** cost
+  （仅补空、绝不覆盖源库已算好的值；去重命中时也补洞，日常同步可自愈历史天）——导出侧
+  写 0 是契约，落库值可能非 0（NAS 实测 11408 行导入行 10274 行已计价，合计 $1887）。
+  `usage-import-cost.test.js` 6 例锁行为。
 - **仪表盘对导入前缀零特殊处理**：`src/(dashboard)/dashboard/usage/` 与 `src/shared/` 下
   grep `zcode-`/`opencode-`/`mirasim-`/`mimo-` 前缀零匹配（2026-09-15 核验）——provider 在
   仪表盘的呈现完全由导入行的 `provider` 字段决定；没有 UI 侧特判可依赖，也没有会被改坏的
@@ -227,7 +241,7 @@ node scripts/export-usage.mjs --import usage.json --endpoint <URL> --key sk-…
 | `usage-daily.mjs` | 聚合契约的共享实现（`aggregateEntryToDay` 的精确移植 + 本地日期分桶）。与 10Router 仓库 `src/lib/db/repos/usageRepo.js` 保持同步。**注意**：#9 后 `apiKey` 列存 mask 而活桶键是 sha256(原始 key)——非空 key 的桶键身份结构上不可复现（头注有详述），byApiKey meta 带 `apiKeyMasked` |
 | `verify-usage-db.mjs` | 只读校验：完整性 / 外键 / **usageDaily 与 usageHistory 逐日逐字段一致性** / lifetime 计数器。byApiKey 维度为**聚合比对**（#9 后键身份不可验证，数值总量仍精确），其余四维逐键。退出码 0=PASS、1=FAIL |
 | `clean-usage-db.mjs` | 按 `--provider <名>` 或 `--where "<谓词>"` 删行并忠实重建受影响日桶 + 修正计数器；默认 dry-report，`--apply` 才写入；内置事后自检，失败返回 1 |
-| `normalize-mirasim-input.mjs` | 一次性订正 mirasim 行的输入口径（`prompt += cache_read + cache_creation` + 幂等 flag + 日桶 delta 打补丁）。2026-09-24 已在双库执行；新装实例不需要。默认 dry-run，`--apply` 写入 |
+| `normalize-mirasim-input.mjs` | 订正旧 mirasim 行的输入口径（`prompt += cache_read + cache_creation` + 幂等 flag + 日桶 delta 打补丁）。2026-09-24 已在双库执行；新装实例不需要。**可安全重跑**：按结构证据判新旧行——已打标 / 同 `mirasimCallId` 有「少一份缓存」孪生 / 库已订正过且 id 大于最大已打标 id → 视为新口径跳过（CreditDaddy 写入不打标也不会被重复加缓存）；有「多一份缓存」孪生 → 报告为重复对待清理；其余加缓存。订正前已被服务端估价的行清零估价并删服务端成本修复水位，下次启动重算。默认 dry-run，`--apply` 写入 |
 
 典型流程（**务必先停 10Router 服务**，它会持有数据库并发的写会损坏文件）：
 
