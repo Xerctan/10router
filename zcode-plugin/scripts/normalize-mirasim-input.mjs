@@ -9,21 +9,35 @@
  * this script brings ALREADY-IMPORTED rows to the same convention so that a
  * re-sync dedups instead of duplicating (signature includes promptTokens).
  *
- * Which rows: provider LIKE 'mirasim-%' that are neither flagged nor already in
- * the new convention. Rows written by a fixed converter (this plugin's
- * export-usage ≥ v1.5.0, CreditDaddy's usage sync) already carry
- * prompt = input + cache, and CreditDaddy never sets the flag — so the flag
- * alone is not enough: adding the cache again would double-count it (a 638 +
- * 113M row would become 638 + 226M). The data itself tells them apart: a
- * new-convention row always has promptTokens >= cacheRead + cacheWrite. Such
- * rows are skipped. Price: an OLD row whose net-new input already exceeded its
- * cache is skipped too, undercounting it by at most its own input — against a
- * double count of the whole cache.
+ * Which rows are OLD (net-new prompt) and get the cache added. Rows written by
+ * a fixed converter (this plugin's export-usage ≥ v1.5.0, CreditDaddy's usage
+ * sync) already carry prompt = input + cache; CreditDaddy never sets the flag,
+ * and both converters write the same meta as the old one — adding the cache to
+ * those would double-count it (638 + 113M → 638 + 226M). Neither "flag" nor
+ * "prompt >= cache" alone decides it: on the NAS 66 of 2904 old rows had a
+ * net-new input larger than their cache, and skipping them would also keep
+ * them out of step with the converter, so a re-sync duplicates them. Decision,
+ * per mirasim row with cache (cache = cacheRead + cacheWrite, p = promptTokens):
+ *   1. flagged                                 → done, skip
+ *   2. p <  cache (and no twin, see 3–4)       → OLD (a new row cannot be below its cache)
+ *   3. a same-mirasimCallId row has p - cache  → NEW, skip (its old twin is the one to fix)
+ *   4. a same-mirasimCallId row has p + cache  → OLD whose new twin is already
+ *      imported — normalizing would make an exact duplicate; skipped and
+ *      reported as a duplicate pair to clean up (AGENTS.md dedup recipe)
+ *   5. the db was normalized before and id > the largest flagged id
+ *                                              → NEW (imported after that run), skip
+ *   6. otherwise                               → OLD (pre-upgrade history)
  *
  * What it changes per normalized row:
  *   - usageHistory.promptTokens  += cache_read + cache_creation
  *   - usageHistory.tokens.prompt_tokens = same new value
  *   - usageHistory.meta.mirasimInputNormalized = true   (idempotency flag)
+ *   - usageHistory.cost = 0 when it was > 0. mirasim rows are exported at
+ *     cost 0, so a cost here is the server's estimate — computed while prompt
+ *     still excluded cache, which bills the fresh input at nothing. The script
+ *     has no price table, so it clears the estimate (and its day-bucket share)
+ *     and deletes the server's cost-repair watermark (_meta usageCostRepair):
+ *     the next 10Router start re-prices these rows from the corrected tokens.
  *
  * Then DELTA-PATCHES the touched usageDaily buckets (top-level promptTokens +
  * the byProvider/byModel/byApiKey/byEndpoint/byAccount counters those rows
@@ -33,8 +47,8 @@
  * for non-null keys; mirasim rows always carry apiKey=null, whose key format
  * is identical on both sides: `local-no-key|<model>|<provider>`).
  *
- * Cost/requests/cachedTokens/completionTokens and the lifetime counter are
- * untouched (no row added or removed).
+ * requests/cachedTokens/completionTokens and the lifetime counter are untouched
+ * (no row added or removed); cost moves only as described above.
  *
  * Usage:
  *   node normalize-mirasim-input.mjs /path/to/data.sqlite            # dry-run
@@ -111,7 +125,7 @@ if (args.apply) db.exec("PRAGMA busy_timeout = 10000");
 let rows;
 try {
   rows = db.prepare(
-    `SELECT id, timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, tokens, meta
+    `SELECT id, timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, tokens, meta, cost
      FROM usageHistory WHERE provider LIKE 'mirasim-%' ORDER BY id`
   ).all();
 } catch (e) {
@@ -119,46 +133,75 @@ try {
   process.exit(1);
 }
 
+const cacheOf = (t) => (t.cache_read_input_tokens || 0) + (t.cache_creation_input_tokens || 0);
+const parsed = rows.map((r) => ({ r, meta: parseJson(r.meta), t: parseJson(r.tokens) }));
+const maxFlaggedId = parsed.reduce((m, x) => (x.meta[FLAG] ? Math.max(m, x.r.id) : m), 0);
+// mirasimCallId → promptTokens of every row carrying it (twins from a re-sync).
+const promptsByCall = new Map();
+for (const x of parsed) {
+  const id = x.meta.mirasimCallId;
+  if (!id) continue;
+  if (!promptsByCall.has(id)) promptsByCall.set(id, []);
+  promptsByCall.get(id).push({ rowId: x.r.id, p: x.r.promptTokens || 0 });
+}
+const twinWith = (x, p) => (promptsByCall.get(x.meta.mirasimCallId) || []).some((o) => o.rowId !== x.r.id && o.p === p);
+
 const pending = [];
 let alreadyFlagged = 0;
 let alreadyIncluded = 0;
-for (const r of rows) {
-  const meta = parseJson(r.meta);
+const duplicatePairs = [];
+for (const x of parsed) {
+  const { r, meta, t } = x;
   if (meta[FLAG]) { alreadyFlagged++; continue; }
-  const t = parseJson(r.tokens);
-  const delta = (t.cache_read_input_tokens || 0) + (t.cache_creation_input_tokens || 0);
-  // Already prompt = input + cache (fixed converter, no flag) — see header.
-  if (delta > 0 && (r.promptTokens || 0) >= delta) { alreadyIncluded++; continue; }
-  const newPrompt = (r.promptTokens || 0) + delta;
+  const delta = cacheOf(t);
+  const p = r.promptTokens || 0;
+  if (delta > 0) {
+    // Twins first: an old row whose new twin is already imported usually sits
+    // below its cache, and rule 2 would turn it into an exact duplicate.
+    if (p >= delta && twinWith(x, p - delta)) { alreadyIncluded++; continue; }                 // rule 3
+    if (twinWith(x, p + delta)) { duplicatePairs.push(r.id); continue; }                       // rule 4
+    if (p >= delta && maxFlaggedId && r.id > maxFlaggedId) { alreadyIncluded++; continue; }   // rule 5
+  }
+  const newPrompt = p + delta;                                                   // rules 2 / 6
   pending.push({
     row: r,
     delta,
     newPrompt,
+    staleCost: r.cost > 0 && delta > 0 ? r.cost : 0,
     newTokens: { ...t, prompt_tokens: newPrompt },
     newMeta: { ...meta, [FLAG]: true },
   });
 }
 
 if (pending.length === 0) {
-  log(`nothing to do (${rows.length} mirasim rows: ${alreadyFlagged} flagged, ${alreadyIncluded} already include cache)`);
+  log(`nothing to do (${rows.length} mirasim rows: ${alreadyFlagged} flagged, ${alreadyIncluded} already include cache, ${duplicatePairs.length} duplicate pairs)`);
+  if (duplicatePairs.length) log(`  duplicate pairs (old row ids, new twin already imported): ${duplicatePairs.slice(0, 20).join(", ")} — clean up, see AGENTS.md`);
   db.close();
   process.exit(0);
 }
 
 // Group deltas per touched local day + counter. Separator \x00 cannot appear
 // in provider/model/endpoint values, unlike '|' which they can.
-const dayDeltas = new Map(); // dayKey -> { prompt, counters: Map<`dim\x00key`, delta> }
+const dayDeltas = new Map(); // dayKey -> { prompt, cost, counters: Map<`dim\x00key`, { prompt, cost }> }
 let totalDelta = 0;
+let totalStaleCost = 0;
+let staleCostRows = 0;
 for (const p of pending) {
   totalDelta += p.delta;
+  totalStaleCost += p.staleCost;
+  if (p.staleCost) staleCostRows++;
   const dayKey = localDateKey(p.row.timestamp);
   let d = dayDeltas.get(dayKey);
-  if (!d) { d = { prompt: 0, counters: new Map() }; dayDeltas.set(dayKey, d); }
+  if (!d) { d = { prompt: 0, cost: 0, counters: new Map() }; dayDeltas.set(dayKey, d); }
   d.prompt += p.delta;
+  d.cost -= p.staleCost;
   if (p.delta === 0) continue; // zero-delta rows only need the flag
   for (const [dim, key] of counterKeys(p.row)) {
     const ck = `${dim}\x00${key}`;
-    d.counters.set(ck, (d.counters.get(ck) || 0) + p.delta);
+    const c = d.counters.get(ck) || { prompt: 0, cost: 0 };
+    c.prompt += p.delta;
+    c.cost -= p.staleCost;
+    d.counters.set(ck, c);
   }
 }
 
@@ -177,7 +220,14 @@ if (missingDays.length > 0) {
 }
 
 log(`mirasim input normalization ${args.apply ? "APPLY" : "dry-run"} on ${args.dbPath}`);
-log(`  rows to normalize : ${pending.length}  (already flagged: ${alreadyFlagged}, already include cache: ${alreadyIncluded}, total mirasim rows: ${rows.length})`);
+const flagOnly = pending.filter((p) => p.delta === 0).length;
+log(`  rows to normalize : ${pending.length - flagOnly}  (already flagged: ${alreadyFlagged}, already include cache: ${alreadyIncluded}, total mirasim rows: ${rows.length})`);
+if (flagOnly) log(`  flag only         : ${flagOnly} rows without cache — tokens unchanged, just marked done`);
+log(`  stale cost cleared: ${staleCostRows} rows, $${totalStaleCost.toFixed(4)} (re-priced by 10Router on next start)`);
+if (duplicatePairs.length) {
+  log(`  duplicate pairs   : ${duplicatePairs.length} old rows whose new twin is already imported — skipped; clean up (AGENTS.md dedup recipe)`);
+  log(`                      old row ids: ${duplicatePairs.slice(0, 20).join(", ")}${duplicatePairs.length > 20 ? ", …" : ""}`);
+}
 log(`  promptTokens delta: ${totalDelta.toLocaleString("en-US")}`);
 log(`  days touched      : ${dayDeltas.size}`);
 for (const p of pending.slice(0, 3)) {
@@ -192,7 +242,7 @@ if (!args.apply) {
 
 // ── apply (single transaction) ──────────────────────────────────────────────
 
-const upd = db.prepare(`UPDATE usageHistory SET promptTokens = ?, tokens = ?, meta = ? WHERE id = ?`);
+const upd = db.prepare(`UPDATE usageHistory SET promptTokens = ?, tokens = ?, meta = ?, cost = ? WHERE id = ?`);
 const getDay = db.prepare(`SELECT data FROM usageDaily WHERE dateKey = ?`);
 const putDay = db.prepare(`INSERT INTO usageDaily(dateKey, data) VALUES(?, ?) ON CONFLICT(dateKey) DO UPDATE SET data = excluded.data`);
 
@@ -201,25 +251,34 @@ const missingCounters = [];
 db.exec("BEGIN");
 try {
   for (const p of pending) {
-    upd.run(p.newPrompt, JSON.stringify(p.newTokens), JSON.stringify(p.newMeta), p.row.id);
+    upd.run(p.newPrompt, JSON.stringify(p.newTokens), JSON.stringify(p.newMeta), p.staleCost ? 0 : p.row.cost, p.row.id);
   }
   for (const [dayKey, d] of dayDeltas) {
-    if (d.prompt === 0 && d.counters.size === 0) continue; // flag-only day
+    if (d.prompt === 0 && d.cost === 0 && d.counters.size === 0) continue; // flag-only day
     const row = getDay.get(dayKey);
     const data = parseJson(row.data);
     data.promptTokens = (data.promptTokens || 0) + d.prompt;
+    if (d.cost) data.cost = Math.max(0, (data.cost || 0) + d.cost);
     for (const [ck, delta] of d.counters) {
       const sep = ck.indexOf("\x00");
       const dim = ck.slice(0, sep);
       const key = ck.slice(sep + 1);
       const counter = data[dim] && data[dim][key];
-      if (counter) { counter.promptTokens = (counter.promptTokens || 0) + delta; patchedCounters++; }
-      else missingCounters.push(`${dayKey} ${dim}[${key}]`);
+      if (counter) {
+        counter.promptTokens = (counter.promptTokens || 0) + delta.prompt;
+        if (delta.cost) counter.cost = Math.max(0, (counter.cost || 0) + delta.cost);
+        patchedCounters++;
+      } else missingCounters.push(`${dayKey} ${dim}[${key}]`);
     }
     putDay.run(dayKey, JSON.stringify(data));
   }
   if (missingCounters.length > 0) {
     throw new Error(`${missingCounters.length} counter key(s) missing in day buckets (first: ${missingCounters[0]})`);
+  }
+  // Cleared estimates must be re-priced: drop the server's repair watermark so
+  // its next start scans everything again (it skips rows it has already seen).
+  if (staleCostRows > 0) {
+    try { db.prepare(`DELETE FROM _meta WHERE key = 'usageCostRepair'`).run(); } catch { /* pre-1.2.1 db: no watermark */ }
   }
   db.exec("COMMIT");
 } catch (e) {
@@ -231,6 +290,7 @@ try {
 
 db.close();
 log(`applied: ${pending.length} rows normalized, ${dayDeltas.size} day buckets patched (${patchedCounters} counters)`);
+if (staleCostRows > 0) log(`cleared ${staleCostRows} stale cost estimates — restart 10Router to re-price them`);
 log(`next: node verify-usage-db.mjs ${path.resolve(args.dbPath)}   # expect PASS`);
 log(`note: historical rows now match the converter's new convention — a re-sync`);
 log(`      must show only genuinely-new rows as imported, all old ones skipped.`);

@@ -13,11 +13,14 @@
 - **鉴权请求头对齐 10r 命名**：`status.mjs` 的 CLI token 与 `export-usage.mjs` 的仪表盘密码改为
   新旧双发（`x-10r-cli-token` + `x-9r-cli-token`、`x-10r-password` + `x-9r-password`）——服务端
   改名后新旧都认，双发让插件对改名前的老实例同样可用。token 派生 salt `9r-cli-auth` 不变。
-- **`normalize-mirasim-input.mjs` 不再对已含缓存的行重复加缓存**：原先只认
-  `mirasimInputNormalized` 标记，而本插件 v1.5.0 起的转换器与 CreditDaddy 用量同步写入时已是
-  `prompt = input + cache` 却不打标记，同步后再跑会把缓存加第二遍。现按 `promptTokens ≥
-  cacheRead + cacheWrite` 识别已是新口径的行并跳过；`export-usage` 的 mirasim 转换器写入时补打标记
-  （服务端去重签名不含 meta，不会引发重导）。
+- **`normalize-mirasim-input.mjs` 判定改为结构证据：旧行只加一次缓存、新行绝不重复加**：原先只认
+  `mirasimInputNormalized` 标记，而本插件 v1.5.0 起的转换器与 CreditDaddy 写入时已是 `prompt = input + cache`
+  却不打标记（meta 与旧转换器相同），同步后再跑会把缓存加第二遍。「`prompt ≥ cache` 即新口径」也不成立——NAS
+  2904 条旧行里 66 条净新增输入大于缓存。现逐行：已打标跳过；同 `mirasimCallId` 有「少一份缓存」的孪生 → 新行跳过；
+  有「多一份缓存」的孪生 → 旧行但新孪生已导入，跳过并报告重复对；库已订正过且 id 大于最大已打标 id → 新行跳过；
+  其余加缓存。订正前已被服务端估价的行清零估价并删除服务端成本修复水位，下次启动重算。`export-usage` 的 mirasim
+  转换器写入时补打标记（去重签名不含 meta，不会重导）。NAS dry-run：迁移前快照 2998 行 / delta 786,499,088 与
+  09-24 实际订正一致；当前库 1530 条新行全部跳过。
 
 ## [1.5.0] — 2026-09-24
 
