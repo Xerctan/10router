@@ -1,6 +1,7 @@
 <div align="center">
 
-<img width="3818" height="1901" alt="image" src="https://github.com/user-attachments/assets/790507c7-68be-4111-a907-32ca6303f141" />
+<img width="2048" height="1265" alt="image" src="https://github.com/user-attachments/assets/d8ef9bb4-e965-4ab8-8965-08f064232271" />
+
 
 # 🚀 10Router
 
