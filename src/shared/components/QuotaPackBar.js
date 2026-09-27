@@ -5,26 +5,29 @@ import { translate } from "@/i18n/runtime";
 import { cn } from "@/shared/utils/cn";
 
 /**
- * Connection quota block — CreditDaddy account-card language.
+ * Connection quota block — CreditDaddy account-card language (签到积分型).
  *
- *   剩余 [✦✦] 2,455.33      100 于 10-15 到期 · 已用 U / 共 T      ← only when a pack family exists
- *   [赠送包 family: proportional segments | trailing used chunk]
- *   滚动   ▓▓▓░  剩 2.91 / 3 · 09-30 重置                     ← meter row, always visible
- *   每周   ▓▓▓░  剩 5.91 / 6 · 09-30 重置
- *   余额   ▓▓▓░  剩 14.95 / 14.95 · 10-20 到期
+ *   余额 [✦✦] 2,455.33      Bonus Pack 24 于 2 天 23 小时 过期
+ *   [family: proportional segments | trailing used chunk]   ← 月度并入：
+ *     它就是「以重置日为到期日的资源包」，不再单独成行
  *
  * SEMANTICS:
- *  - Aggregate summaries ("Total Points") are derived data — excluded.
- *  - Same-family packs (base name minus trailing index, ≥2 members) aggregate
- *    into one segmented bar + the 剩余 total.
- *  - Subscription-recurring windows (Monthly/每周/滚动…) and stored-value
- *    singletons (余额/代金券) are DIFFERENT-relationship pools: never summed,
- *    each renders as its own always-visible meter row (they replace the old
- *    table rows for these kinds).
+ *  - Aggregate summaries ("Total Points") are derived data — excluded from
+ *    the chart; the expanded details show the ORIGINAL rows untouched.
+ *  - Additive pool (签到积分型): when a pack family (≥2 same-base-name
+ *    non-recurring rows) coexists with a monthly window, the monthly joins
+ *    the bar + the 余额 total — its reset day acts as its expiry ("最后一天
+ *    的资源包"), and it no longer renders as its own row.
+ *  - Parallel-constraint recurring windows without such a family (commandcode
+ *    滚动/每周/月度额度) stay as per-window meter rows — they are limits, not
+ *    an additive pool (用户此前的拍板保持).
+ *  - Stored-value singletons (余额/代金券) render as meter rows too, but do
+ *    not sum into 余额 (不同花费池).
  */
 
 const MAX_SEGMENTS = 20;
 const AGGREGATE_RE = /total|aggregate|summary|^总/i;
+const MONTHLY_RE = /month|月/i;
 const RECURRING_NAME_RE = /month|月|week|周|滚动|rolling/i;
 
 /** CreditDaddy's `credit` icon — twin four-point sparkles (feather-style). */
@@ -57,6 +60,19 @@ function shortDate(iso) {
   return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** "2 天 23 小时" style relative countdown (CreditDaddy's rel-reset wording). */
+function relativeUntil(iso) {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  const totalMin = Math.floor(ms / 60000);
+  const d = Math.floor(totalMin / 1440);
+  const h = Math.floor((totalMin % 1440) / 60);
+  const m = totalMin % 60;
+  if (d > 0) return `${d} 天 ${h} 小时`;
+  if (h > 0) return `${h} 小时 ${m} 分钟`;
+  return `${Math.max(1, m)} 分钟`;
+}
+
 function remainingOf(p) {
   if (p.remaining !== undefined && p.remaining !== null) return Math.max(0, Number(p.remaining));
   return Math.max(0, Number(p.total || 0) - Number(p.used || 0));
@@ -75,7 +91,7 @@ export function isRecurringQuotaRow(row) {
 
 /** One always-visible meter row (name | bar | 剩 X / Y · word date). */
 function MeterRow({ row }) {
-  const total = Number(row.totalNum || row.total || 0);
+  const total = Number(row.totalNum ?? row.total || 0);
   const remaining = Number(row.remainingNum ?? remainingOf(row));
   const pct = total > 0 ? Math.min(100, (remaining / total) * 100) : 0;
   const recurring = row.recurring === true || isRecurringQuotaRow(row);
@@ -121,14 +137,15 @@ export default function QuotaPackBar({ packs = [], className }) {
     return { ...p, totalNum, remainingNum: remainingOf(p) };
   });
 
-  // Recurring windows: always-visible meter rows — never summed into 剩余
-  // (their constraints are parallel, not additive).
-  const recurringRows = withNums.filter((p) => isRecurringQuotaRow(p));
+  // Monthly window (签到积分型): additive resource pack whose "expiry" is its
+  // reset day — joins the bar + the 余额 total when a pack family coexists.
+  const monthly = withNums.find(
+    (p) => isRecurringQuotaRow(p) && MONTHLY_RE.test(String(p.name || ""))
+  ) || null;
 
   // Non-recurring rows: same-base-name groups with ≥2 members are a pack
-  // family (aggregatable); singletons are stored-value pools (余额/代金券) —
-  // rendered as meter rows, never summed into 剩余 (用户拍板：储值类不聚合).
-  const nonRecurring = withNums.filter((p) => !isRecurringQuotaRow(p));
+  // family; singletons are stored-value pools (余额/代金券) → meter rows.
+  const nonRecurring = withNums.filter((p) => p !== monthly && !isRecurringQuotaRow(p));
   const groups = new Map();
   for (const p of nonRecurring) {
     const base = String(p.name || "").replace(/\s*\d+\s*$/, "").trim();
@@ -141,25 +158,35 @@ export default function QuotaPackBar({ packs = [], className }) {
       const totalNum = members.reduce((s, p) => s + p.totalNum, 0);
       const usedNum = members.reduce((s, p) => s + Number(p.used || 0), 0);
       const remainingNum = members.reduce((s, p) => s + p.remainingNum, 0);
-      const soonPack = members
-        .filter((p) => p.resetAt && p.remainingNum > 0)
-        .sort((a, b) => String(a.resetAt).localeCompare(String(b.resetAt)))[0] || null;
-      return { base, members, totalNum, usedNum, remainingNum, soonPack, live: members.filter((p) => p.remainingNum > 0 && p.totalNum > 0) };
+      return { base, members, totalNum, usedNum, remainingNum, live: members.filter((p) => p.remainingNum > 0 && p.totalNum > 0) };
     })
     .filter((f) => f.members.length >= 2 && f.totalNum > 0);
   const familyMemberSet = new Set(families.flatMap((f) => f.members));
   const singletonPools = nonRecurring.filter((p) => !familyMemberSet.has(p));
 
+  // Other recurring windows (每周/滚动…) without a family to join: meter rows.
+  const parallelWindows = withNums.filter(
+    (p) => isRecurringQuotaRow(p) && p !== monthly
+  );
+
+  // Additive pool (签到积分型): family packs + the monthly window.
+  const pool = monthly && families.length > 0
+    ? [...families.flatMap((f) => f.members), monthly]
+    : [];
+  const poolTotal = pool.reduce((s, p) => s + p.totalNum, 0);
+  const poolRemaining = pool.reduce((s, p) => s + p.remainingNum, 0);
+  // 最近一个（赠送包/资源包/月度）：earliest reset/expiry in the pool — a
+  // depleted monthly counts (its reset day is when it refills).
+  const nearest = pool
+    .filter((p) => p.resetAt)
+    .sort((a, b) => String(a.resetAt).localeCompare(String(b.resetAt)))[0] || null;
+
   const hasFamily = families.length > 0;
 
-  // Family bars: one per family (proportional segments + trailing used chunk).
-  const renderFamilyBar = (family) => {
-    const livePacks = family.live
-      .sort((a, b) => {
-        const ta = a.resetAt ? new Date(a.resetAt).getTime() : Infinity;
-        const tb = b.resetAt ? new Date(b.resetAt).getTime() : Infinity;
-        return ta - tb;
-      });
+  const renderPoolBar = (poolPacks, poolTotal) => {
+    const livePacks = poolPacks
+      .filter((p) => p.remainingNum > 0 && p.totalNum > 0)
+      .sort((a, b) => String(a.resetAt || "").localeCompare(String(b.resetAt || "")));
     let oneShotIdx = 0;
     const withAlpha = livePacks.map((p) => ({
       ...p,
@@ -172,7 +199,7 @@ export default function QuotaPackBar({ packs = [], className }) {
       segments = [
         ...kept,
         {
-          name: family.base,
+          name: translate("{count} more packs").replace("{count}", String(rest.length)),
           remainingNum: rest.reduce((s, p) => s + p.remainingNum, 0),
           totalNum: rest.reduce((s, p) => s + p.totalNum, 0),
           resetAt: rest[0]?.resetAt || null,
@@ -181,20 +208,20 @@ export default function QuotaPackBar({ packs = [], className }) {
         },
       ];
     }
-    const usedShare = family.totalNum > 0 ? family.usedNum / family.totalNum : 0;
+    const poolUsed = poolPacks.reduce((s, p) => s + Number(p.used || 0), 0);
+    const usedShare = poolTotal > 0 ? poolUsed / poolTotal : 0;
     return (
       <div
         className="flex w-full gap-[2px] overflow-hidden rounded-[3px] bg-black/10 dark:bg-white/10"
         style={{ height: "5px" }}
         role="img"
-        aria-label={translate("{name}: {count} packs, remaining {remaining} of {total}")
-          .replace("{name}", family.base)
-          .replace("{count}", String(family.live.length))
-          .replace("{remaining}", fmt(family.remainingNum))
-          .replace("{total}", fmt(family.totalNum))}
+        aria-label={translate("{count} packs, remaining {remaining} of {total}")
+          .replace("{count}", String(livePacks.length))
+          .replace("{remaining}", fmt(poolPacks.reduce((s, p) => s + p.remainingNum, 0)))
+          .replace("{total}", fmt(poolTotal))}
       >
         {segments.map((p, i) => {
-          const share = family.totalNum > 0 ? p.remainingNum / family.totalNum : 0;
+          const share = poolTotal > 0 ? p.remainingNum / poolTotal : 0;
           const expiresWord = p.recurring === true ? translate("resets") : translate("expires");
           return (
             <span
@@ -202,18 +229,18 @@ export default function QuotaPackBar({ packs = [], className }) {
               className={cn("block h-full min-w-[3px]", p.recurring === true ? "bg-sky-500" : "bg-green-500")}
               style={{ flex: `${share.toFixed(4)} 1 0`, opacity: p.alpha }}
               title={[
-                p.name || family.base,
+                p.name || translate("Quota package"),
                 `${translate("Remaining")} ${fmt(p.remainingNum)} / ${fmt(p.totalNum)}`,
                 p.resetAt ? `${expiresWord} ${shortDate(p.resetAt)}` : null,
               ].filter(Boolean).join("，")}
             />
           );
         })}
-        {family.usedNum > 0 && (
+        {poolUsed > 0 && (
           <span
             className="block h-full min-w-[3px] bg-black/20 dark:bg-white/20"
             style={{ flex: `${usedShare.toFixed(4)} 1 0` }}
-            title={`${translate("Used")} ${fmt(family.usedNum)}`}
+            title={`${translate("Used")} ${fmt(poolUsed)}`}
           />
         )}
       </div>
@@ -222,41 +249,36 @@ export default function QuotaPackBar({ packs = [], className }) {
 
   return (
     <div className={cn("min-w-0 space-y-2", className)}>
-      {/* 剩余 total: aggregatable family pools only (储值类 singletons excluded,
-          用户拍板) — and only when a family exists to aggregate. */}
-      {hasFamily && (
+      {/* 余额 total (+30% 大号) + 最近一个到期的包（相对时间） */}
+      {pool.length > 0 && (
         <div className="flex items-center justify-between gap-3">
           <span className="inline-flex items-center gap-1.5 tabular-nums">
             <span className="text-xs text-text-muted">{translate("Remaining")}</span>
             <CreditIcon className="size-[13px] text-primary" />
-            {/* 大号（约 +20%）：CreditDaddy 的主数字位，显眼优先 */}
-            <b className="text-base font-bold text-text">{fmt(families.reduce((s, f) => s + f.remainingNum, 0))}</b>
+            <b className="text-xl font-bold text-text">{fmt(poolRemaining)}</b>
           </span>
           <span className="inline-flex min-w-0 items-center gap-1 truncate text-xs tabular-nums text-text-muted">
-            {(() => {
-              const soon = families
-                .map((f) => f.soonPack)
-                .filter(Boolean)
-                .sort((a, b) => String(a.resetAt).localeCompare(String(b.resetAt)))[0] || null;
-              const totalAll = families.reduce((s, f) => s + f.totalNum, 0);
-              const totalUsed = families.reduce((s, f) => s + f.usedNum, 0);
-              if (!soon) return `${translate("Used")} ${fmt(totalUsed)} / ${fmt(totalAll)}`;
-              return translate("expires {date} · used {used} of {total}")
-                .replace("{date}", shortDate(soon.resetAt))
-                .replace("{used}", fmt(totalUsed))
-                .replace("{total}", fmt(totalAll));
-            })()}
+            {nearest && (
+              <>
+                {nearest.name} {translate("expires in {duration}").replace("{duration}", relativeUntil(nearest.resetAt) || "")}
+              </>
+            )}
           </span>
         </div>
       )}
-      {hasFamily && families.map((family) => <div key={family.base} className="min-w-0">{renderFamilyBar(family)}</div>)}
+      {/* Additive pool bar: family packs + monthly (月度并入聚合，不单独成行) */}
+      {pool.length > 0 && renderPoolBar(pool, poolTotal)}
 
-      {/* Recurring windows + stored-value singletons: always-visible meter
-          rows in the same visual language (they replace the old table rows
-          for these kinds). Original order preserved. */}
-      {withNums
-        .filter((p) => isRecurringQuotaRow(p) || singletonPools.includes(p))
-        .map((p, i) => <MeterRow key={`${p.name || "row"}-${i}`} row={p} />)}
+      {/* Stored-value singletons (余额/代金券): own meter rows, 不并入 余额 */}
+      {singletonPools.map((p, i) => (
+        <MeterRow key={`${p.name || "pool"}-${i}`} row={{ ...p, totalNum: p.totalNum, remainingNum: p.remainingNum }} />
+      ))}
+
+      {/* Parallel-constraint recurring windows without a family (每周/滚动…):
+          own meter rows — limits, not an additive pool. */}
+      {parallelWindows.map((p, i) => (
+        <MeterRow key={`${p.name || "win"}-${i}`} row={{ ...p, totalNum: p.totalNum, remainingNum: p.remainingNum }} />
+      ))}
     </div>
   );
 }

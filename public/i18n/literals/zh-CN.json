@@ -1896,5 +1896,6 @@
   "remaining {remaining} of {total}": "剩 {remaining} / {total}",
   "earliest {date}": "最早 {date} 到期",
   "{name}: {count} packs, remaining {remaining} of {total}": "{name}：{count} 个包，剩余 {remaining} / {total}",
-  "Per-pack details": "逐包明细"
+  "Per-pack details": "逐包明细",
+  "expires in {duration}": "{duration}后过期"
 }
