@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card, Button, Input } from "@/shared/components";
+import ThemeToggle from "@/shared/components/ThemeToggle";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
@@ -68,7 +69,11 @@ export default function LoginPage() {
   });
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg p-4">
+    <div className="min-h-screen flex items-center justify-center bg-bg p-4 relative">
+      {/* 主题三态切换（system/light/dark）：登录页默认跟随系统日/夜，白天不再黑屏 */}
+      <div className="absolute top-6 right-6 z-20">
+        <ThemeToggle variant="card" />
+      </div>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-primary mb-2">10Router</h1>
