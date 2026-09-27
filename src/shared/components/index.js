@@ -39,6 +39,7 @@ export { default as ProviderInfoCard } from "./ProviderInfoCard";
 export { default as InviteCodeChip } from "./InviteCodeChip";
 export { default as CapacityBadges } from "./CapacityBadges";
 export { default as SecurityBanner } from "./SecurityBanner";
+export { default as QuotaPackBar } from "./QuotaPackBar";
 
 // Layouts
 export * from "./layouts";

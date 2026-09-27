@@ -721,5 +721,10 @@
   "Theme: light": "主題：淺色",
   "Theme: dark": "主題：深色",
   "Quit MiMo Desktop and re-detect": "關閉 MiMo Desktop 並重新偵測",
-  "Closing MiMo Desktop...": "正在關閉 MiMo Desktop…"
+  "Closing MiMo Desktop...": "正在關閉 MiMo Desktop…",
+  "{count} more packs": "其餘 {count} 個包",
+  "{used} of {total} used across {count} packs": "{count} 個配額包：已用 {used} / 共 {total}",
+  "resets": "重置於",
+  "recurring window": "週期性配額",
+  "expires {date} · used {used} of {total}": "{date} 到期 · 已用 {used} / 共 {total}"
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import ProviderIcon from "@/shared/components/ProviderIcon";
+import QuotaPackBar from "@/shared/components/QuotaPackBar";
 import QuotaTable, { translateQuotaName } from "./QuotaTable";
 import Toggle from "@/shared/components/Toggle";
 import Tooltip from "@/shared/components/Tooltip";
@@ -1475,6 +1476,16 @@ export default function ProviderLimits() {
                   </div>
                 </div>
               </div>
+
+              {/* Multi-pack segmented bar (CreditDaddy visual language): one
+                  segment per quota pack, earliest-expiry first; the meta line
+                  carries the earliest live pack's remaining + reset date and
+                  the connection-wide used/total sums. */}
+              {!isLoading && !error && visibleQuotas.length > 0 && (
+                <div className="px-3 pt-2">
+                  <QuotaPackBar packs={visibleQuotas} />
+                </div>
+              )}
 
               <div className="px-2 py-1.5">
                 {isLoading ? (
