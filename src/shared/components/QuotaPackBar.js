@@ -269,6 +269,30 @@ export default function QuotaPackBar({ packs = [], className }) {
       {/* Additive pool bar: family packs + monthly (月度并入聚合，不单独成行) */}
       {pool.length > 0 && renderPoolBar(pool, poolTotal)}
 
+      {/* 资源包计数行：可用数 + 最近的绝对到期（xx 于 MM-DD 到期） */}
+      {pool.length > 0 && (() => {
+        const liveCount = pool.filter((p) => p.remainingNum > 0).length;
+        const soonestLive = pool
+          .filter((p) => p.resetAt && p.remainingNum > 0)
+          .sort((a, b) => String(a.resetAt).localeCompare(String(b.resetAt)))[0] || null;
+        return (
+          <div className="flex items-center justify-between gap-3 text-[11px] tabular-nums">
+            <span className="text-text-muted">
+              {translate("{count} resource packs").replace("{count}", String(liveCount))}
+              {" · "}
+              {translate("remaining {remaining} of {total}")
+                .replace("{remaining}", fmt(poolRemaining))
+                .replace("{total}", fmt(poolTotal))}
+            </span>
+            {soonestLive && (
+              <span className="text-text-muted">
+                {fmt(soonestLive.remainingNum)} {translate("expires on {date}").replace("{date}", shortDate(soonestLive.resetAt))}
+              </span>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Stored-value singletons (余额/代金券): own meter rows, 不并入 余额 */}
       {singletonPools.map((p, i) => (
         <MeterRow key={`${p.name || "pool"}-${i}`} row={{ ...p, totalNum: p.totalNum, remainingNum: p.remainingNum }} />
