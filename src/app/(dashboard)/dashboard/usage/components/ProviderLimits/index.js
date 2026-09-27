@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import ProviderIcon from "@/shared/components/ProviderIcon";
-import QuotaPackBar, { isAggregateQuotaRow } from "@/shared/components/QuotaPackBar";
+import QuotaPackBar, { isAggregateQuotaRow, isRecurringQuotaRow } from "@/shared/components/QuotaPackBar";
 import QuotaTable, { translateQuotaName } from "./QuotaTable";
 import Toggle from "@/shared/components/Toggle";
 import Tooltip from "@/shared/components/Tooltip";
@@ -1232,14 +1232,21 @@ export default function ProviderLimits() {
           // both surface as "Hidden:" chips and both can be restored individually.
           const visibleQuotas = filterQuotasByVisibility(conn.id, rawQuotas, quotaVisibility, conn.provider);
           const hiddenQuotaRows = getHiddenQuotaRows(conn.id, rawQuotas, quotaVisibility, conn.provider);
-          // 明细表行：聚合汇总行剔除（总积分本身就是聚合，与分段条重复）；
-          // 月度窗口置顶（展开时的第一行）。
+          // 逐包明细只承载「同族加量包」成员（≥2 同名非周期行）；订阅周期
+          // 窗口与储值类单池由 QuotaPackBar 以常显进度条行渲染，不再进明细。
           const nonAggregateQuotas = visibleQuotas.filter((r) => !isAggregateQuotaRow(r));
-          const monthlyRows = nonAggregateQuotas.filter((r) => /month|月/i.test(String(r.name || "")));
-          const tableQuotas = [
-            ...monthlyRows,
-            ...nonAggregateQuotas.filter((r) => !monthlyRows.includes(r)),
-          ];
+          const baseCounts = new Map();
+          for (const r of nonAggregateQuotas) {
+            if (isRecurringQuotaRow(r)) continue;
+            const base = String(r.name || "").replace(/\s*\d+\s*$/, "").trim();
+            if (!base) continue;
+            baseCounts.set(base, (baseCounts.get(base) || 0) + 1);
+          }
+          const tableQuotas = nonAggregateQuotas.filter((r) => {
+            if (isRecurringQuotaRow(r)) return false;
+            const base = String(r.name || "").replace(/\s*\d+\s*$/, "").trim();
+            return Boolean(base) && (baseCounts.get(base) || 0) >= 2;
+          });
 
           return (
             <Card
@@ -1448,7 +1455,7 @@ export default function ProviderLimits() {
                   carries the earliest live pack's remaining + reset date and
                   the connection-wide used/total sums. */}
               {!isLoading && !error && visibleQuotas.length > 0 && (
-                <div className="px-3 pt-2">
+                <div className="px-3 pt-2.5">
                   <QuotaPackBar packs={visibleQuotas} />
                 </div>
               )}
@@ -1491,7 +1498,7 @@ export default function ProviderLimits() {
                     )}
                     {/* 逐包明细默认收起（CreditDaddy 语言）：展开后月度置顶、
                         聚合汇总行已剔除。 */}
-                    {tableQuotas.length > 0 && (
+                    {tableQuotas.length >= 2 && (
                       <button
                         type="button"
                         onClick={() => toggleDetails(conn.id)}

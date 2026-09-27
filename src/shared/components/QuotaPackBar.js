@@ -5,22 +5,22 @@ import { translate } from "@/i18n/runtime";
 import { cn } from "@/shared/utils/cn";
 
 /**
- * Connection quota summary block — CreditDaddy account-card language:
+ * Connection quota block — CreditDaddy account-card language.
  *
- *   剩余 [✦✦ credit icon] 2,455.33    100 于 10-16 到期 · 已用 U / 共 T
+ *   剩余 [✦✦] 2,455.33      100 于 10-15 到期 · 已用 U / 共 T      ← only when a pack family exists
  *   [赠送包 family: proportional segments | trailing used chunk]
- *   滚动   ▓▓▓░  剩 2.91 / 3 · 09-30 重置      ← recurring window bar
- *   每周   ▓▓▓░  剩 5.91 / 6 · 09-30 重置      ← one bar per window
- *   月度   ▓▓▓░  剩 9.9 / 10 · 10-01 重置
+ *   滚动   ▓▓▓░  剩 2.91 / 3 · 09-30 重置                     ← meter row, always visible
+ *   每周   ▓▓▓░  剩 5.91 / 6 · 09-30 重置
+ *   余额   ▓▓▓░  剩 14.95 / 14.95 · 10-20 到期
  *
- * SEMANTICS (CreditDaddy-faithful): only same-family packs aggregate into a
- * segmented bar ("Bonus Pack 24/25…" — base name minus trailing index, ≥2
- * members). Subscription-recurring windows (Monthly/Weekly/滚动…) are NOT
- * part of the pack pool and never sum into 剩余 — each gets its own
- * progress-bar row in the same visual language. Aggregate summary rows
- * ("Total Points") are derived data and excluded everywhere. Other
- * different-relationship singletons (余额 vs 代金券) stay in the details
- * table — never charted into one number.
+ * SEMANTICS:
+ *  - Aggregate summaries ("Total Points") are derived data — excluded.
+ *  - Same-family packs (base name minus trailing index, ≥2 members) aggregate
+ *    into one segmented bar + the 剩余 total.
+ *  - Subscription-recurring windows (Monthly/每周/滚动…) and stored-value
+ *    singletons (余额/代金券) are DIFFERENT-relationship pools: never summed,
+ *    each renders as its own always-visible meter row (they replace the old
+ *    table rows for these kinds).
  */
 
 const MAX_SEGMENTS = 20;
@@ -62,16 +62,55 @@ function remainingOf(p) {
   return Math.max(0, Number(p.total || 0) - Number(p.used || 0));
 }
 
-/** Subscription-recurring window: explicit flag or a cycle-named row. */
-function isRecurringWindow(p) {
-  if (p.recurring === true) return true;
-  return RECURRING_NAME_RE.test(String(p.name || ""));
-}
-
 /** Aggregate/summary rows are derived data — never charted, never summed. */
 export function isAggregateQuotaRow(row) {
   return AGGREGATE_RE.test(String(row?.name || ""));
 }
+
+/** Subscription-recurring window: explicit flag or a cycle-named row. */
+export function isRecurringQuotaRow(row) {
+  if (row?.recurring === true) return true;
+  return RECURRING_NAME_RE.test(String(row?.name || ""));
+}
+
+/** One always-visible meter row (name | bar | 剩 X / Y · word date). */
+function MeterRow({ row }) {
+  const total = Number(row.totalNum || row.total || 0);
+  const remaining = Number(row.remainingNum ?? remainingOf(row));
+  const pct = total > 0 ? Math.min(100, (remaining / total) * 100) : 0;
+  const recurring = row.recurring === true || isRecurringQuotaRow(row);
+  const word = recurring ? translate("resets") : translate("expires");
+  return (
+    <div className="flex min-w-0 items-center gap-2 text-[11px] tabular-nums">
+      <span className="w-16 shrink-0 truncate text-text-muted">{row.name}</span>
+      <div className="h-[5px] min-w-0 flex-1 overflow-hidden rounded-[3px] bg-black/10 dark:bg-white/10">
+        <div
+          className={cn("h-full rounded-[3px]", recurring ? "bg-sky-500/80" : "bg-green-500/90")}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="shrink-0 text-text-muted">
+        {translate("remaining {remaining} of {total}")
+          .replace("{remaining}", fmt(remaining))
+          .replace("{total}", fmt(total))}
+        {row.resetAt ? ` · ${word} ${shortDate(row.resetAt)}` : ""}
+      </span>
+    </div>
+  );
+}
+
+MeterRow.propTypes = {
+  row: PropTypes.shape({
+    name: PropTypes.string,
+    used: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    total: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    remaining: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    remainingNum: PropTypes.number,
+    totalNum: PropTypes.number,
+    resetAt: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date)]),
+    recurring: PropTypes.bool,
+  }),
+};
 
 export default function QuotaPackBar({ packs = [], className }) {
   const rows = (packs || []).filter((p) => p && typeof p === "object" && !isAggregateQuotaRow(p));
@@ -82,16 +121,16 @@ export default function QuotaPackBar({ packs = [], className }) {
     return { ...p, totalNum, remainingNum: remainingOf(p) };
   });
 
-  // Recurring windows: excluded from 剩余 and from family bars (their rows
-  // stay readable in the collapsed details table) — parallel constraints, not
-  // an additive pool. 用户拍板：样式也隐藏。
-  const packRows = withNums.filter((p) => !isRecurringWindow(p));
+  // Recurring windows: always-visible meter rows — never summed into 剩余
+  // (their constraints are parallel, not additive).
+  const recurringRows = withNums.filter((p) => isRecurringQuotaRow(p));
 
-  // Family packs: base-name groups with ≥2 members. 储值类 singletons
-  // (余额/代金券/…) are NOT aggregated — different spending scopes, and a
-  // card without any family pool renders no top block at all.
+  // Non-recurring rows: same-base-name groups with ≥2 members are a pack
+  // family (aggregatable); singletons are stored-value pools (余额/代金券) —
+  // rendered as meter rows, never summed into 剩余 (用户拍板：储值类不聚合).
+  const nonRecurring = withNums.filter((p) => !isRecurringQuotaRow(p));
   const groups = new Map();
-  for (const p of packRows) {
+  for (const p of nonRecurring) {
     const base = String(p.name || "").replace(/\s*\d+\s*$/, "").trim();
     if (!base) continue;
     if (!groups.has(base)) groups.set(base, []);
@@ -103,122 +142,121 @@ export default function QuotaPackBar({ packs = [], className }) {
       const usedNum = members.reduce((s, p) => s + Number(p.used || 0), 0);
       const remainingNum = members.reduce((s, p) => s + p.remainingNum, 0);
       const soonPack = members
-        .filter((p) => p.recurring !== true && p.resetAt && p.remainingNum > 0)
+        .filter((p) => p.resetAt && p.remainingNum > 0)
         .sort((a, b) => String(a.resetAt).localeCompare(String(b.resetAt)))[0] || null;
       return { base, members, totalNum, usedNum, remainingNum, soonPack, live: members.filter((p) => p.remainingNum > 0 && p.totalNum > 0) };
     })
     .filter((f) => f.members.length >= 2 && f.totalNum > 0);
+  const familyMemberSet = new Set(families.flatMap((f) => f.members));
+  const singletonPools = nonRecurring.filter((p) => !familyMemberSet.has(p));
 
-  if (families.length === 0) return null;
+  const hasFamily = families.length > 0;
 
-  // 剩余 = the aggregatable family pools only (储值类 singletons excluded).
-  const totalRemaining = families.reduce((s, f) => s + f.remainingNum, 0);
-  const totalAll = families.reduce((s, f) => s + f.totalNum, 0);
-  const totalUsed = families.reduce((s, f) => s + f.usedNum, 0);
-
-  // Earliest live expiry across the family pools drives the right-hand meta.
-  const soon = families
-    .map((f) => f.soonPack)
-    .filter(Boolean)
-    .sort((a, b) => String(a.resetAt).localeCompare(String(b.resetAt)))[0] || null;
+  // Family bars: one per family (proportional segments + trailing used chunk).
+  const renderFamilyBar = (family) => {
+    const livePacks = family.live
+      .sort((a, b) => {
+        const ta = a.resetAt ? new Date(a.resetAt).getTime() : Infinity;
+        const tb = b.resetAt ? new Date(b.resetAt).getTime() : Infinity;
+        return ta - tb;
+      });
+    let oneShotIdx = 0;
+    const withAlpha = livePacks.map((p) => ({
+      ...p,
+      alpha: p.recurring === true ? 1 : Math.max(0.45, 0.85 - oneShotIdx++ * 0.05),
+    }));
+    let segments = withAlpha;
+    if (withAlpha.length > MAX_SEGMENTS) {
+      const kept = withAlpha.slice(0, MAX_SEGMENTS - 1);
+      const rest = withAlpha.slice(MAX_SEGMENTS - 1);
+      segments = [
+        ...kept,
+        {
+          name: family.base,
+          remainingNum: rest.reduce((s, p) => s + p.remainingNum, 0),
+          totalNum: rest.reduce((s, p) => s + p.totalNum, 0),
+          resetAt: rest[0]?.resetAt || null,
+          recurring: false,
+          alpha: 0.6,
+        },
+      ];
+    }
+    const usedShare = family.totalNum > 0 ? family.usedNum / family.totalNum : 0;
+    return (
+      <div
+        className="flex w-full gap-[2px] overflow-hidden rounded-[3px] bg-black/10 dark:bg-white/10"
+        style={{ height: "5px" }}
+        role="img"
+        aria-label={translate("{name}: {count} packs, remaining {remaining} of {total}")
+          .replace("{name}", family.base)
+          .replace("{count}", String(family.live.length))
+          .replace("{remaining}", fmt(family.remainingNum))
+          .replace("{total}", fmt(family.totalNum))}
+      >
+        {segments.map((p, i) => {
+          const share = family.totalNum > 0 ? p.remainingNum / family.totalNum : 0;
+          const expiresWord = p.recurring === true ? translate("resets") : translate("expires");
+          return (
+            <span
+              key={`${p.name || "pack"}-${i}`}
+              className={cn("block h-full min-w-[3px]", p.recurring === true ? "bg-sky-500" : "bg-green-500")}
+              style={{ flex: `${share.toFixed(4)} 1 0`, opacity: p.alpha }}
+              title={[
+                p.name || family.base,
+                `${translate("Remaining")} ${fmt(p.remainingNum)} / ${fmt(p.totalNum)}`,
+                p.resetAt ? `${expiresWord} ${shortDate(p.resetAt)}` : null,
+              ].filter(Boolean).join("，")}
+            />
+          );
+        })}
+        {family.usedNum > 0 && (
+          <span
+            className="block h-full min-w-[3px] bg-black/20 dark:bg-white/20"
+            style={{ flex: `${usedShare.toFixed(4)} 1 0` }}
+            title={`${translate("Used")} ${fmt(family.usedNum)}`}
+          />
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className={cn("min-w-0 space-y-2", className)}>
-      {/* Line 1: account remaining (left) + earliest pack expiry / used / total */}
-      <div className="flex items-center justify-between gap-3 text-xs">
-        <span className="inline-flex items-center gap-1.5 tabular-nums">
-          <span className="text-text-muted">{translate("Remaining")}</span>
-          <CreditIcon className="size-[13px] text-primary" />
-          <b className="font-bold text-text">{fmt(totalRemaining)}</b>
-        </span>
-        <span className="inline-flex min-w-0 items-center gap-1 truncate tabular-nums text-text-muted">
-          {soon && (
-            <>
-              {fmt(soon.remainingNum)} {translate("expires {date} · used {used} of {total}")
+      {/* 剩余 total: aggregatable family pools only (储值类 singletons excluded,
+          用户拍板) — and only when a family exists to aggregate. */}
+      {hasFamily && (
+        <div className="flex items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-1.5 tabular-nums">
+            <span className="text-xs text-text-muted">{translate("Remaining")}</span>
+            <CreditIcon className="size-[13px] text-primary" />
+            {/* 大号（约 +20%）：CreditDaddy 的主数字位，显眼优先 */}
+            <b className="text-base font-bold text-text">{fmt(families.reduce((s, f) => s + f.remainingNum, 0))}</b>
+          </span>
+          <span className="inline-flex min-w-0 items-center gap-1 truncate text-xs tabular-nums text-text-muted">
+            {(() => {
+              const soon = families
+                .map((f) => f.soonPack)
+                .filter(Boolean)
+                .sort((a, b) => String(a.resetAt).localeCompare(String(b.resetAt)))[0] || null;
+              const totalAll = families.reduce((s, f) => s + f.totalNum, 0);
+              const totalUsed = families.reduce((s, f) => s + f.usedNum, 0);
+              if (!soon) return `${translate("Used")} ${fmt(totalUsed)} / ${fmt(totalAll)}`;
+              return translate("expires {date} · used {used} of {total}")
                 .replace("{date}", shortDate(soon.resetAt))
                 .replace("{used}", fmt(totalUsed))
-                .replace("{total}", fmt(totalAll))}
-            </>
-          )}
-          {!soon && `${translate("Used")} ${fmt(totalUsed)} / ${fmt(totalAll)}`}
-        </span>
-      </div>
+                .replace("{total}", fmt(totalAll));
+            })()}
+          </span>
+        </div>
+      )}
+      {hasFamily && families.map((family) => <div key={family.base} className="min-w-0">{renderFamilyBar(family)}</div>)}
 
-      {/* Family bars: one per same-name pack group (赠送包 / Bonus Pack…) */}
-      {families.map((family) => {
-        const livePacks = family.live
-          .sort((a, b) => {
-            const ta = a.resetAt ? new Date(a.resetAt).getTime() : Infinity;
-            const tb = b.resetAt ? new Date(b.resetAt).getTime() : Infinity;
-            return ta - tb;
-          });
-        let oneShotIdx = 0;
-        const withAlpha = livePacks.map((p) => ({
-          ...p,
-          alpha: p.recurring === true ? 1 : Math.max(0.45, 0.85 - oneShotIdx++ * 0.05),
-        }));
-        let segments = withAlpha;
-        if (withAlpha.length > MAX_SEGMENTS) {
-          const kept = withAlpha.slice(0, MAX_SEGMENTS - 1);
-          const rest = withAlpha.slice(MAX_SEGMENTS - 1);
-          segments = [
-            ...kept,
-            {
-              name: family.base,
-              remainingNum: rest.reduce((s, p) => s + p.remainingNum, 0),
-              totalNum: rest.reduce((s, p) => s + p.totalNum, 0),
-              resetAt: rest[0]?.resetAt || null,
-              recurring: false,
-              alpha: 0.6,
-            },
-          ];
-        }
-        const usedShare = family.totalNum > 0 ? family.usedNum / family.totalNum : 0;
-        return (
-          <div key={family.base} className="min-w-0">
-            <div
-              className="flex w-full gap-[2px] overflow-hidden rounded-[3px] bg-black/10 dark:bg-white/10"
-              style={{ height: "5px" }}
-              role="img"
-              aria-label={translate("{name}: {count} packs, remaining {remaining} of {total}")
-                .replace("{name}", family.base)
-                .replace("{count}", String(family.live.length))
-                .replace("{remaining}", fmt(family.remainingNum))
-                .replace("{total}", fmt(family.totalNum))}
-            >
-              {segments.map((p, i) => {
-                const share = family.totalNum > 0 ? p.remainingNum / family.totalNum : 0;
-                const expiresWord = p.recurring === true ? translate("resets") : translate("expires");
-                return (
-                  <span
-                    key={`${p.name || "pack"}-${i}`}
-                    className={cn("block h-full min-w-[3px]", p.recurring === true ? "bg-sky-500" : "bg-green-500")}
-                    style={{ flex: `${share.toFixed(4)} 1 0`, opacity: p.alpha }}
-                    title={[
-                      p.name || family.base,
-                      `${translate("Remaining")} ${fmt(p.remainingNum)} / ${fmt(p.totalNum)}`,
-                      p.resetAt ? `${expiresWord} ${shortDate(p.resetAt)}` : null,
-                    ].filter(Boolean).join("，")}
-                  />
-                );
-              })}
-              {family.usedNum > 0 && (
-                <span
-                  className="block h-full min-w-[3px] bg-black/20 dark:bg-white/20"
-                  style={{ flex: `${usedShare.toFixed(4)} 1 0` }}
-                  title={`${translate("Used")} ${fmt(family.usedNum)}`}
-                />
-              )}
-            </div>
-          </div>
-        );
-      })}
-
-      {/* Recurring windows (每月/每周/滚动…) are intentionally NOT rendered
-          here (用户拍板：样式隐藏) — they stay readable in the collapsed
-          per-pack details table when expanded. They are also excluded from
-          剩余 and from family bars: subscription windows are parallel
-          constraints, not an additive pool. */}
+      {/* Recurring windows + stored-value singletons: always-visible meter
+          rows in the same visual language (they replace the old table rows
+          for these kinds). Original order preserved. */}
+      {withNums
+        .filter((p) => isRecurringQuotaRow(p) || singletonPools.includes(p))
+        .map((p, i) => <MeterRow key={`${p.name || "row"}-${i}`} row={p} />)}
     </div>
   );
 }
