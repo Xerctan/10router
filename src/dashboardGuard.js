@@ -65,6 +65,8 @@ const ALWAYS_PROTECTED = [
   "/api/version/update",
   "/api/oauth/cursor/auto-import",
   "/api/oauth/kiro/auto-import",
+  "/api/oauth/xiaomi-mimo/desktop-status",
+  "/api/oauth/xiaomi-mimo/desktop-kill",
   // Reads MiMo Desktop's local auth.json and returns the full sk- key —
   // credential-bearing like cursor/kiro auto-import, so it must never slip
   // through the requireLogin=false catch-all.
@@ -112,8 +114,12 @@ const LOCAL_ONLY_PATHS = [
   "/api/oauth/cursor/auto-import",
   "/api/oauth/kiro/auto-import",
   // Host-secret reader (MiMo Desktop auth.json) — remote/LAN calls must never
-  // reach it, matching the cursor/kiro auto-import siblings.
+  // reach it, matching the cursor/kiro auto-import siblings. desktop-status /
+  // desktop-kill join them: process control on the host machine is exactly the
+  // "spawn-capable" class this list exists for.
   "/api/oauth/xiaomi-mimo/auto-import",
+  "/api/oauth/xiaomi-mimo/desktop-status",
+  "/api/oauth/xiaomi-mimo/desktop-kill",
   "/api/auth/reset-password",
   "/api/headroom/start",
   "/api/headroom/stop",
@@ -257,6 +263,26 @@ export async function proxy(request) {
         { status: 403 },
       );
     }
+  }
+
+  // Xiaomi Desktop credential detection + process control, from the machine
+  // itself. auto-import is credential-BEARING (returns the Desktop sk- key) and
+  // sits in BOTH the local-only and always-protected lists, so it must never
+  // slip through the requireLogin=false catch-all — but those same gates lock
+  // the LOCAL operator (no JWT on a免密 deployment) out of detecting their own
+  // Desktop, which is what the modal's whole flow needs. This branch must sit
+  // ABOVE the local-only gate (which answers 403 to remote and would otherwise
+  // run first); same-machine requests pass, remote/LAN/CSRF fall through to
+  // the gates' 403/401. desktop-status/desktop-kill ride along (status is
+  // harmless; kill only ever targets this machine's own Desktop).
+  if (
+    (pathname === "/api/oauth/xiaomi-mimo/auto-import" ||
+      pathname === "/api/oauth/xiaomi-mimo/desktop-status" ||
+      (pathname === "/api/oauth/xiaomi-mimo/desktop-kill" && request.method === "POST")) &&
+    isLocalRequest(request) &&
+    (await isAuthenticated(request))
+  ) {
+    return NextResponse.next();
   }
 
   // Local-only gate for spawn-capable / host-secret routes.

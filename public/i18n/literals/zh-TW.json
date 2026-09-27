@@ -719,5 +719,7 @@
   "Backup downloaded, but {count} connection(s) could not be decrypted — their credentials are stored as ciphertext and can only be restored with the original key.": "備份已下載，但有 {count} 個連線無法解密 —— 其憑證以密文形式保存，只有用原始金鑰才能還原。",
   "Theme: system": "主題：跟隨系統",
   "Theme: light": "主題：淺色",
-  "Theme: dark": "主題：深色"
+  "Theme: dark": "主題：深色",
+  "Quit MiMo Desktop and re-detect": "關閉 MiMo Desktop 並重新偵測",
+  "Closing MiMo Desktop...": "正在關閉 MiMo Desktop…"
 }

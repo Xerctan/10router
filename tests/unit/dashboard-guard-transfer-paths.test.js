@@ -119,3 +119,26 @@ describe("audit: guard behavior for new sensitive paths (requireLogin=false)", (
     expect(local).toBe(mocks.nextResponse); // same posture as single-item PUT /api/models/custom
   });
 });
+
+describe("audit: xiaomi desktop detection paths (same-machine bypass)", () => {
+  it("auto-import: remote 403 (local-only); local on a requireLogin=false dashboard passes", async () => {
+    expect((await proxy(req("/api/oauth/xiaomi-mimo/auto-import", "10.0.0.5"))).status).toBe(403);
+    expect(await proxy(req("/api/oauth/xiaomi-mimo/auto-import", "127.0.0.1"))).toBe(mocks.nextResponse);
+    const csrf = await proxy(req("/api/oauth/xiaomi-mimo/auto-import", "127.0.0.1", { origin: "https://evil.example" }));
+    expect(csrf.status).toBe(403);
+  });
+
+  it("desktop status/kill: local passes; CSRF and remote stay 403 (local-only)", async () => {
+    expect(await proxy(req("/api/oauth/xiaomi-mimo/desktop-status", "127.0.0.1"))).toBe(mocks.nextResponse);
+    expect(await proxy(req("/api/oauth/xiaomi-mimo/desktop-kill", "127.0.0.1"))).toBe(mocks.nextResponse);
+    const csrfKill = await proxy(req("/api/oauth/xiaomi-mimo/desktop-kill", "127.0.0.1", { origin: "https://evil.example" }));
+    expect(csrfKill.status).toBe(403);
+    expect((await proxy(req("/api/oauth/xiaomi-mimo/desktop-kill", "10.0.0.5"))).status).toBe(403);
+  });
+
+  it("desktop detection: requireLogin=true without a session stays 401", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: true });
+    expect((await proxy(req("/api/oauth/xiaomi-mimo/auto-import", "127.0.0.1"))).status).toBe(403);
+    expect((await proxy(req("/api/oauth/xiaomi-mimo/desktop-kill", "127.0.0.1"))).status).toBe(403);
+  });
+});

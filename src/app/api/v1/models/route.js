@@ -14,6 +14,12 @@ import { resolveKiroModels } from "open-sse/services/kiroModels.js";
 import { resolveKimchiModels } from "open-sse/services/kimchiModels.js";
 import { resolveQoderModels } from "open-sse/services/qoderModels.js";
 import { resolveCopilotModels } from "open-sse/services/copilotModels.js";
+
+// This GET reads live connection/registry state — without it Next may serve a
+// cached render, and a freshly added connection would not appear in the model
+// list until a full server restart (observed 2026-09-27: imported ocg stayed
+// invisible while /v1/models kept serving the pre-import render).
+export const dynamic = "force-dynamic";
 import { resolveClinepassModels } from "open-sse/services/clinepassModels.js";
 import { resolveClineModels } from "open-sse/services/clineModels.js";
 import { resolveGrokCliModels } from "open-sse/services/grokCliModels.js";

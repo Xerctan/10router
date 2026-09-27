@@ -36,6 +36,10 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
   const effectivePhase = isDesktopCard ? phase : "cloud";
   const [detectResult, setDetectResult] = useState(null);
   const [desktopLocked, setDesktopLocked] = useState(false);
+  // "Quit MiMo Desktop" button (locked state): force-closes the local Desktop
+  // process so the cookie-store lock releases; the existing silent re-check
+  // poll then flips the modal once the session becomes readable.
+  const [desktopClosing, setDesktopClosing] = useState(false);
   const [error, setError] = useState(null);
   const [errorCode, setErrorCode] = useState(null);
   const [errorDetails, setErrorDetails] = useState("");
@@ -55,6 +59,7 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
     setManualUrl(null);
     setAuthCode("");
     setDesktopLocked(false);
+    setDesktopClosing(false);
 
     const res = await fetch(`/api/oauth/xiaomi-mimo/auto-import`);
     const data = await res.json();
@@ -171,6 +176,20 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
       setPhase("found");
       setError(err.message);
     }
+  };
+
+  // Force-close the local MiMo Desktop process (tree-kill) so the exclusive
+  // cookie-store lock releases, then re-run detection. The modal's silent
+  // re-check poll also covers this path; the button is the explicit trigger.
+  const handleKillDesktop = async () => {
+    setDesktopClosing(true);
+    try {
+      await fetch("/api/oauth/xiaomi-mimo/desktop-kill", { method: "POST" });
+    } catch { /* network blip — the re-detect below reports the real state */ }
+    setTimeout(() => {
+      setDesktopClosing(false);
+      detect().catch(() => setPhase("not-found"));
+    }, 1500);
   };
 
   // Start browser OAuth fallback
@@ -497,9 +516,23 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
               onClick={() => { detect().catch(() => setPhase("not-found")); }}
               variant="outline"
               fullWidth
+              disabled={desktopClosing}
             >
               {translate("Retry Local Detect")}
             </Button>
+            {desktopLocked && (
+              <Button
+                onClick={handleKillDesktop}
+                variant="outline"
+                fullWidth
+                disabled={desktopClosing}
+                className="mt-2"
+              >
+                {desktopClosing
+                  ? translate("Closing MiMo Desktop...")
+                  : translate("Quit MiMo Desktop and re-detect")}
+              </Button>
+            )}
           </>
         )}
       </div>
