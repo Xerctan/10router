@@ -222,7 +222,7 @@ function stripAll(body) {
 }
 
 // Apply unified thinking config to body in the resolved provider-native format.
-function applyFormat(fmt, body, cfg, caps, supportedLevels) {
+function applyFormat(fmt, body, cfg, caps, supportedLevels, targetFormat = null, provider = null) {
   const none = cfg.mode === "none";
   const canDisable = caps.thinkingCanDisable !== false;
   // Model cannot disable thinking → clamp "none" to minimal effort instead.
@@ -230,9 +230,23 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels) {
 
   switch (fmt) {
     case "openai": {
-      if (none && canDisable) { body.reasoning_effort = "none"; break; }
+      // Responses wire format carries the effort on `reasoning.effort`;
+      // `reasoning_effort` is Chat-Completions-only and Responses upstreams
+      // reject it with 400 unsupported_parameter ("moved to 'reasoning.effort'").
+      // applyThinking runs AFTER the openai→responses translator, so the field
+      // must be written in the target's native shape here — EXCEPT for the
+      // codex provider: its executor owns the final conversion
+      // (normalizeReasoningEffort + reasoning.summary re-attachment) and feeds
+      // on reasoning_effort.
+      const responsesFamily = (targetFormat === "openai-responses" ||
+        targetFormat === "openai-response") && provider !== "codex";
+      const setEffort = (v) => {
+        if (responsesFamily) body.reasoning = { ...(body.reasoning || {}), effort: v };
+        else body.reasoning_effort = v;
+      };
+      if (none && canDisable) { setEffort("none"); break; }
       const level = toLevel(eff);
-      if (level) body.reasoning_effort = normalizeOpenAILevel(level, supportedLevels);
+      if (level) setEffort(normalizeOpenAILevel(level, supportedLevels));
       break;
     }
     case "claude-adaptive": {
@@ -351,6 +365,6 @@ export function applyThinking(targetFormat, model, body, provider = null, intent
   const fmt = resolveFormat(targetFormat, cleanModel, provider);
   const supportedLevels = getThinkingLevels(provider, cleanModel);
   stripAll(body);
-  applyFormat(fmt, body, cfg, caps, supportedLevels);
+  applyFormat(fmt, body, cfg, caps, supportedLevels, targetFormat, provider);
   return body;
 }

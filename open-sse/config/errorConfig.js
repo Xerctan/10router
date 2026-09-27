@@ -41,6 +41,11 @@ export const TRANSIENT_COOLDOWN_MS = 30 * 1000;
 // Hard cap for provider-reported rate limit cooldown (e.g. codex resets_at can be 5-6h)
 export const MAX_RATE_LIMIT_COOLDOWN_MS = 30 * 60 * 1000;
 
+// Google-style quota windows (Antigravity 429 RESOURCE_EXHAUSTED with
+// quotaResetDelay) are the account's REAL reset clock — hours by design.
+// Honoring them needs a bigger ceiling than the generic 30min hint cap.
+export const MAX_QUOTA_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
 // Cooldown durations (ms)
 const COOLDOWN = {
   long: 2 * 60 * 1000,

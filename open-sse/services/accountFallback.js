@@ -1,4 +1,4 @@
-import { ERROR_RULES, BACKOFF_CONFIG, TRANSIENT_COOLDOWN_MS, CHANNEL_BLOCK_MS, CHANNEL_BLOCK_ESCALATE_WINDOW_MS, MAX_RATE_LIMIT_COOLDOWN_MS } from "../config/errorConfig.js";
+import { ERROR_RULES, BACKOFF_CONFIG, TRANSIENT_COOLDOWN_MS, CHANNEL_BLOCK_MS, CHANNEL_BLOCK_ESCALATE_WINDOW_MS, MAX_RATE_LIMIT_COOLDOWN_MS, MAX_QUOTA_COOLDOWN_MS } from "../config/errorConfig.js";
 
 // 4xx statuses that DO describe the credential / the account's standing, so they
 // keep their cooldown rules. Everything else in 400–499 describes the request
@@ -44,6 +44,46 @@ export function extractRetrySeconds(text) {
   return null;
 }
 
+// Google-style quota payloads (Antigravity / Gemini Code Assist 429
+// RESOURCE_EXHAUSTED): "quotaResetDelay":"4h32m30.523936355s" (plus the
+// proto "retryDelay":"16350.52s" and the human "Resets in 4h32m30s"). This is
+// the account's REAL window reset — hours by design — not a per-minute cap,
+// so it must not be flattened into the exponential-backoff guess.
+const GOOGLE_DURATION_RE = /^(?:(\d+(?:\.\d+)?)h)?(?:(\d+(?:\.\d+)?)m)?(?:(\d+(?:\.\d+)?)s)?$/i;
+
+/** Parse a Google duration string ("4h32m30.523936355s") into seconds. */
+export function googleDurationToSeconds(str) {
+  const m = GOOGLE_DURATION_RE.exec(String(str || "").trim());
+  if (!m || (!m[1] && !m[2] && !m[3])) return null;
+  return Math.round(parseFloat(m[1] || 0) * 3600 + parseFloat(m[2] || 0) * 60 + parseFloat(m[3] || 0));
+}
+
+/**
+ * Extract the quota-window reset duration from an upstream error payload.
+ * @returns {number|null} milliseconds until the quota resets, or null
+ */
+export function extractQuotaResetMs(text) {
+  const s = typeof text === "string" ? text : "";
+  if (!s) return null;
+  const delay = /"quotaResetDelay"\s*:\s*"([^"]+)"/.exec(s)
+    || /"retryDelay"\s*:\s*"([^"]+)"/.exec(s)
+    || /\bResets in\s+([0-9hms.]+)/i.exec(s);
+  if (delay) {
+    const sec = googleDurationToSeconds(delay[1].replace(/[.\s]+$/, ""));
+    if (sec !== null && sec > 0) return sec * 1000;
+  }
+  // Absolute timestamp without a delay (rare shapes) — derive from now.
+  const ts = /"quotaResetTimeStamp"\s*:\s*"([^"]+)"/.exec(s);
+  if (ts) {
+    const t = Date.parse(ts[1]);
+    if (Number.isFinite(t)) {
+      const ms = t - Date.now();
+      if (ms > 0) return ms;
+    }
+  }
+  return null;
+}
+
 /**
  * Cooldown for a `backoff: true` rule — exponential, but never shorter than an
  * explicit wait the upstream just told us about.
@@ -52,6 +92,14 @@ export function extractRetrySeconds(text) {
  * @returns {number} cooldown ms (capped by MAX_RATE_LIMIT_COOLDOWN_MS)
  */
 function backoffCooldown(errorText, backoffLevel) {
+  // An explicit Google quota window (429 RESOURCE_EXHAUSTED with
+  // quotaResetDelay/quotaResetTimeStamp) is the upstream's authoritative reset
+  // clock — hours by design. Honor it beyond the generic 30min hint cap
+  // (bounded by MAX_QUOTA_COOLDOWN_MS), else the backoff keeps burning requests
+  // against an account that cannot recover for hours — and the client-facing
+  // "reset after" shows a meaningless 1m instead of the real window.
+  const quotaMs = extractQuotaResetMs(errorText);
+  if (quotaMs !== null) return Math.min(quotaMs, MAX_QUOTA_COOLDOWN_MS);
   const newLevel = Math.min(backoffLevel + 1, BACKOFF_CONFIG.maxLevel);
   const backoffMs = getQuotaCooldown(newLevel);
   const hintSec = extractRetrySeconds(errorText);
@@ -327,6 +375,25 @@ export function isRateLimitText(message) {
  */
 export function withRateLimitHint(message, provider) {
   if (!isRateLimitText(message)) return message;
+  // Quota-window exhaustion (Google RESOURCE_EXHAUSTED / "Individual quota
+  // reached") is a different beast from per-minute throttling: the account's
+  // whole window is spent and the payload carries the exact reset clock. Say
+  // so instead of the generic "稍候重试" — the user is otherwise told to retry
+  // in vain for hours.
+  const quotaMs = extractQuotaResetMs(message);
+  if (quotaMs !== null || /Individual quota reached|QUOTA_EXHAUSTED|RESOURCE_EXHAUSTED/i.test(message)) {
+    let resetAt = "";
+    if (quotaMs !== null) {
+      try {
+        resetAt = new Date(Date.now() + quotaMs).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+      } catch { resetAt = ""; }
+    }
+    return (
+      `${message}\n\n` +
+      `提示：该账号的本阶段额度已用尽（非故障、非账号异常），系统已按上游重置时间自动冷却` +
+      `${resetAt ? `，约 ${resetAt} 自动恢复` : ""}；期间请切换其他模型或渠道。`
+    );
+  }
   const note = RATE_LIMIT_PROVIDER_NOTE[provider] ? ` ${RATE_LIMIT_PROVIDER_NOTE[provider]}` : "";
   return (
     `${message}\n\n` +
