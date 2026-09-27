@@ -112,6 +112,10 @@ export async function POST(request) {
     // (the executor uses the session cookie for Preview models, and cloud models
     // will report a clear auth error until the user adds an sk- key).
     const accessToken = key || `mimo-desktop-session${session.userId ? `-${session.userId}` : ""}`;
+    // A captured session IS a verified credential: the import only succeeds when
+    // a live passToken was read from a signed-in Desktop, so the "untested" badge
+    // (which implies a validation step this card does not have) would be noise.
+    const sessionOk = Boolean(session.passToken);
 
     // Dedup: if a connection with the same uid or the same key already exists, update it
     const { getProviderConnections, updateProviderConnection } = await import("@/models");
@@ -165,7 +169,7 @@ export async function POST(request) {
             : {}),
           modelCount: modelCount || existingPsd.modelCount,
         },
-        testStatus: validated ? "active" : existing.testStatus,
+        testStatus: validated || sessionOk ? "active" : existing.testStatus,
         // Re-imported key/session supersedes any stored failure text.
         resetErrorState: true,
       });
@@ -201,7 +205,7 @@ export async function POST(request) {
         modelCount,
         ...sessionData,
       },
-      testStatus: validated ? "active" : "untested",
+      testStatus: validated || sessionOk ? "active" : "untested",
     });
 
     return NextResponse.json({
