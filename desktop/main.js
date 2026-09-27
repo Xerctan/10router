@@ -622,19 +622,25 @@ function createWindow() {
     }
     const firstUrl = pendingUrl || DASHBOARD_URL;
     pendingUrl = null;
+    // 窗口底色跟随系统日/夜(Windows 个性化 / macOS 外观),与页面内联引导脚本
+    // 的首帧配色一致,避免亮色系统下开窗先闪黑;系统切换时实时跟随。
+    const shellBg = () => (nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#FDFAF6');
     win = new BrowserWindow({
         width: 1380,
         height: 880,
         title: '10Router',
         autoHideMenuBar: true,
         icon: path.join(__dirname, 'icon.ico'),
-        backgroundColor: '#0a0a0a',
+        backgroundColor: shellBg(),
         show: false,
         webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,
             sandbox: true,
         },
+    });
+    nativeTheme.on('updated', () => {
+        try { if (win && !win.isDestroyed()) win.setBackgroundColor(shellBg()); } catch { /* 非致命 */ }
     });
     win.once('ready-to-show', () => win.show());
     attachWindowOpenRouting(win.webContents, null);
