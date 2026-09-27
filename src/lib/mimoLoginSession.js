@@ -636,6 +636,16 @@ export async function proxyAccountRequest(sess, req, origin) {
     break;
   }
 
+  // 诊断：每个被代理的账号请求落一行（方法/路径/状态/响应片段），排 10025/二维码
+  // 获取失败时看真实上游返回。JSON 或非 2xx 都记；日志量低频（仅登录会话内）。
+  try {
+    const ct = res.headers.get("content-type") || "";
+    if (res.status >= 400 || /json|javascript/i.test(ct)) {
+      const snippet = (await res.clone().text().catch(() => "")).replace(/\s+/g, " ").slice(0, 240);
+      console.log(`${new Date().toISOString().slice(11, 23)} [mimo-login] proxied ${req.method} ${u.pathname}${u.search} -> ${res.status} ${ct.slice(0, 40)} | ${snippet}`);
+    }
+  } catch { /* 诊断日志绝不影响主链路 */ }
+
   return buildBrowserResponse(sess, res, origin, u.pathname, current);
 }
 
