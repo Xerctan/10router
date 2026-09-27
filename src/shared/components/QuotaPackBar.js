@@ -60,19 +60,6 @@ function shortDate(iso) {
   return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** "2 天 23 小时" style relative countdown (CreditDaddy's rel-reset wording). */
-function relativeUntil(iso) {
-  const ms = new Date(iso).getTime() - Date.now();
-  if (!Number.isFinite(ms) || ms <= 0) return null;
-  const totalMin = Math.floor(ms / 60000);
-  const d = Math.floor(totalMin / 1440);
-  const h = Math.floor((totalMin % 1440) / 60);
-  const m = totalMin % 60;
-  if (d > 0) return `${d} 天 ${h} 小时`;
-  if (h > 0) return `${h} 小时 ${m} 分钟`;
-  return `${Math.max(1, m)} 分钟`;
-}
-
 function remainingOf(p) {
   if (p.remaining !== undefined && p.remaining !== null) return Math.max(0, Number(p.remaining));
   return Math.max(0, Number(p.total || 0) - Number(p.used || 0));
@@ -175,11 +162,6 @@ export default function QuotaPackBar({ packs = [], className }) {
     : [];
   const poolTotal = pool.reduce((s, p) => s + p.totalNum, 0);
   const poolRemaining = pool.reduce((s, p) => s + p.remainingNum, 0);
-  // 最近一个（赠送包/资源包/月度）：earliest reset/expiry in the pool — a
-  // depleted monthly counts (its reset day is when it refills).
-  const nearest = pool
-    .filter((p) => p.resetAt)
-    .sort((a, b) => String(a.resetAt).localeCompare(String(b.resetAt)))[0] || null;
 
   const hasFamily = families.length > 0;
 
@@ -251,18 +233,11 @@ export default function QuotaPackBar({ packs = [], className }) {
     <div className={cn("min-w-0 space-y-2", className)}>
       {/* 余额 total (+30% 大号) + 最近一个到期的包（相对时间） */}
       {pool.length > 0 && (
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-1.5 tabular-nums">
             <span className="text-xs text-text-muted">{translate("Remaining")}</span>
             <CreditIcon className="size-[13px] text-primary" />
             <b className="text-xl font-bold text-text">{fmt(poolRemaining)}</b>
-          </span>
-          <span className="inline-flex min-w-0 items-center gap-1 truncate text-xs tabular-nums text-text-muted">
-            {nearest && (
-              <>
-                {nearest.name} {translate("expires in {duration}").replace("{duration}", relativeUntil(nearest.resetAt) || "")}
-              </>
-            )}
           </span>
         </div>
       )}
