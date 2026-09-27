@@ -729,5 +729,8 @@
   "expires {date} · used {used} of {total}": " 於 {date} 到期 · 已用 {used} / 共 {total}",
   "Used": "已用",
   "expires": "到期",
-  "Remaining": "剩餘"
+  "Remaining": "剩餘",
+  "remaining {remaining} of {total}": "剩 {remaining} / {total}",
+  "earliest {date}": "最早 {date} 到期",
+  "{name}: {count} packs, remaining {remaining} of {total}": "{name}：{count} 個包，剩餘 {remaining} / {total}"
 }
