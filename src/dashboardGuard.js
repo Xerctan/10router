@@ -72,8 +72,8 @@ const ALWAYS_PROTECTED = [
   // OAuth credentials transfer: export dumps live tokens (encrypted by a
   // user passphrase AFTER the guard), import writes them. Even with
   // requireLogin=false these must demand credentials (export re-checks the
-  // dashboard password inside). Only exception: a same-machine import, see the
-  // transfer-import branch in proxy().
+  // dashboard password inside). Exception: same-machine import AND export,
+  // see the transfer branch in proxy() — the route keeps its own re-auth.
   "/api/oauth/transfer/",
 ];
 
@@ -278,16 +278,18 @@ export async function proxy(request) {
     return NextResponse.next();
   }
 
-  // OAuth transfer IMPORT from the machine itself. Inside the route the transfer
-  // passphrase is the real authorization (GCM tag proves possession of the export
-  // passphrase). With requireLogin=false the local operator has no JWT to present,
-  // so the ALWAYS_PROTECTED match below would lock them out of importing their own
-  // file (e.g. a CreditDaddy / 10router export). Loopback peer + loopback Origin
-  // (isLocalRequest) keeps tunnels, LAN and cross-site pages out; EXPORT stays
-  // fully protected because it dumps live tokens.
+  // OAuth transfer IMPORT/EXPORT from the machine itself. The route is the real
+  // authorization: import proves the export passphrase (GCM tag), export
+  // re-authenticates the dashboard password (verifyDashboardPassword) and the
+  // dump is additionally sealed under the user's own passphrase. With
+  // requireLogin=false the local operator has no JWT to present, so the
+  // ALWAYS_PROTECTED match below would lock them out of their own transfer
+  // dialog entirely (import e.g. a CreditDaddy / 10router file; export MiMo
+  // Desktop credentials). Loopback peer + loopback Origin (isLocalRequest)
+  // keeps tunnels, LAN and cross-site pages out.
   if (
     request.method === "POST" &&
-    pathname === "/api/oauth/transfer/import" &&
+    (pathname === "/api/oauth/transfer/import" || pathname === "/api/oauth/transfer/export") &&
     isLocalRequest(request) &&
     (await isAuthenticated(request))
   ) {
