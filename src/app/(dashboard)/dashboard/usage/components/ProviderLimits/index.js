@@ -865,24 +865,10 @@ export default function ProviderLimits() {
   }, [sortedConnections, hideNoQuota, loading, errors, quotaData]);
 
   /**
-   * "Only with balance": hide every zero-balance row across the current
-   * connections by writing them into `quotaVisibility.hidden` — the same list
-   * the per-row hide button writes.
-   *
-   * This is a live re-filter, not a one-way add: a row that currently HAS balance
-   * (used < total — including a fresh 0/total pack, e.g. CodeBuddy CN's daily
-   * check-in bonus) is dropped from `hidden` even if a past click hid it.
-   * CodeBuddy renumbers bonus packs (older ones expire and later packs shift into
-   * their names), so a persistent hide-by-name would otherwise keep a brand-new
-   * full pack invisible under the name of a pack that used to be depleted.
+   * "Only with balance" bulk action removed (用户拍板): the pack-bar top block
+   * and the collapsed details made row-level balance filtering noise. The
+   * per-row hide button and the "Hidden:" chips stay for manual curation.
    */
-  const handleHideDepletedQuotas = useCallback(() => {
-    applyVisibilityToConnections(
-      sortedConnections.map((conn) => conn.id),
-      (connId) => [...computeDepletedHiddenKeys(quotaData[connId]?.quotas || [])],
-    );
-  }, [applyVisibilityToConnections, sortedConnections, quotaData]);
-
   // A connection is empty (depleted) only when EVERY quota row has an absolute
   // zero balance — 0/0 (no allowance, e.g. Qoder) or used >= total. Any single
   // row with remaining credit (e.g. a fresh Bonus Pack) keeps the account
@@ -1165,21 +1151,6 @@ export default function ProviderLimits() {
               check_circle
             </span>
             <span className="hidden sm:inline">{translate("Turn on Available")}</span>
-          </button>
-
-          {/* Bulk: show only quota rows with a balance — writes the zero-balance
-              rows into the shared hidden list, so they appear as "Hidden:" chips
-              and stay individually restorable, exactly like a manual hide. */}
-          <button
-            type="button"
-            onClick={handleHideDepletedQuotas}
-            className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-blue-500/30 px-2 text-xs text-blue-500 transition-colors hover:bg-blue-500/10"
-            title={translate("Hide depleted (zero-balance) quota packs across current connections")}
-          >
-            <span className="material-symbols-outlined text-[14px]">
-              visibility_off
-            </span>
-            <span className="hidden sm:inline">{translate("Only with balance")}</span>
           </button>
 
           {/* Auto-refresh toggle */}

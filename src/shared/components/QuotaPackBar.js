@@ -82,25 +82,14 @@ export default function QuotaPackBar({ packs = [], className }) {
     return { ...p, totalNum, remainingNum: remainingOf(p) };
   });
 
-  // Recurring windows: one independent progress-bar row each — never summed
-  // into 剩余 (their constraints are parallel, not additive).
-  const recurringWindows = withNums
-    .filter((p) => isRecurringWindow(p) && p.totalNum > 0)
-    .sort((a, b) => String(a.resetAt || "").localeCompare(String(b.resetAt || "")));
-
-  // Pack pool: everything else. Same-family groups (≥2) render the segmented
-  // bar; different-relationship singletons (余额 vs 代金券) stay un-charted in
-  // the details table — but their remaining DOES count toward 剩余 total.
+  // Recurring windows: excluded from 剩余 and from family bars (their rows
+  // stay readable in the collapsed details table) — parallel constraints, not
+  // an additive pool. 用户拍板：样式也隐藏。
   const packRows = withNums.filter((p) => !isRecurringWindow(p));
-  const totalRemaining = packRows.reduce((s, p) => s + (p.totalNum > 0 ? p.remainingNum : 0), 0);
-  const totalAll = packRows.reduce((s, p) => s + p.totalNum, 0);
-  const totalUsed = packRows.reduce((s, p) => s + Number(p.used || 0), 0);
 
-  // CreditDaddy's `soon`: earliest one-shot live expiry drives the right meta.
-  const soon = packRows
-    .filter((p) => p.recurring !== true && p.resetAt && p.remainingNum > 0 && p.totalNum > 0)
-    .sort((a, b) => String(a.resetAt).localeCompare(String(b.resetAt)))[0] || null;
-
+  // Family packs: base-name groups with ≥2 members. 储值类 singletons
+  // (余额/代金券/…) are NOT aggregated — different spending scopes, and a
+  // card without any family pool renders no top block at all.
   const groups = new Map();
   for (const p of packRows) {
     const base = String(p.name || "").replace(/\s*\d+\s*$/, "").trim();
@@ -111,12 +100,27 @@ export default function QuotaPackBar({ packs = [], className }) {
   const families = [...groups.entries()]
     .map(([base, members]) => {
       const totalNum = members.reduce((s, p) => s + p.totalNum, 0);
-      const remainingNum = members.reduce((s, p) => s + p.remainingNum, 0);
       const usedNum = members.reduce((s, p) => s + Number(p.used || 0), 0);
-      const live = members.filter((p) => p.remainingNum > 0 && p.totalNum > 0);
-      return { base, members, totalNum, remainingNum, usedNum, live };
+      const remainingNum = members.reduce((s, p) => s + p.remainingNum, 0);
+      const soonPack = members
+        .filter((p) => p.recurring !== true && p.resetAt && p.remainingNum > 0)
+        .sort((a, b) => String(a.resetAt).localeCompare(String(b.resetAt)))[0] || null;
+      return { base, members, totalNum, usedNum, remainingNum, soonPack, live: members.filter((p) => p.remainingNum > 0 && p.totalNum > 0) };
     })
     .filter((f) => f.members.length >= 2 && f.totalNum > 0);
+
+  if (families.length === 0) return null;
+
+  // 剩余 = the aggregatable family pools only (储值类 singletons excluded).
+  const totalRemaining = families.reduce((s, f) => s + f.remainingNum, 0);
+  const totalAll = families.reduce((s, f) => s + f.totalNum, 0);
+  const totalUsed = families.reduce((s, f) => s + f.usedNum, 0);
+
+  // Earliest live expiry across the family pools drives the right-hand meta.
+  const soon = families
+    .map((f) => f.soonPack)
+    .filter(Boolean)
+    .sort((a, b) => String(a.resetAt).localeCompare(String(b.resetAt)))[0] || null;
 
   return (
     <div className={cn("min-w-0 space-y-2", className)}>
@@ -210,27 +214,11 @@ export default function QuotaPackBar({ packs = [], className }) {
         );
       })}
 
-      {/* Recurring windows: one same-language progress-bar row per window. */}
-      {recurringWindows.map((p, i) => {
-        const pct = p.totalNum > 0 ? Math.min(100, (p.remainingNum / p.totalNum) * 100) : 0;
-        return (
-          <div key={`${p.name || "win"}-${i}`} className="flex min-w-0 items-center gap-2 text-[11px] tabular-nums">
-            <span className="w-16 shrink-0 truncate text-text-muted">{p.name}</span>
-            <div className="h-[5px] min-w-0 flex-1 overflow-hidden rounded-[3px] bg-black/10 dark:bg-white/10">
-              <div
-                className="h-full rounded-[3px] bg-sky-500/80"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            <span className="shrink-0 text-text-muted">
-              {translate("remaining {remaining} of {total}")
-                .replace("{remaining}", fmt(p.remainingNum))
-                .replace("{total}", fmt(p.totalNum))}
-              {p.resetAt ? ` · ${translate("resets")} ${shortDate(p.resetAt)}` : ""}
-            </span>
-          </div>
-        );
-      })}
+      {/* Recurring windows (每月/每周/滚动…) are intentionally NOT rendered
+          here (用户拍板：样式隐藏) — they stay readable in the collapsed
+          per-pack details table when expanded. They are also excluded from
+          剩余 and from family bars: subscription windows are parallel
+          constraints, not an additive pool. */}
     </div>
   );
 }
