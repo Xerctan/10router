@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import ProviderIcon from "@/shared/components/ProviderIcon";
-import QuotaPackBar from "@/shared/components/QuotaPackBar";
+import QuotaPackBar, { isAggregateQuotaRow } from "@/shared/components/QuotaPackBar";
 import QuotaTable, { translateQuotaName } from "./QuotaTable";
 import Toggle from "@/shared/components/Toggle";
 import Tooltip from "@/shared/components/Tooltip";
@@ -202,6 +202,16 @@ export default function ProviderLimits() {
   // and the screen disagreed.
   const [providerMenuOpen, setProviderMenuOpen] = useState(false);
   const [bulkToggling, setBulkToggling] = useState(false);
+  // 逐包明细默认收起（CreditDaddy 语言）：展开才渲染 QuotaTable。
+  const [expandedDetails, setExpandedDetails] = useState(() => new Set());
+  const toggleDetails = useCallback((id) => {
+    setExpandedDetails((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(CONNECTIONS_PAGE_SIZE);
   const [customPageSizeInput, setCustomPageSizeInput] = useState(
@@ -873,16 +883,6 @@ export default function ProviderLimits() {
     );
   }, [applyVisibilityToConnections, sortedConnections, quotaData]);
 
-  /** Un-hide every quota row across the current connections ("show all packs"). */
-  const handleShowAllQuotas = useCallback(() => {
-    applyVisibilityToConnections(
-      sortedConnections
-        .filter((conn) => quotaVisibility[conn.id]?.hidden?.length)
-        .map((conn) => conn.id),
-      () => [],
-    );
-  }, [applyVisibilityToConnections, sortedConnections, quotaVisibility]);
-
   // A connection is empty (depleted) only when EVERY quota row has an absolute
   // zero balance — 0/0 (no allowance, e.g. Qoder) or used >= total. Any single
   // row with remaining credit (e.g. a fresh Bonus Pack) keeps the account
@@ -1182,19 +1182,6 @@ export default function ProviderLimits() {
             <span className="hidden sm:inline">{translate("Only with balance")}</span>
           </button>
 
-          {/* Bulk: show all quota packs — clears the shared hidden list. */}
-          <button
-            type="button"
-            onClick={handleShowAllQuotas}
-            className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-black/10 px-2 text-xs text-text transition-colors hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-            title={translate("Show all quota packs across current connections")}
-          >
-            <span className="material-symbols-outlined text-[14px]">
-              visibility
-            </span>
-            <span className="hidden sm:inline">{translate("Show all")}</span>
-          </button>
-
           {/* Auto-refresh toggle */}
           <button
             type="button"
@@ -1274,6 +1261,14 @@ export default function ProviderLimits() {
           // both surface as "Hidden:" chips and both can be restored individually.
           const visibleQuotas = filterQuotasByVisibility(conn.id, rawQuotas, quotaVisibility, conn.provider);
           const hiddenQuotaRows = getHiddenQuotaRows(conn.id, rawQuotas, quotaVisibility, conn.provider);
+          // 明细表行：聚合汇总行剔除（总积分本身就是聚合，与分段条重复）；
+          // 月度窗口置顶（展开时的第一行）。
+          const nonAggregateQuotas = visibleQuotas.filter((r) => !isAggregateQuotaRow(r));
+          const monthlyRows = nonAggregateQuotas.filter((r) => /month|月/i.test(String(r.name || "")));
+          const tableQuotas = [
+            ...monthlyRows,
+            ...nonAggregateQuotas.filter((r) => !monthlyRows.includes(r)),
+          ];
 
           return (
             <Card
@@ -1523,15 +1518,35 @@ export default function ProviderLimits() {
                         </p>
                       </div>
                     )}
-                    <QuotaTable
-                      quotas={visibleQuotas}
-                      compact
-                      sortMode="default"
-                      showSortLabel={
-                        conn.provider === "codex" && quotaSortMode !== "default"
-                      }
-                      onHideQuota={(quotaRow) => handleHideQuota(conn.id, quotaRow, conn.provider)}
-                    />
+                    {/* 逐包明细默认收起（CreditDaddy 语言）：展开后月度置顶、
+                        聚合汇总行已剔除。 */}
+                    {tableQuotas.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => toggleDetails(conn.id)}
+                        className="flex w-full items-center gap-1 rounded-lg py-1.5 text-[11px] text-text-muted transition-colors hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
+                        aria-expanded={expandedDetails.has(conn.id)}
+                      >
+                        <span className="material-symbols-outlined text-[14px]">
+                          {expandedDetails.has(conn.id) ? "expand_less" : "expand_more"}
+                        </span>
+                        {translate("Per-pack details")}
+                        <span className="tabular-nums opacity-60">
+                          ({tableQuotas.length})
+                        </span>
+                      </button>
+                    )}
+                    {expandedDetails.has(conn.id) && (
+                      <QuotaTable
+                        quotas={tableQuotas}
+                        compact
+                        sortMode="default"
+                        showSortLabel={
+                          conn.provider === "codex" && quotaSortMode !== "default"
+                        }
+                        onHideQuota={(quotaRow) => handleHideQuota(conn.id, quotaRow, conn.provider)}
+                      />
+                    )}
                   </>
                 )}
                 {hiddenQuotaRows.length > 0 && (

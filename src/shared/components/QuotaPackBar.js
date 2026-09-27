@@ -5,24 +5,28 @@ import { translate } from "@/i18n/runtime";
 import { cn } from "@/shared/utils/cn";
 
 /**
- * Family-pack segmented bar — faithful port of CreditDaddy's bonus-pack block
- * (QoderDaddy panel.html creditHtml: "积分包 13 个可用…" + Bonus Pack ×N +
- * proportional .bar with a trailing used segment).
+ * Connection quota summary block — CreditDaddy account-card language:
  *
- * SEMANTICS (the part that matters): only packs of the SAME family aggregate
- * into a bar. "Bonus Pack 24/25/26…" are interchangeable one-shot packs of one
- * pool → one segmented bar. Different-relationship rows — 余额 vs 代金券
- * (different spending scopes) or 滚动/每周/月度 (independent reset windows) —
- * are NEVER summed: their numbers only make sense per-window, and the table
- * below already renders each of them with its own meter. Aggregate summary
- * rows ("Total Points") are excluded as derived data.
+ *   剩余 [paid] 2,455.33        100 于 10-16 到期 · 已用 U / 共 T
+ *   [赠送包 family: proportional segments | trailing used chunk]
+ *   月度 ▓▓░░ 剩 0 / 500 · 重置 10-16          ← pinned meter, when present
  *
- * Family identity: the row name minus its trailing index ("Bonus Pack 24" →
- * "Bonus Pack"). Groups with ≥2 members render; singletons are left to the
- * table. Multiple families stack as separate blocks.
+ * SEMANTICS: only same-family packs aggregate into a bar ("Bonus Pack 24/25…"
+ * — base name minus trailing index, ≥2 members). Aggregate summary rows
+ * ("Total Points" — themselves derived) are excluded from every part; other
+ * singletons (余额/代金券/滚动/每周) stay in the details table below — they
+ * are different-relationship pools or independent reset windows and must
+ * never be summed into one number.
  */
 
 const MAX_SEGMENTS = 20;
+const AGGREGATE_RE = /total|aggregate|summary|^总/i;
+const MONTHLY_RE = /month|月/i;
+
+/** Aggregate/summary rows are derived data — never charted, never summed. */
+export function isAggregateQuotaRow(row) {
+  return AGGREGATE_RE.test(String(row?.name || ""));
+}
 
 function fmt(n) {
   return Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -40,50 +44,77 @@ function remainingOf(p) {
   return Math.max(0, Number(p.total || 0) - Number(p.used || 0));
 }
 
-const AGGREGATE_RE = /total|aggregate|summary|^总/i;
-function familyBase(name) {
-  return String(name || "").replace(/\s*\d+\s*$/, "").trim();
-}
-
 export default function QuotaPackBar({ packs = [], className }) {
-  const rows = (packs || []).filter((p) => p && typeof p === "object" && !AGGREGATE_RE.test(String(p.name || "")));
+  const rows = (packs || []).filter((p) => p && typeof p === "object" && !isAggregateQuotaRow(p));
+  if (rows.length === 0) return null;
 
-  // Group by family base name; keep insertion order of first appearance.
+  const withNums = rows.map((p) => {
+    const totalNum = Number(p.total || 0);
+    return { ...p, totalNum, remainingNum: remainingOf(p) };
+  });
+
+  // Account-wide remaining: every non-aggregate row with a real pool. Rows
+  // that only carry a percentage (antigravity-style windows) can't contribute
+  // an absolute number and are skipped rather than guessed.
+  const totalRemaining = withNums
+    .filter((p) => p.totalNum > 0)
+    .reduce((s, p) => s + p.remainingNum, 0);
+  const totalAll = withNums.reduce((s, p) => s + p.totalNum, 0);
+  const totalUsed = withNums.reduce((s, p) => s + Number(p.used || 0), 0);
+
+  // Earliest live expiry across everything drives the right-hand meta.
+  const soon = withNums
+    .filter((p) => p.resetAt && p.remainingNum > 0 && p.totalNum > 0)
+    .sort((a, b) => String(a.resetAt).localeCompare(String(b.resetAt)))[0] || null;
+
+  // Monthly window gets its own pinned meter (recurring refill semantics).
+  const monthly = withNums.find((p) => MONTHLY_RE.test(String(p.name || ""))) || null;
+
+  // Family packs: base-name groups with ≥2 members, excluding the monthly row.
+  const familyRows = withNums.filter((p) => p !== monthly);
   const groups = new Map();
-  for (const p of rows) {
-    const base = familyBase(p.name);
+  for (const p of familyRows) {
+    const base = String(p.name || "").replace(/\s*\d+\s*$/, "").trim();
     if (!base) continue;
     if (!groups.has(base)) groups.set(base, []);
     groups.get(base).push(p);
   }
-
   const families = [...groups.entries()]
     .map(([base, members]) => {
-      const withNums = members.map((p) => ({
-        ...p,
-        remainingNum: remainingOf(p),
-        totalNum: Number(p.total || 0),
-      }));
-      const totalNum = withNums.reduce((s, p) => s + p.totalNum, 0);
-      const usedNum = withNums.reduce((s, p) => s + Number(p.used || 0), 0);
-      const remainingNum = withNums.reduce((s, p) => s + p.remainingNum, 0);
-      // CreditDaddy's `soon`: earliest one-shot live expiry drives the badge.
-      const soon = withNums
+      const totalNum = members.reduce((s, p) => s + p.totalNum, 0);
+      const remainingNum = members.reduce((s, p) => s + p.remainingNum, 0);
+      const soonPack = members
         .filter((p) => p.recurring !== true && p.resetAt && p.remainingNum > 0)
         .sort((a, b) => String(a.resetAt).localeCompare(String(b.resetAt)))[0] || null;
-      return { base, members: withNums, totalNum, usedNum, remainingNum, soon, live: withNums.filter((p) => p.remainingNum > 0 && p.totalNum > 0) };
+      return { base, members, totalNum, remainingNum, soonPack, live: members.filter((p) => p.remainingNum > 0 && p.totalNum > 0) };
     })
     .filter((f) => f.members.length >= 2 && f.totalNum > 0);
 
-  if (families.length === 0) return null;
-
   return (
-    <div className={cn("min-w-0 space-y-2.5", className)}>
+    <div className={cn("min-w-0", className)}>
+      {/* Line 1: account remaining (left) + earliest expiry / used / total (right) */}
+      <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
+        <span className="inline-flex items-center gap-1 tabular-nums">
+          <span className="text-text-muted">{translate("Remaining")}</span>
+          <span className="material-symbols-outlined text-[14px] text-green-600 dark:text-green-400">paid</span>
+          <b className="font-bold text-text">{fmt(totalRemaining)}</b>
+        </span>
+        <span className="inline-flex min-w-0 items-center gap-1 truncate tabular-nums text-text-muted">
+          {soon && (
+            <>
+              {fmt(soon.remainingNum)} {translate("expires {date} · used {used} of {total}")
+                .replace("{date}", shortDate(soon.resetAt))
+                .replace("{used}", fmt(totalUsed))
+                .replace("{total}", fmt(totalAll))}
+            </>
+          )}
+          {!soon && `${translate("Used")} ${fmt(totalUsed)} / ${fmt(totalAll)}`}
+        </span>
+      </div>
+
+      {/* Family bars: one per same-name pack group (赠送包 / Bonus Pack…) */}
       {families.map((family) => {
-        // CreditDaddy renders only LIVE packs (remaining > 0) as colored
-        // segments; exhausted ones live on inside the "已用" numbers.
         const livePacks = family.live
-          // Expiry order: the soonest-to-die pack leads the bar.
           .sort((a, b) => {
             const ta = a.resetAt ? new Date(a.resetAt).getTime() : Infinity;
             const tb = b.resetAt ? new Date(b.resetAt).getTime() : Infinity;
@@ -101,37 +132,18 @@ export default function QuotaPackBar({ packs = [], className }) {
           segments = [
             ...kept,
             {
-              ...rest.reduce((acc, p) => ({
-                name: acc.name,
-                remainingNum: acc.remainingNum + p.remainingNum,
-                totalNum: acc.totalNum + p.totalNum,
-                resetAt: acc.resetAt,
-                recurring: false,
-              }), { name: family.base, remainingNum: 0, totalNum: 0, resetAt: null, recurring: false }),
+              name: family.base,
+              remainingNum: rest.reduce((s, p) => s + p.remainingNum, 0),
+              totalNum: rest.reduce((s, p) => s + p.totalNum, 0),
+              resetAt: rest[0]?.resetAt || null,
+              recurring: false,
               alpha: 0.6,
             },
           ];
         }
         const usedShare = family.totalNum > 0 ? family.usedNum / family.totalNum : 0;
-
         return (
           <div key={family.base} className="min-w-0">
-            <div className="mb-1 flex items-center justify-between gap-3 text-xs">
-              <span className="truncate font-semibold text-text">
-                {family.base} <span className="tabular-nums opacity-70">×{family.live.length || family.members.length}</span>
-              </span>
-              <span className="inline-flex shrink-0 items-center gap-1 tabular-nums text-text-muted">
-                {translate("remaining {remaining} of {total}")
-                  .replace("{remaining}", fmt(family.remainingNum))
-                  .replace("{total}", fmt(family.totalNum))}
-                {family.soon && (
-                  <>
-                    {" · "}
-                    {translate("earliest {date}").replace("{date}", shortDate(family.soon.resetAt))}
-                  </>
-                )}
-              </span>
-            </div>
             <div
               className="flex w-full gap-[2px] overflow-hidden rounded-[3px] bg-black/10 dark:bg-white/10"
               style={{ height: "5px" }}
@@ -169,6 +181,25 @@ export default function QuotaPackBar({ packs = [], className }) {
           </div>
         );
       })}
+
+      {/* Monthly window pinned under the bar (recurring refill semantics). */}
+      {monthly && (
+        <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[11px] tabular-nums">
+          <span className="shrink-0 truncate text-text-muted">{monthly.name}</span>
+          <div className="h-[4px] min-w-0 flex-1 overflow-hidden rounded-[2px] bg-black/10 dark:bg-white/10">
+            <div
+              className="h-full bg-sky-500/80"
+              style={{ width: `${monthly.totalNum > 0 ? Math.min(100, (monthly.remainingNum / monthly.totalNum) * 100) : 0}%` }}
+            />
+          </div>
+          <span className="shrink-0 text-text-muted">
+            {translate("remaining {remaining} of {total}")
+              .replace("{remaining}", fmt(monthly.remainingNum))
+              .replace("{total}", fmt(monthly.totalNum))}
+            {monthly.resetAt ? ` · ${translate("resets")} ${shortDate(monthly.resetAt)}` : ""}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
