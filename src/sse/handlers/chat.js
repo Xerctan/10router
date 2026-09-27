@@ -17,6 +17,7 @@ import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect";
 import { getTransform as getPxpipeTransform } from "@/lib/pxpipe/loader.js";
 import { appendPxpipeEvent } from "@/lib/pxpipe/events.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
+import { upstreamResponseHeaders } from "open-sse/utils/upstreamHeaders.js";
 import { handleComboChat, handleFusionChat, detectRequiredCapabilities } from "open-sse/services/combo.js";
 import { maybeCompactChatBody } from "../services/autoCompact.js";
 import { augmentModelsWithCapacityAdapter, withCapacityAdapterStripping, getActiveAdapterStrategy } from "open-sse/services/capacityAdapter.js";
@@ -253,6 +254,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   const excludeConnectionIds = new Set();
   let lastError = null;
   let lastStatus = null;
+  let lastHeaders = null;
 
   // Pre-emptive protection for CodeBuddy CN — EXTREME-SIZE BACKSTOP ONLY.
   //
@@ -306,6 +308,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
           withRateLimitHint(`[${provider}/${model}] ${errorMsg}`, provider),
           credentials.retryAfter,
           credentials.retryAfterHuman,
+          lastHeaders,
         );
       }
       if (excludeConnectionIds.size === 0) {
@@ -316,6 +319,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       return errorResponse(
         lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE,
         withRateLimitHint(lastError || "All accounts unavailable", provider),
+        lastHeaders,
       );
     }
 
@@ -412,6 +416,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       excludeConnectionIds.add(credentials.connectionId);
       lastError = result.error;
       lastStatus = result.status;
+      lastHeaders = upstreamResponseHeaders(result.response?.headers);
       continue;
     }
 

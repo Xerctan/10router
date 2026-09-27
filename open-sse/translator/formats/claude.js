@@ -15,6 +15,14 @@ const CACHE_CONTROL_1H = { type: "ephemeral", ttl: "1h" };
 // Check if message has valid non-empty content
 export function hasValidContent(msg) {
   if (typeof msg.content === "string" && msg.content.trim()) return true;
+  if (msg.content && typeof msg.content === "object" && !Array.isArray(msg.content)) {
+    const block = msg.content;
+    return !!((block.type === CLAUDE_BLOCK.TEXT && block.text?.trim()) ||
+      block.type === CLAUDE_BLOCK.TOOL_USE ||
+      block.type === CLAUDE_BLOCK.TOOL_RESULT ||
+      block.type === CLAUDE_BLOCK.IMAGE ||
+      block.type === CLAUDE_BLOCK.DOCUMENT);
+  }
   if (Array.isArray(msg.content)) {
     return msg.content.some(block =>
       (block.type === CLAUDE_BLOCK.TEXT && block.text?.trim()) ||
@@ -25,6 +33,19 @@ export function hasValidContent(msg) {
     );
   }
   return false;
+}
+
+// Content may arrive as a single content block object (spec allows string | array;
+// some clients send the bare object). Wrap it as a one-block array and strip any
+// client-placed cache_control: a bare-object marker must never survive
+// normalization, on any path, guard or no guard. (上游 8a81085a)
+function normalizeMessageContent(msg) {
+  const c = msg?.content;
+  if (c && typeof c === "object" && !Array.isArray(c)) {
+    delete c.cache_control;
+    msg.content = [c];
+  }
+  return msg;
 }
 
 // Fix tool_use/tool_result ordering for Claude API
@@ -138,6 +159,14 @@ export function normalizeClaudePassthrough(body, model = "") {
   if (ADAPTIVE_THINKING_UNSUPPORTED.test(model) && body.output_config?.effort != null) {
     delete body.output_config.effort;
     if (Object.keys(body.output_config).length === 0) delete body.output_config;
+  }
+
+  // 2. Wrap bare content-block objects as one-element arrays before folding.
+  // Some clients send content: {block} instead of content: [{block}]; the
+  // mid-conversation-system fold below assumes the array shape, so it must
+  // run first — a bare-object neighbor would otherwise be zeroed to [].
+  if (Array.isArray(body.messages)) {
+    for (const msg of body.messages) normalizeMessageContent(msg);
   }
 
   // 2. Fold mid-conversation system messages into the neighbouring turn.
@@ -271,6 +300,9 @@ export function lastCacheableToolIndex(tools) {
 // (normalize, tool dedupe, token savers) — otherwise the anchor drifts off the tail.
 export function anchorClaudeCache(body) {
   if (!body || typeof body !== "object") return body;
+  if (Array.isArray(body.messages)) {
+    for (const msg of body.messages) normalizeMessageContent(msg);
+  }
 
   if (Array.isArray(body.system)) {
     const last = body.system.length - 1;
@@ -368,6 +400,7 @@ export function prepareClaudeRequest(body, provider = null, apiKey = null, conne
     // Pass 1: remove cache_control + filter empty messages
     for (let i = 0; i < len; i++) {
       const msg = body.messages[i];
+      normalizeMessageContent(msg);
 
       // Remove cache_control from content blocks
       if (Array.isArray(msg.content)) {
