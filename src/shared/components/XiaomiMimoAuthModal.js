@@ -48,6 +48,10 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
   const [serverLoginRegion, setServerLoginRegion] = useState("cn");
   const [serverLoginPhase, setServerLoginPhase] = useState("idle"); // idle | starting | logging-in | saving
   const [serverLoginError, setServerLoginError] = useState(null);
+  // 区域自动匹配（与 Token Plan 卡同一套 /api/network/egress-region 探测）：
+  // 用户手选后不再覆盖。
+  const [serverLoginRegionUserEdited, setServerLoginRegionUserEdited] = useState(false);
+  const [serverLoginRegionInfo, setServerLoginRegionInfo] = useState(null);
 
   const detect = async () => {
     setPhase("detecting");
@@ -181,6 +185,25 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
   // 随后的保存调用让 api-key 路由从本次请求自带的 httpOnly 会话 cookie 里读出
   // 凭据并消费——passToken 全程不经过浏览器。
   const MIMO_REGIONS = { cn: "CN 中国", sgp: "SGP 新加坡", ams: "AMS 阿姆斯特丹", ru: "RU 俄罗斯", in: "IN 印度" };
+  // 服务端登录屏出现且用户未手改区域时，按网络出口 GeoIP 预选集群（探测失败
+  // 静默保持 cn 缺省）。映射与 Token Plan 卡共用同一张 cn/ams/sgp 国家表。
+  useEffect(() => {
+    if (!isOpen || !isDesktopCard || effectivePhase !== "not-found") return;
+    if (serverLoginRegionUserEdited) return;
+    let cancelled = false;
+    fetch("/api/network/egress-region")
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        const rec = data?.recommendedRegions?.["mimo-desktop"];
+        if (rec && MIMO_REGIONS[rec]) {
+          setServerLoginRegion(rec);
+          setServerLoginRegionInfo({ country: data.country || data.countryCode || "" });
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isOpen, isDesktopCard, effectivePhase, serverLoginRegionUserEdited]);
   const handleServerLogin = async () => {
     setServerLoginError(null);
     setServerLoginPhase("starting");
@@ -588,7 +611,11 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
               <label className="text-xs text-text-muted mb-1 block">{translate("Account region")}</label>
               <select
                 value={serverLoginRegion}
-                onChange={(e) => setServerLoginRegion(e.target.value)}
+                onChange={(e) => {
+                  setServerLoginRegion(e.target.value);
+                  setServerLoginRegionUserEdited(true);
+                  setServerLoginRegionInfo(null);
+                }}
                 disabled={serverLoginPhase !== "idle"}
                 className="w-full mb-2 px-3 py-2 rounded-lg border border-border bg-surface text-sm"
               >
@@ -596,6 +623,14 @@ export default function XiaomiMimoAuthModal({ provider, isOpen, onSuccess, onClo
                   <option key={k} value={k}>{v}</option>
                 ))}
               </select>
+              {serverLoginRegionInfo && !serverLoginRegionUserEdited && (
+                <p className="text-xs text-primary mt-1 mb-2 flex items-center gap-1">
+                  <span>🌐</span>
+                  <span>
+                    {translate("Auto-matched region based on network location ({country})").replace("{country}", serverLoginRegionInfo.country)}
+                  </span>
+                </p>
+              )}
               <Button onClick={handleServerLogin} disabled={serverLoginPhase !== "idle"} fullWidth>
                 {serverLoginPhase === "starting"
                   ? translate("Starting login proxy...")

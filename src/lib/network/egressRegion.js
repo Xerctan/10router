@@ -105,13 +105,17 @@ export async function getEgressRegion({ bypassCache = false, timeoutMs = DEFAULT
       const parsed = provider.parse(data);
       if (!parsed || !parsed.countryCode) continue;
 
+      const tokenplanRegion = mapCountryToXiaomiTokenplanRegion(parsed.countryCode);
       const result = {
         countryCode: parsed.countryCode,
         country: parsed.country,
         ip: parsed.ip,
         source: provider.name,
         recommendedRegions: {
-          "xiaomi-tokenplan": mapCountryToXiaomiTokenplanRegion(parsed.countryCode),
+          "xiaomi-tokenplan": tokenplanRegion,
+          // MiMo 桌面卡服务端登录用同一张国家表预选集群（cn/sgp/ams 同名；
+          // ru/in 仅账号服务层，不参与出口推荐）。
+          "mimo-desktop": tokenplanRegion,
         },
       };
 
