@@ -87,6 +87,7 @@ describe("issue 13: mimo desktop session error", () => {
     expect(flagged.sort()).toEqual([
       "mimo-v2.6-flash",
       "mimo-v2.6-pro",
+      "mimo-v2.6-pro-ultraspeed",
     ]);
     const { default: base } = await import("../../open-sse/providers/registry/xiaomi-mimo.js");
     expect(base.models.filter((m) => m.requiresSession === true)).toEqual([]);

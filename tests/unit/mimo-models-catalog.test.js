@@ -119,12 +119,13 @@ describe("xiaomi-mimo registry integrity", () => {
     expect(registry).toMatch(/\{\s*id:\s*"mimo-v2\.6-flash"/);
     expect(registry).not.toMatch(/\{\s*id:\s*"mimo-v2\.5-pro"/);
     expect(registry).not.toMatch(/\{\s*id:\s*"mimo-v2\.5"/);
-    // ultraspeed is 定制服务 on the open API (a normal key gets an upstream error),
-    // but the cloud + Token Plan cards list it anyway so a contracted user can call
-    // it out of the box instead of hand-adding a custom model (2026-09). It stays
-    // OFF the Desktop card — that surface is the account-session models (pro/flash).
+    // ultraspeed is 定制服务 on the open API (a session/key without the contract
+    // gets an upstream error), but cloud + Token Plan + Desktop cards all list it
+    // anyway so a contracted user can call it out of the box instead of
+    // hand-adding a custom model (2026-09-27 user decision: pre-list on the
+    // Desktop card too — whether it works depends on the user's plan).
     expect(registry).toMatch(/\{\s*id:\s*"mimo-v2\.6-pro-ultraspeed"/);
-    expect(desktopRegistry).not.toMatch(/\{\s*id:\s*"mimo-v2\.6-pro-ultraspeed"/);
+    expect(desktopRegistry).toMatch(/\{\s*id:\s*"mimo-v2\.6-pro-ultraspeed"/);
   });
 });
 

@@ -99,6 +99,10 @@ export default {
     // 现读被跳过。
     { id: "mimo-v2.6-pro", name: "MiMo V2.6 Pro", rateMultiplier: 1, supportedFormats: ["openai"], requiresSession: true },
     { id: "mimo-v2.6-flash", name: "MiMo V2.6 Flash", rateMultiplier: 0.4, supportedFormats: ["openai"], requiresSession: true },
+    // 定制服务 upstream（能否调用取决于用户的 Desktop 套餐/合同）：按用户决定
+    // 预置进 Desktop 卡（2026-09-27），无合同的会话调用会拿到上游报错，有合同
+    // 的开箱即用。Desktop 未公示该档积分倍率，故不标 rateMultiplier。
+    { id: "mimo-v2.6-pro-ultraspeed", name: "MiMo V2.6 Pro UltraSpeed", supportedFormats: ["openai"], requiresSession: true },
   ],
   features: {
     usage: true,
