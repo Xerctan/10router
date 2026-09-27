@@ -60,7 +60,6 @@ describe("egressRegion multi-source fallback", () => {
         source: "ip.sb",
         recommendedRegions: {
           "xiaomi-tokenplan": "cn",
-          "mimo-desktop": "cn",
         },
       });
       expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -98,7 +97,6 @@ describe("egressRegion multi-source fallback", () => {
         source: "ipwho.is",
         recommendedRegions: {
           "xiaomi-tokenplan": "ams",
-          "mimo-desktop": "ams",
         },
       });
       expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -132,7 +130,6 @@ describe("egressRegion multi-source fallback", () => {
         source: "ipapi.is",
         recommendedRegions: {
           "xiaomi-tokenplan": "sgp",
-          "mimo-desktop": "sgp",
         },
       });
       expect(mockFetch).toHaveBeenCalledTimes(3);

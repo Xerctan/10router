@@ -113,9 +113,6 @@ export async function getEgressRegion({ bypassCache = false, timeoutMs = DEFAULT
         source: provider.name,
         recommendedRegions: {
           "xiaomi-tokenplan": tokenplanRegion,
-          // MiMo 桌面卡服务端登录用同一张国家表预选集群（cn/sgp/ams 同名；
-          // ru/in 仅账号服务层，不参与出口推荐）。
-          "mimo-desktop": tokenplanRegion,
         },
       };
 

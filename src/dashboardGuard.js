@@ -212,9 +212,6 @@ async function loadSettings() {
   }
 }
 
-// Shared with src/proxy.js — the mimo login branch must respect dashboard auth.
-export { isAuthenticated };
-
 async function isAuthenticated(request) {
   if (await hasValidToken(request)) return true;
   const settings = await loadSettings();

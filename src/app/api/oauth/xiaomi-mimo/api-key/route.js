@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createProviderConnection } from "@/models";
-import { SESSION_COOKIE, sessionFromRequest, readSessionIdentity } from "@/lib/mimoLoginSession";
 
 /**
  * POST /api/oauth/xiaomi-mimo/api-key
@@ -16,7 +15,7 @@ import { SESSION_COOKIE, sessionFromRequest, readSessionIdentity } from "@/lib/m
  */
 export async function POST(request) {
   try {
-    const { apiKey, uid, baseUrl, mimoPassToken, mimoUserId, mimoCUserId, sessionOnly, region, fromServerLogin, provider: requestedProvider } = await request.json();
+    const { apiKey, uid, baseUrl, mimoPassToken, mimoUserId, mimoCUserId, sessionOnly, region, provider: requestedProvider } = await request.json();
 
     // 区域集群（对照上游 910db749）：cn/sgp/ams/ru/in 选择账号服务集群，
     // 缺省 cn（存量 Desktop cookie 都是 CN 签发）。非法值一律忽略回落 cn。
@@ -85,33 +84,13 @@ export async function POST(request) {
       }
     }
 
-    // Server-login flow (modal "Sign in via Server Proxy"): the captured
-    // passToken never crosses the browser — the httpOnly login-session cookie
-    // rides along with this same-origin POST, so the identity is read here and
-    // the cookie is consumed once the save lands. Gated on an explicit flag so
-    // a stale login cookie can never bleed into the Desktop auto-import path.
-    let loginIdentity = null;
-    if (fromServerLogin === true && !mimoPassToken && !mimoUserId) {
-      const sess = sessionFromRequest(request);
-      const id = sess && readSessionIdentity(sess);
-      if (id) loginIdentity = id;
-      if (!loginIdentity) {
-        return NextResponse.json(
-          { error: "Login session expired — start the sign-in again." },
-          { status: 409 },
-        );
-      }
-    }
-
     // Account-session credential, for the Desktop-exclusive models. It belongs to
     // the Desktop card only — a cloud-card row must never hold a passToken, or it
     // renders the Desktop-session badge and reads the weekly quota through this
     // machine's Desktop login. The cloud card therefore ignores whatever the
     // client sent and skips the server-side read entirely.
     let session = isDesktopCard
-      ? loginIdentity
-        ? { passToken: loginIdentity.passToken, userId: loginIdentity.userId, cUserId: loginIdentity.cUserId }
-        : { passToken: mimoPassToken || null, userId: mimoUserId || null, cUserId: mimoCUserId || null }
+      ? { passToken: mimoPassToken || null, userId: mimoUserId || null, cUserId: mimoCUserId || null }
       : { passToken: null, userId: null, cUserId: null };
     // A running Desktop locks its cookie store, so the session read can fail — the
     // import itself does not depend on it (the sk- key covers the cloud models),
@@ -190,9 +169,7 @@ export async function POST(request) {
         // Re-imported key/session supersedes any stored failure text.
         resetErrorState: true,
       });
-      // One-shot: the login session's purpose is served — drop the cookie so
-      // the captured identity can't linger in the browser's jar.
-      const res = NextResponse.json({
+      return NextResponse.json({
         success: true,
         validated,
         modelCount,
@@ -205,8 +182,6 @@ export async function POST(request) {
           displayName: existing.displayName,
         },
       });
-      if (loginIdentity) res.cookies.set(SESSION_COOKIE, "", { path: "/", httpOnly: true, maxAge: 0 });
-      return res;
     }
 
     const connection = await createProviderConnection({
@@ -229,7 +204,7 @@ export async function POST(request) {
       testStatus: validated ? "active" : "untested",
     });
 
-    const res = NextResponse.json({
+    return NextResponse.json({
       success: true,
       validated,
       modelCount,
@@ -242,8 +217,6 @@ export async function POST(request) {
         displayName: connection.displayName,
       },
     });
-    if (loginIdentity) res.cookies.set(SESSION_COOKIE, "", { path: "/", httpOnly: true, maxAge: 0 });
-    return res;
   } catch (error) {
     console.log("Xiaomi MiMo API key import error:", error);
     // Do not reflect upstream response bodies to the client (SSRF hardening)
