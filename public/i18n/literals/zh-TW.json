@@ -726,5 +726,5 @@
   "{used} of {total} used across {count} packs": "{count} 個配額包：已用 {used} / 共 {total}",
   "resets": "重置於",
   "recurring window": "週期性配額",
-  "expires {date} · used {used} of {total}": "{date} 到期 · 已用 {used} / 共 {total}"
+  "expires {date} · used {used} of {total}": " 於 {date} 到期 · 已用 {used} / 共 {total}"
 }
