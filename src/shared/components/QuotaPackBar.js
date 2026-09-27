@@ -5,29 +5,20 @@ import { translate } from "@/i18n/runtime";
 import { cn } from "@/shared/utils/cn";
 
 /**
- * Multi-quota-pack segmented bar (visual language ported from CreditDaddy).
+ * Multi-quota-pack bar — faithful port of CreditDaddy's account-card bar
+ * (QoderDaddy src/panel.html creditHtml + .bar/.seg CSS):
  *
- * One segment per quota pack, ordered by expiry (earliest first, like
- * CreditDaddy's left-most segment); each segment fills with the pack's
- * REMAINING fraction — the bar drains as the pack is consumed. Recurring
- * windows (weekly/monthly refills) render in a cooler tone so one-shot bonus
- * packs read apart from them. Depleted packs stay as dim stubs: an empty
- * segment is information (that pack is spent) and dropping it would fatten
- * the survivors.
+ *   剩余 <b>N</b>          X 于 MM-DD 到期 · 已用 U / 共 T     ← credit-line, space-between
+ *   [■■■ pack1 ■■ | ■■ pack2 | … | ▒▒ used ▒▒]                ← .bar (5px, gap 2px)
  *
- * Meta line below mirrors CreditDaddy's "6.09 于 10-11 到期 · 已用 2,502.91 /
- * 共 4,918": the earliest live pack's remaining + reset date, then the
- * connection-wide used/total sums.
+ * Segment widths are PROPORTIONAL to each pack's remaining share of the total
+ * (not equal-width); a single dim trailing segment carries the used amount.
+ * Non-recurring packs fade with index (--a: max(.45, .85 - i*.05)); recurring
+ * windows stay full-strength. Segment title: "name：剩余 X / Y，MM-DD 重置|到期".
+ * The meta line sits ABOVE the bar and is space-between (剩余 N on the LEFT).
  */
 
-const MAX_SEGMENTS = 14;
-
-function packRemaining(quota) {
-  if (quota.remaining !== undefined && quota.remaining !== null) return Math.max(0, Number(quota.remaining));
-  const total = Number(quota.total || 0);
-  const used = Number(quota.used || 0);
-  return Math.max(0, total - used);
-}
+const MAX_SEGMENTS = 20;
 
 function fmt(n) {
   return Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -46,98 +37,113 @@ export default function QuotaPackBar({ packs = [], className }) {
   );
   if (live.length === 0) return null;
 
-  // Earliest-expiry first: the left-most segment is the one about to reset/die,
-  // mirroring CreditDaddy's reading order.
-  const sorted = [...live].sort((a, b) => {
-    const ta = a.resetAt ? new Date(a.resetAt).getTime() : Infinity;
-    const tb = b.resetAt ? new Date(b.resetAt).getTime() : Infinity;
-    return ta - tb;
+  const total = live.reduce((s, p) => s + Number(p.total || 0), 0);
+  const used = live.reduce((s, p) => s + Number(p.used || 0), 0);
+  const remainingAll = Math.max(0, total - used);
+  if (total <= 0) return null;
+
+  // CreditDaddy renders only LIVE packs (remaining > 0) as colored segments;
+  // exhausted one-shot packs vanish into the trailing "used" chunk.
+  const livePacks = live
+    .map((p) => {
+      const t = Number(p.total || 0);
+      const r = p.remaining !== undefined && p.remaining !== null
+        ? Math.max(0, Number(p.remaining))
+        : Math.max(0, t - Number(p.used || 0));
+      return { ...p, remainingNum: r, totalNum: t };
+    })
+    .filter((p) => p.remainingNum > 0 && p.totalNum > 0)
+    // Expiry order: the soonest-to-die pack leads the bar.
+    .sort((a, b) => {
+      const ta = a.resetAt ? new Date(a.resetAt).getTime() : Infinity;
+      const tb = b.resetAt ? new Date(b.resetAt).getTime() : Infinity;
+      return ta - tb;
+    });
+
+  // CreditDaddy's opacity ramp indexes the non-recurring live packs.
+  let oneShotIdx = 0;
+  const withAlpha = livePacks.map((p) => {
+    const alpha = p.recurring === true ? 1 : Math.max(0.45, 0.85 - oneShotIdx++ * 0.05);
+    return { ...p, alpha };
   });
 
-  // Overflow packs (beyond MAX_SEGMENTS) collapse into one trailing segment so
-  // a 40-pack connection still renders a readable bar.
-  let segments = sorted;
-  let overflow = null;
-  if (sorted.length > MAX_SEGMENTS) {
-    segments = sorted.slice(0, MAX_SEGMENTS - 1);
-    const rest = sorted.slice(MAX_SEGMENTS - 1);
-    overflow = {
-      name: translate("{count} more packs").replace("{count}", String(rest.length)),
-      used: rest.reduce((s, p) => s + Number(p.used || 0), 0),
-      total: rest.reduce((s, p) => s + Number(p.total || 0), 0),
-      resetAt: rest[0]?.resetAt || null,
-      remaining: rest.reduce((s, p) => s + packRemaining(p), 0),
-      isOverflow: true,
-    };
+  // Cap: fold packs beyond MAX_SEGMENTS into one merged live segment (a 40-pack
+  // connection would otherwise overflow the bar via min-width accumulation).
+  let segments = withAlpha;
+  if (withAlpha.length > MAX_SEGMENTS) {
+    const kept = withAlpha.slice(0, MAX_SEGMENTS - 1);
+    const rest = withAlpha.slice(MAX_SEGMENTS - 1);
+    segments = [
+      ...kept,
+      {
+        name: translate("{count} more packs").replace("{count}", String(rest.length)),
+        remainingNum: rest.reduce((s, p) => s + p.remainingNum, 0),
+        totalNum: rest.reduce((s, p) => s + p.totalNum, 0),
+        resetAt: rest[0]?.resetAt || null,
+        recurring: false,
+        alpha: 0.6,
+      },
+    ];
   }
 
-  const totalUsed = sorted.reduce((s, p) => s + Number(p.used || 0), 0);
-  const totalAll = sorted.reduce((s, p) => s + Number(p.total || 0), 0);
-  const earliestLive = sorted.find((p) => {
-    const t = p.resetAt ? new Date(p.resetAt).getTime() : Infinity;
-    return Number.isFinite(t) && t > Date.now() && packRemaining(p) > 0;
-  }) || sorted.find((p) => p.resetAt);
+  // Earliest one-shot live pack drives the right-hand meta ("X 于 MM-DD 到期"),
+  // matching CreditDaddy's `soon` pick (recurring windows reset rather than die).
+  const soon = withAlpha
+    .filter((p) => p.recurring !== true && p.resetAt)
+    .sort((a, b) => String(a.resetAt).localeCompare(String(b.resetAt)))[0] || null;
 
   return (
     <div className={cn("min-w-0", className)}>
-      <div className="flex items-center gap-[3px]" role="img"
+      <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
+        <span className="inline-flex items-center gap-1 tabular-nums">
+          <span className="text-text-muted">{translate("Remaining")}</span>
+          <b className="font-bold text-text">{fmt(remainingAll)}</b>
+        </span>
+        <span className="inline-flex min-w-0 items-center gap-1 truncate tabular-nums text-text-muted">
+          {soon && (
+            <>
+              {fmt(soon.remainingNum)} {translate("expires {date} · used {used} of {total}")
+                .replace("{date}", shortDate(soon.resetAt))
+                .replace("{used}", fmt(used))
+                .replace("{total}", fmt(total))}
+            </>
+          )}
+          {!soon && `${translate("Used")} ${fmt(used)} / ${fmt(total)}`}
+        </span>
+      </div>
+      <div
+        className="flex w-full gap-[2px] overflow-hidden rounded-[3px] bg-black/10 dark:bg-white/10"
+        style={{ height: "5px" }}
+        role="img"
         aria-label={translate("{used} of {total} used across {count} packs")
-          .replace("{used}", fmt(totalUsed))
-          .replace("{total}", fmt(totalAll))
-          .replace("{count}", String(sorted.length))}>
+          .replace("{used}", fmt(used))
+          .replace("{total}", fmt(total))
+          .replace("{count}", String(live.length))}
+      >
         {segments.map((p, i) => {
-          const total = Number(p.total || 0);
-          const remaining = packRemaining(p);
-          const frac = total > 0 ? Math.min(1, Math.max(0, remaining / total)) : 0;
-          const depleted = total > 0 && remaining <= 0;
-          const recurring = p.recurring === true;
+          const share = total > 0 ? p.remainingNum / total : 0;
+          const expiresWord = p.recurring === true ? translate("resets") : translate("expires");
           return (
-            <div
+            <span
               key={`${p.name || "pack"}-${i}`}
-              className="h-[6px] min-w-0 flex-1 overflow-hidden rounded-[3px] bg-black/10 dark:bg-white/10"
+              className={cn("block h-full min-w-[3px]", p.recurring === true ? "bg-sky-500" : "bg-green-500")}
+              style={{ flex: `${share.toFixed(4)} 1 0`, opacity: p.alpha }}
               title={[
                 p.name || translate("Quota package"),
-                `${fmt(remaining)} / ${fmt(total)}`,
-                p.resetAt ? `${translate("resets")} ${shortDate(p.resetAt)}` : null,
-                recurring ? translate("recurring window") : null,
-              ].filter(Boolean).join(" · ")}
-            >
-              <div
-                className={cn(
-                  "h-full rounded-[3px] transition-[width] duration-500",
-                  depleted
-                    ? "w-full bg-black/15 dark:bg-white/15"
-                    : recurring
-                      ? "bg-sky-500/80"
-                      : "bg-green-500/90"
-                )}
-                style={{ width: `${(depleted ? 1 : frac) * 100}%` }}
-              />
-            </div>
+                `${translate("Remaining")} ${fmt(p.remainingNum)} / ${fmt(p.totalNum)}`,
+                p.resetAt ? `${expiresWord} ${shortDate(p.resetAt)}` : null,
+              ].filter(Boolean).join("，")}
+            />
           );
         })}
-        {overflow && (
-          <div
-            className="h-[6px] w-10 shrink-0 overflow-hidden rounded-[3px] bg-black/10 dark:bg-white/10"
-            title={`${overflow.name}: ${fmt(overflow.remaining)} / ${fmt(overflow.total)}`}
-          >
-            <div
-              className="h-full bg-green-500/90"
-              style={{ width: `${overflow.total > 0 ? Math.min(100, (overflow.remaining / overflow.total) * 100) : 100}%` }}
-            />
-          </div>
+        {used > 0 && (
+          <span
+            className="block h-full min-w-[3px] bg-black/20 dark:bg-white/20"
+            style={{ flex: `${(used / total).toFixed(4)} 1 0` }}
+            title={`${translate("Used")} ${fmt(used)}`}
+          />
         )}
       </div>
-      {earliestLive && (
-        <p className="mt-1 text-right text-[11px] tabular-nums text-text-muted">
-          {fmt(packRemaining(earliestLive))}
-          {" "}
-          {translate("expires {date} · used {used} of {total}")
-            .replace("{date}", shortDate(earliestLive.resetAt))
-            .replace("{used}", fmt(totalUsed))
-            .replace("{total}", fmt(totalAll))}
-        </p>
-      )}
     </div>
   );
 }

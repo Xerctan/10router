@@ -1890,5 +1890,7 @@
   "{used} of {total} used across {count} packs": "{count} 个配额包：已用 {used} / 共 {total}",
   "resets": "重置于",
   "recurring window": "周期性配额",
-  "expires {date} · used {used} of {total}": " 于 {date} 到期 · 已用 {used} / 共 {total}"
+  "expires {date} · used {used} of {total}": " 于 {date} 到期 · 已用 {used} / 共 {total}",
+  "Used": "已用",
+  "expires": "到期"
 }
