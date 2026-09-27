@@ -48,9 +48,12 @@ function envUrl(name, def) {
 // Configure this for a separate Docker service or remote SearXNG instance.
 export const SEARXNG_URL = envUrl("SEARXNG_URL", "http://localhost:8888/search");
 
-// Inter-chunk stall timeout (once tokens are flowing). Generous headroom so
-// slow reasoning models aren't aborted mid-stream. Env: STREAM_STALL_TIMEOUT_MS.
-export const STREAM_STALL_TIMEOUT_MS = envMs("STREAM_STALL_TIMEOUT_MS", 360 * 1000);
+// Inter-chunk stall timeout (once tokens are flowing). Claude Code-class
+// clients abandon an idle stream at ~2min and surface their own cryptic
+// "empty or malformed response" error — the watchdog must fire BEFORE that so
+// our friendly in-band terminal frame wins the race. Providers with genuinely
+// slow upstreams override per-registry or via env.
+export const STREAM_STALL_TIMEOUT_MS = envMs("STREAM_STALL_TIMEOUT_MS", 120 * 1000);
 
 // Time-to-first-token timeout (prompt prefill). Env: STREAM_FIRST_CHUNK_TIMEOUT_MS.
 export const STREAM_FIRST_CHUNK_TIMEOUT_MS = envMs("STREAM_FIRST_CHUNK_TIMEOUT_MS", 200 * 1000);

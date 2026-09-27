@@ -89,9 +89,15 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
   // passthrough keeps its own response.failed shape; every other client format
   // gets the OpenAI error frame + [DONE], or `event: error` for Claude.
   const isResponsesPassthrough = sourceFormat === FORMATS.OPENAI_RESPONSES && targetFormat === FORMATS.OPENAI_RESPONSES;
+  // Friendly abort copy (用户实测：客户端在 ~140s 自行放弃并报
+  // "empty or malformed response (HTTP 200)"——看门狗必须先行，且文案要给出路).
+  const friendlyAbort = (message) =>
+    message === "stream stall timeout"
+      ? "上游连接在响应中途失联（120 秒无任何数据）——通常是上游过载、网络抖动或渠道临时故障；本轮已自动终止以免客户端长时间挂起。请直接重试，或切换其他渠道/模型。"
+      : "上游连接中断——通常是上游过载或网络抖动；本轮已自动终止。请直接重试，或切换其他渠道/模型。";
   const onAbortTerminal = isResponsesPassthrough
     ? buildAbortedResponsesTerminalBytes
-    : (message) => buildStreamErrorBytes(HTTP_STATUS.GATEWAY_TIMEOUT, message, sourceFormat);
+    : (message) => buildStreamErrorBytes(HTTP_STATUS.GATEWAY_TIMEOUT, friendlyAbort(message), sourceFormat);
   const stallTimeoutMs = PROVIDERS[provider]?.stallTimeoutMs || STREAM_STALL_TIMEOUT_MS;
   const transformedBody = pipeWithDisconnect(providerResponse, transformStream, streamController, onAbortTerminal, stallTimeoutMs);
 
