@@ -352,3 +352,58 @@ describe("transfer buttons placement — single-auth OAuth providers too", () =>
     expect(registry).toMatch(/category:\s*"oauth"/); // → present in OAUTH_PROVIDERS, providerInfo exists
   });
 });
+
+describe("accountTransfer: api-key compatible nodes (opencode-go shape)", () => {
+  const originalDataDir = process.env.DATA_DIR;
+  let tempDir;
+  let mod;
+
+  beforeAll(async () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "10router-transfer-apikey-"));
+    process.env.DATA_DIR = tempDir;
+    vi.resetModules();
+    const db = await import("@/lib/db/index.js");
+    await db.initDb();
+    mod = await import("../../src/lib/oauth/accountTransfer.js");
+  });
+
+  afterAll(() => {
+    process.env.DATA_DIR = originalDataDir;
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch { /* best-effort on Windows */ }
+  });
+
+  it("exports a connection whose credential lives in apiKey (compatible-node shape)", () => {
+    const accounts = mod.buildExportAccounts("opencode-go", [
+      { id: "c1", authType: "apikey", apiKey: "sk-ocg-key", name: "zen" }, // no accessToken at all
+      { id: "c2", authType: "oauth", accessToken: "jwt-tok" },             // oauth shape untouched
+    ]);
+    expect(accounts).toHaveLength(2);
+    expect(accounts[0]).toMatchObject({ provider: "opencode-go", authType: "apikey", accessToken: "sk-ocg-key" });
+    expect(accounts[1]).toMatchObject({ provider: "opencode-go", authType: "oauth", accessToken: "jwt-tok" });
+  });
+
+  it("skips rows with no credential in either field", () => {
+    expect(mod.buildExportAccounts("opencode-go", [{ id: "x", authType: "apikey" }])).toEqual([]);
+  });
+
+  it("imports an apikey account with the key in the apiKey field (runtime contract)", async () => {
+    const res = await mod.importAccounts("opencode-go", [
+      { authType: "apikey", accessToken: "sk-zen-key", name: "zen" },
+    ]);
+    expect(res.imported).toBe(1);
+    const { getProviderConnectionById } = await import("@/lib/db/repos/connectionsRepo.js");
+    const conn = await getProviderConnectionById(res.results[0].id);
+    expect(conn.apiKey).toBe("sk-zen-key");
+    expect(conn.authType).toBe("apikey");
+  });
+
+  it("re-import dedups an apikey row by its key instead of creating a duplicate", async () => {
+    const res = await mod.importAccounts("opencode-go", [
+      { authType: "apikey", accessToken: "sk-zen-key", name: "zen" },
+    ]);
+    expect(res.updated).toBe(1);
+    expect(res.imported).toBe(0);
+  });
+});

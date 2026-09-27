@@ -41,8 +41,12 @@ export function decodeJwt(jwt) {
 export function buildExportAccounts(provider, connections, now = Date.now()) {
   const accounts = [];
   for (const c of connections || []) {
-    if (!c.accessToken) continue;
-    const claims = decodeJwt(c.accessToken) || {};
+    // API-key compatible nodes (opencode-go etc.) hold the credential in
+    // `apiKey`, OAuth rows in `accessToken` — export whichever holds the key,
+    // tagged with authType so the import side lands it back in the right field.
+    const token = c.accessToken || c.apiKey || null;
+    if (!token) continue;
+    const claims = decodeJwt(token) || {};
     let expiresAt = null;
     if (typeof claims.exp === "number" && claims.exp * 1000 > now) {
       expiresAt = new Date(claims.exp * 1000).toISOString();
@@ -54,10 +58,11 @@ export function buildExportAccounts(provider, connections, now = Date.now()) {
       : null;
     accounts.push({
       provider,
+      authType: c.authType || null,
       name: c.name || claims.nickname || claims.preferred_username || null,
       email: c.email || claims.email || null,
       uid: claims.sub || null,
-      accessToken: c.accessToken,
+      accessToken: token,
       refreshToken: c.refreshToken || null,
       expiresAt,
       expiresIn: typeof c.expiresIn === "number" ? c.expiresIn : null,
@@ -125,7 +130,8 @@ export async function importAccounts(provider, accounts) {
 
       // Dedup (issue #9 sibling: re-imports must never duplicate accounts).
       // Priority: JWT sub (strongest identity) → exact accessToken (same file
-      // re-imported) → refreshToken → email → name.
+      // re-imported) → apiKey (api-key compatible nodes hold the credential
+      // there, not in accessToken) → refreshToken → email → name.
       const sub = claims?.sub || null;
       let match = null;
       if (sub) {
@@ -133,6 +139,9 @@ export async function importAccounts(provider, accounts) {
       }
       if (!match) {
         match = existing.find((c) => c.accessToken === accessToken) || null;
+      }
+      if (!match) {
+        match = existing.find((c) => c.apiKey && c.apiKey === accessToken) || null;
       }
       if (!match && refreshToken) {
         match = existing.find((c) => c.refreshToken && c.refreshToken === refreshToken) || null;
@@ -144,10 +153,16 @@ export async function importAccounts(provider, accounts) {
         match = existing.find((c) => c.name === nickname) || null;
       }
 
+      // API-key compatible nodes (opencode-go etc.) keep the credential in the
+      // `apiKey` field — that is what the runtime reads for them. Write it
+      // there IN ADDITION to accessToken (which stays for the identity/dedup
+      // paths); OAuth rows keep the accessToken-only shape.
+      const isApiKeyType = String(item.authType || "").toLowerCase() === "apikey";
       const payload = {
         provider,
         authType: item.authType || "oauth",
         accessToken,
+        ...(isApiKeyType ? { apiKey: accessToken } : {}),
         refreshToken,
         name: nickname || undefined,
         email: item.email || undefined,
