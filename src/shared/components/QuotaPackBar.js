@@ -91,7 +91,7 @@ export function isRecurringQuotaRow(row) {
 
 /** One always-visible meter row (name | bar | 剩 X / Y · word date). */
 function MeterRow({ row }) {
-  const total = Number(row.totalNum ?? row.total || 0);
+  const total = Number((row.totalNum ?? row.total) || 0);
   const remaining = Number(row.remainingNum ?? remainingOf(row));
   const pct = total > 0 ? Math.min(100, (remaining / total) * 100) : 0;
   const recurring = row.recurring === true || isRecurringQuotaRow(row);
