@@ -393,43 +393,6 @@ export default function ProviderDetailPage() {
       </>
     ) : null;
 
-  // ZCode: pull the credential material out of the local ZCode desktop install
-  // (~/.zcode/v2). Server-side scan, offline when a cached minted key exists.
-  const [importingZcodeLocal, setImportingZcodeLocal] = useState(false);
-  const handleZcodeAutoImport = async () => {
-    if (importingZcodeLocal) return;
-    setImportingZcodeLocal(true);
-    try {
-      const res = await fetch("/api/oauth/zcode/auto-import");
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || `Request failed: ${res.status}`);
-      const landed = (data.imported || 0) + (data.updated || 0);
-      if (landed > 0) {
-        notify.success(translate("Imported from local ZCode install") + ` (${data.imported || 0}+${data.updated || 0})`);
-        await fetchConnections();
-      } else {
-        notify.warning(translate("No usable ZCode credentials found in local install"));
-      }
-    } catch (e) {
-      notify.error(translate("Local ZCode import failed") + ": " + e.message);
-    } finally {
-      setImportingZcodeLocal(false);
-    }
-  };
-  const renderZcodeAutoImportButton = (className) =>
-    providerId === "zcode" ? (
-      <Button
-        size="sm"
-        icon="download"
-        variant="secondary"
-        disabled={importingZcodeLocal}
-        onClick={handleZcodeAutoImport}
-        className={className}
-      >
-        {translate("Import Local Install")}
-      </Button>
-    ) : null;
-
   const staticModels = getModelsByProviderId(providerId);
   // Qoder publishes credit multipliers + off-peak promos only on its live
   // catalog (price_factor flips to 0 during a free window, the promotion
@@ -2170,7 +2133,6 @@ export default function ProviderDetailPage() {
                       {apiKeyConnectionLabel}
                     </Button>
                     {renderOAuthTransferButtons()}
-                    {renderZcodeAutoImportButton()}
                     {codeBuddyCheckinOn && renderCbCheckinBlock()}
                   </>
                 ) : (
@@ -2283,7 +2245,6 @@ export default function ProviderDetailPage() {
                         {apiKeyConnectionLabel}
                       </Button>
                       {renderOAuthTransferButtons("w-full sm:w-auto")}
-                      {renderZcodeAutoImportButton("w-full sm:w-auto")}
                       {codeBuddyCheckinOn && renderCbCheckinBlock()}
                       {(providerId === "qoder" || providerId === "qoder-cn") && renderQoderCheckinBlock()}
                     </>

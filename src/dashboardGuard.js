@@ -77,13 +77,6 @@ const ALWAYS_PROTECTED = [
   // dashboard password inside). Exception: same-machine import AND export,
   // see the transfer branch in proxy() — the route keeps its own re-auth.
   "/api/oauth/transfer/",
-  // ZCode CreditDaddy-file import writes live credentials; the transfer
-  // passphrase (GCM tag) is the real auth, same model as transfer/import —
-  // same-machine exception mirrors the transfer branch in proxy().
-  "/api/oauth/zcode/import",
-  // Reads the host's ~/.zcode/v2 install (config.json + credentials.json) —
-  // host-secret reader like the xiaomi-mimo auto-import sibling.
-  "/api/oauth/zcode/auto-import",
 ];
 
 // Require auth, but allow through if requireLogin is disabled
@@ -120,9 +113,6 @@ const LOCAL_ONLY_PATHS = [
   "/api/tunnel/disable",
   "/api/oauth/cursor/auto-import",
   "/api/oauth/kiro/auto-import",
-  // Host-secret reader (~/.zcode/v2 install) — remote/LAN calls must never
-  // reach it, matching the cursor/kiro/xiaomi auto-import siblings.
-  "/api/oauth/zcode/auto-import",
   // Host-secret reader (MiMo Desktop auth.json) — remote/LAN calls must never
   // reach it, matching the cursor/kiro auto-import siblings. desktop-status /
   // desktop-kill join them: process control on the host machine is exactly the
@@ -325,10 +315,7 @@ export async function proxy(request) {
   // keeps tunnels, LAN and cross-site pages out.
   if (
     request.method === "POST" &&
-    (pathname === "/api/oauth/transfer/import" ||
-      pathname === "/api/oauth/transfer/export" ||
-      // ZCode CreditDaddy import: same model — the passphrase proves possession.
-      pathname === "/api/oauth/zcode/import") &&
+    (pathname === "/api/oauth/transfer/import" || pathname === "/api/oauth/transfer/export") &&
     isLocalRequest(request) &&
     (await isAuthenticated(request))
   ) {

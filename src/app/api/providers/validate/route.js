@@ -299,7 +299,6 @@ export async function POST(request) {
 
         case "glm":
         case "glm-cn":
-        case "zcode":
         case "kimi":
         case "minimax":
         case "minimax-cn":
@@ -309,7 +308,7 @@ export async function POST(request) {
         case "agentrouter": {
           // Use baseUrl from PROVIDERS (DRY); separate openai-format vs claude-format flow
           const cfg = PROVIDERS[provider];
-          const isOpenAiFormat = provider === "glm-cn" || provider === "zcode" || provider === "alicode" || provider === "alicode-intl" || provider === "alims-intl";
+          const isOpenAiFormat = provider === "glm-cn" || provider === "alicode" || provider === "alicode-intl" || provider === "alims-intl";
 
           if (isOpenAiFormat) {
             const testModel = getDefaultModel(provider);

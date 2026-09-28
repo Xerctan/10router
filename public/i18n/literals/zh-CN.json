@@ -1,8 +1,4 @@
 {
-  "Local ZCode import failed": "本机 ZCode 导入失败",
-  "No usable ZCode credentials found in local install": "本机 ZCode 安装中未找到可用凭据",
-  "Imported from local ZCode install": "已从本机 ZCode 安装导入",
-  "Import Local Install": "从本机安装导入",
   "10Router (Entry)": "10Router（入口）",
   "($/1M tokens). Example: An input rate of 2.50 means $2.50 per 1,000,000 input tokens.": "（$/100 万 Token）。示例：输入费率 2.50 表示每 1,000,000 个输入 Token 需 2.50 美元。",
   "($/1M tokens). Example: Input rate of 2.50 means $2.50 per 1,000,000 input tokens.": "（$/100 万 Token）。示例：输入费率 2.50 表示每 1,000,000 个输入 Token 需 2.50 美元。",
