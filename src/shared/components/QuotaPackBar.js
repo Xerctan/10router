@@ -86,7 +86,7 @@ function MeterRow({ row }) {
   const word = recurring ? translate("resets") : translate("expires");
   return (
     <div className="flex min-w-0 items-center gap-2 text-[11px] tabular-nums">
-      <span className="w-16 shrink-0 truncate text-text-muted">{row.name}</span>
+      <span className="w-16 shrink-0 truncate text-text-muted">{translateQuotaName(row.name)}</span>
       <div className="h-[5px] min-w-0 flex-1 overflow-hidden rounded-[3px] bg-black/10 dark:bg-white/10">
         <div
           className={cn("h-full rounded-[3px]", recurring ? "bg-sky-500/80" : "bg-green-500/90")}
