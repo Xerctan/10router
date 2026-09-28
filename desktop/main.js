@@ -21,13 +21,14 @@
  *  - 端口: ROUTER_PORT > 20128(与 CLI 默认一致)
  *  - 界面语言: 跟随系统(与 npm CLI 的 i18n 同规则),TENROUTER_LANG 可覆盖
  */
-const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, shell, dialog, ipcMain, session } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, shell, dialog, ipcMain, session, safeStorage } = require('electron');
 const { spawn, spawnSync } = require('child_process');
 const crypto = require('crypto');
 const http = require('http');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { createPasswordStore } = require('./passwordStore');
 
 // 必须先于一切 getPath('userData') 调用:productName "10Router" 在 Windows(大小写
 // 不敏感)上会与服务数据目录 %APPDATA%\10router 撞名,壳日志会混进服务数据。
@@ -116,6 +117,34 @@ const STRINGS = {
         'appmenu.recent': 'Recent',
         'appmenu.recent.empty': '(none yet)',
         'appmenu.clearrecent': 'Clear Recent',
+        'appmenu.managePw': 'Saved Passwords…',
+        'pw.save.title': 'Save password?',
+        'pw.save.updateTitle': 'Update password?',
+        'pw.save.site': 'Site',
+        'pw.save.user': 'Username',
+        'pw.save.pass': 'Password',
+        'pw.save.save': 'Save',
+        'pw.save.update': 'Update',
+        'pw.save.never': 'Never for this site',
+        'pw.save.notNow': 'Not now',
+        'pw.notify.disabled': 'System credential encryption is unavailable — password saving is disabled.',
+        'pw.mgr.title': 'Saved Passwords',
+        'pw.mgr.empty': 'No saved passwords yet — save on login or add one below.',
+        'pw.mgr.add': 'Add',
+        'pw.mgr.originPh': 'Site (https://example.com)',
+        'pw.mgr.userPh': 'Username',
+        'pw.mgr.passPh': 'Password',
+        'pw.mgr.keepPw': 'Leave empty to keep current password',
+        'pw.mgr.reveal': 'Show',
+        'pw.mgr.hide': 'Hide',
+        'pw.mgr.copy': 'Copy',
+        'pw.mgr.copied': 'Copied',
+        'pw.mgr.confirmDel': 'Sure?',
+        'pw.mgr.noUser': '(no username)',
+        'pw.mgr.fill': 'Fill password: {user}',
+        'pw.mgr.invalid': 'Site must be a valid http(s) address',
+        'pw.mgr.needPw': 'Password cannot be empty',
+        'pw.mgr.err': 'Operation failed',
     },
     'zh-CN': {
         'status.stopped': '服务未运行',
@@ -198,6 +227,34 @@ const STRINGS = {
         'appmenu.recent': '最近打开',
         'appmenu.recent.empty': '(还没有记录)',
         'appmenu.clearrecent': '清除最近打开',
+        'appmenu.managePw': '管理已保存的密码…',
+        'pw.save.title': '保存密码？',
+        'pw.save.updateTitle': '更新密码？',
+        'pw.save.site': '站点',
+        'pw.save.user': '用户名',
+        'pw.save.pass': '密码',
+        'pw.save.save': '保存',
+        'pw.save.update': '更新',
+        'pw.save.never': '永不保存此站点',
+        'pw.save.notNow': '暂不',
+        'pw.notify.disabled': '系统凭据加密不可用，密码保存功能已停用。',
+        'pw.mgr.title': '已保存的密码',
+        'pw.mgr.empty': '还没有已保存的密码。可在网页登录时保存，或在下方手动添加。',
+        'pw.mgr.add': '添加',
+        'pw.mgr.originPh': '站点（https://example.com）',
+        'pw.mgr.userPh': '用户名',
+        'pw.mgr.passPh': '密码',
+        'pw.mgr.keepPw': '留空则保持原密码',
+        'pw.mgr.reveal': '显示',
+        'pw.mgr.hide': '隐藏',
+        'pw.mgr.copy': '复制',
+        'pw.mgr.copied': '已复制',
+        'pw.mgr.confirmDel': '确认删除？',
+        'pw.mgr.noUser': '（无用户名）',
+        'pw.mgr.fill': '填充密码：{user}',
+        'pw.mgr.invalid': '站点必须是合法的 http(s) 地址',
+        'pw.mgr.needPw': '密码不能为空',
+        'pw.mgr.err': '操作失败',
     },
     'zh-TW': {
         'status.stopped': '服務未執行',
@@ -280,6 +337,34 @@ const STRINGS = {
         'appmenu.recent': '最近開啟',
         'appmenu.recent.empty': '(還沒有記錄)',
         'appmenu.clearrecent': '清除最近開啟',
+        'appmenu.managePw': '管理已儲存的密碼…',
+        'pw.save.title': '儲存密碼？',
+        'pw.save.updateTitle': '更新密碼？',
+        'pw.save.site': '站點',
+        'pw.save.user': '使用者名稱',
+        'pw.save.pass': '密碼',
+        'pw.save.save': '儲存',
+        'pw.save.update': '更新',
+        'pw.save.never': '永不儲存此站點',
+        'pw.save.notNow': '暫不',
+        'pw.notify.disabled': '系統憑證加密不可用，密碼儲存功能已停用。',
+        'pw.mgr.title': '已儲存的密碼',
+        'pw.mgr.empty': '還沒有已儲存的密碼。可在網頁登入時儲存，或在下方手動新增。',
+        'pw.mgr.add': '新增',
+        'pw.mgr.originPh': '站點（https://example.com）',
+        'pw.mgr.userPh': '使用者名稱',
+        'pw.mgr.passPh': '密碼',
+        'pw.mgr.keepPw': '留空則保持原密碼',
+        'pw.mgr.reveal': '顯示',
+        'pw.mgr.hide': '隱藏',
+        'pw.mgr.copy': '複製',
+        'pw.mgr.copied': '已複製',
+        'pw.mgr.confirmDel': '確認刪除？',
+        'pw.mgr.noUser': '（無使用者名稱）',
+        'pw.mgr.fill': '填入密碼：{user}',
+        'pw.mgr.invalid': '站點必須是合法的 http(s) 位址',
+        'pw.mgr.needPw': '密碼不能為空',
+        'pw.mgr.err': '操作失敗',
     },
 };
 
@@ -570,12 +655,20 @@ function attachWindowOpenRouting(openerContents, fixedSession) {
             // 无痕授权流程内站点自弹的子窗:复用同一分区;不清存储(随顶层授权窗关闭统一清)
             openerContents.once('did-create-window', (child) => {
                 attachWindowOpenRouting(child.webContents, fixedSession);
+                attachContainerCapture(child.webContents);
+                attachContextMenu(child);
             });
             return {
                 action: 'allow',
                 overrideBrowserWindowOptions: {
                     autoHideMenuBar: true,
-                    webPreferences: { session: fixedSession, contextIsolation: true, nodeIntegration: false, sandbox: true },
+                    webPreferences: {
+                        session: fixedSession,
+                        preload: CONTAINER_PRELOAD,
+                        contextIsolation: true,
+                        nodeIntegration: false,
+                        sandbox: true,
+                    },
                 },
             };
         }
@@ -586,6 +679,8 @@ function attachWindowOpenRouting(openerContents, fixedSession) {
             : session.fromPartition('auth-' + crypto.randomUUID());
         openerContents.once('did-create-window', (child) => {
             attachWindowOpenRouting(child.webContents, childSession);
+            attachContainerCapture(child.webContents);
+            attachContextMenu(child);
             if (childSession) {
                 // 顶层无痕授权窗关闭 = 本次登录流程结束:清掉该分区的全部存储
                 child.on('closed', () => {
@@ -600,6 +695,7 @@ function attachWindowOpenRouting(openerContents, fixedSession) {
                 ...(childSession ? { title: tr('win.authWindowTitle') } : {}),
                 webPreferences: {
                     ...(childSession ? { session: childSession } : {}),
+                    preload: CONTAINER_PRELOAD,
                     contextIsolation: true,
                     nodeIntegration: false,
                     sandbox: true,
@@ -634,6 +730,7 @@ function createWindow() {
         backgroundColor: shellBg(),
         show: false,
         webPreferences: {
+            preload: CONTAINER_PRELOAD,   // 容器密码管理:捕获/自动填充(见下方密码管理段)
             contextIsolation: true,
             nodeIntegration: false,
             sandbox: true,
@@ -644,6 +741,7 @@ function createWindow() {
     });
     win.once('ready-to-show', () => win.show());
     attachWindowOpenRouting(win.webContents, null);
+    attachContainerCapture(win.webContents);
     win.webContents.on('will-navigate', (e, url) => {
         // 主窗体当通用视图用:http(s) 一律放行(「前往→打开网址」的既有语义);
         // 其余 scheme(file: 等)拦下,已知外部协议丢系统浏览器。
@@ -1014,6 +1112,415 @@ ipcMain.on('recent-mgr', (e, msg) => {
     e.returnValue = { ok: !!fromMgr, list: loadRecentUrls() };
 });
 
+// ──────────────────────── 容器密码管理(捕获/自动填充/管理窗) ────────────────────────
+// 「容器」= 主窗体加载的外部网页(「前往→打开网址/最近打开」)与壳内弹窗子窗。
+// 捕获与填充逻辑在 preload-container.js(sandbox 安全,不向页面暴露任何东西),
+// 这里只做:登记容器 webContents、密码库(passwords.json,safeStorage 密文)、
+// 保存询问窗、管理窗、右键填充。约定:
+//  - 渲染层传来的 url 一律不采信,归属 origin 只按主进程侧读到的 senderFrame.url;
+//  - pw:fill 广播给全部 frame,各 frame 按 location.origin 自滤,跨域 iframe 拿不到;
+//  - cipher 用 Electron safeStorage(Windows=DPAPI 绑当前系统用户),不可用即停用,
+//    绝不落明文(库模块 passwordStore.js 同款约定)。
+const PASSWORD_FILE = path.join(app.getPath('userData'), 'passwords.json');
+const CONTAINER_PRELOAD = path.join(__dirname, 'preload-container.js');
+
+const safeStorageCipher = {
+    available: () => { try { return safeStorage.isEncryptionAvailable() === true; } catch { return false; } },
+    encrypt: (plain) => safeStorage.encryptString(plain).toString('base64'),
+    decrypt: (blob) => safeStorage.decryptString(Buffer.from(String(blob), 'base64')).toString('utf8'),
+};
+
+let pwStore = null;
+function getPwStore() {
+    if (!pwStore) pwStore = createPasswordStore({ file: PASSWORD_FILE, cipher: safeStorageCipher, log: (m) => log(m) });
+    return pwStore;
+}
+
+function listPasswords() {
+    try { return getPwStore().list(); } catch { return []; }
+}
+
+const cleanText = (v) => String(v === undefined || v === null ? '' : v).trim().slice(0, 300);
+
+// pw:* 事件的归属 origin:优先取发送 frame 的真实 URL(iframe 里的登录框归 iframe),
+// frame 已销毁等场景回退整页 URL。
+function frameOrigin(e) {
+    try {
+        const fu = e.senderFrame && e.senderFrame.url;
+        if (fu) return new URL(fu).origin;
+    } catch { /* 回退 sender */ }
+    try { return new URL(e.sender.getURL()).origin; } catch { return null; }
+}
+
+// 容器 webContents 登记:只有这些窗的 pw:* IPC 会被受理;弹窗子窗同享捕获/填充
+const containerContents = new Set();
+const typedCaptures = new Map();   // webContents.id → {origin, url, username, password, ts}
+
+function attachContainerCapture(contents) {
+    if (!contents || containerContents.has(contents)) return;
+    containerContents.add(contents);
+    contents.once('destroyed', () => {
+        containerContents.delete(contents);
+        typedCaptures.delete(contents.id);
+    });
+    // SPA 登录启发式:输入过密码后同 origin 换路径 → 视作登录成功,转保存询问。
+    // 原地提交(失败重试同 URL)/换站/超 10 分钟都不算。
+    contents.on('did-navigate', (e, url) => {
+        const rec = typedCaptures.get(contents.id);
+        if (!rec) return;
+        typedCaptures.delete(contents.id);
+        try {
+            const next = new URL(url || '');
+            if (!/^https?:$/.test(next.protocol)) return;
+            if (next.origin.toLowerCase() !== String(rec.origin).toLowerCase()) return;
+            if (next.toString() === rec.url) return;
+            if (Date.now() - rec.ts > 10 * 60 * 1000) return;
+            offerPasswordSave({ origin: rec.origin, username: rec.username, password: rec.password });
+        } catch { }
+    });
+}
+
+let pwDisabledNotified = false;
+// 保存询问的唯一入口(form 捕获/typed 启发式共用):去重 + 更新判定,再弹窗
+function offerPasswordSave({ origin, username, password }) {
+    if (!origin || !password) return;
+    const store = getPwStore();
+    if (!store.isAvailable()) {
+        if (!pwDisabledNotified) {
+            pwDisabledNotified = true;
+            notify(tr('pw.mgr.title'), tr('pw.notify.disabled'));
+        }
+        return;
+    }
+    if (store.isNeverAsk(origin)) return;
+    const existing = store.findEntry(origin, username || '');
+    let isUpdate = false;
+    if (existing) {
+        try { if (store.reveal(existing.id) === password) return; } catch { /* 解不开按更新处理 */ }
+        isUpdate = true;
+    }
+    promptSavePassword({ origin, username: username || '', password, isUpdate });
+}
+
+// ── 保存询问窗(保存/更新、永不保存此站点、暂不) ──
+let savePwWin = null;
+let savePwPending = null;   // {origin, username, password, isUpdate}
+
+function promptSavePassword(payload) {
+    if (savePwWin && !savePwWin.isDestroyed()) { savePwWin.focus(); return; }   // 一次只处理一条
+    savePwPending = payload;
+    savePwWin = new BrowserWindow({
+        width: 470,
+        height: 256,
+        parent: (win && !win.isDestroyed()) ? win : null,
+        // 刻意不用 modal(见 promptOpenUrl 注释:模态子窗会永久卡死父窗体)
+        alwaysOnTop: true,
+        title: tr(payload.isUpdate ? 'pw.save.updateTitle' : 'pw.save.title'),
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        autoHideMenuBar: true,
+        show: true,
+        webPreferences: { contextIsolation: false, nodeIntegration: true, sandbox: false },
+    });
+    attachContextMenu(savePwWin);
+    const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const html = `<!doctype html><html><head><meta charset="utf-8"></head>
+<body style="font-family:inherit;margin:0;padding:14px;display:flex;flex-direction:column;gap:8px;background:transparent">
+<div style="font-size:14px;font-weight:600">PW_TITLE</div>
+<div style="display:flex;gap:8px;align-items:center">
+<span style="width:56px;font-size:12px;color:#888">SITE_LBL</span>
+<input value="SITE_VAL" readonly style="flex:1;min-width:0;padding:5px 10px;font-size:13px;border:1px solid #8883;border-radius:6px;color:#555;background:transparent">
+</div>
+<div style="display:flex;gap:8px;align-items:center">
+<span style="width:56px;font-size:12px;color:#888">USER_LBL</span>
+<input id="u" value="USER_VAL" placeholder="USER_PH" style="flex:1;min-width:0;padding:5px 10px;font-size:13px;border:1px solid #8883;border-radius:6px;outline:none">
+</div>
+<div style="display:flex;gap:8px;align-items:center">
+<span style="width:56px;font-size:12px;color:#888">PASS_LBL</span>
+<input id="p" type="password" value="PASS_VAL" style="flex:1;min-width:0;padding:5px 10px;font-size:13px;border:1px solid #8883;border-radius:6px;outline:none">
+</div>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+<button id="never" style="padding:5px 12px;font-size:13px;border:1px solid #8883;border-radius:6px;cursor:pointer;background:transparent">NEVER_LBL</button>
+<button id="no" style="padding:5px 12px;font-size:13px;border:1px solid #8883;border-radius:6px;cursor:pointer;background:transparent">NOTNOW_LBL</button>
+<button id="ok" style="padding:5px 14px;font-size:13px;border:1px solid #8883;border-radius:6px;cursor:pointer">SAVE_LBL</button>
+</div>
+<script>
+const { ipcRenderer } = require('electron');
+const decide = (action) => ipcRenderer.send('pw:save-decide', {
+  action,
+  username: document.getElementById('u').value,
+  password: document.getElementById('p').value,
+});
+document.getElementById('ok').addEventListener('click', () => decide('save'));
+document.getElementById('never').addEventListener('click', () => decide('never'));
+document.getElementById('no').addEventListener('click', () => window.close());
+['u', 'p'].forEach((id) => document.getElementById(id).addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') decide('save');
+  if (e.key === 'Escape') window.close();
+}));
+</script>
+</body></html>`;
+    const filled = html
+        .replace('PW_TITLE', esc(tr(payload.isUpdate ? 'pw.save.updateTitle' : 'pw.save.title')))
+        .replace('SITE_LBL', esc(tr('pw.save.site')))
+        .replace('USER_LBL', esc(tr('pw.save.user')))
+        .replace('PASS_LBL', esc(tr('pw.save.pass')))
+        .replace('USER_PH', esc(tr('pw.mgr.userPh')))
+        .replace('SITE_VAL', esc(payload.origin))
+        .replace('USER_VAL', esc(payload.username))
+        .replace('PASS_VAL', esc(payload.password))
+        .replace('NEVER_LBL', esc(tr('pw.save.never')))
+        .replace('NOTNOW_LBL', esc(tr('pw.save.notNow')))
+        .replace('SAVE_LBL', esc(tr(payload.isUpdate ? 'pw.save.update' : 'pw.save.save')));
+    savePwWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(filled))
+        .catch((e) => { log(`pw save prompt load failed: ${e.message}`); try { savePwWin.close(); } catch { /* ignore */ } });
+    savePwWin.on('closed', () => { savePwWin = null; savePwPending = null; });
+}
+
+// 用户名/密码以弹窗输入为准(可改完再存);关窗/暂不 = 丢弃这条,下次登录再问
+ipcMain.on('pw:save-decide', (e, msg) => {
+    const fromPrompt = savePwWin && !savePwWin.isDestroyed() && e.sender === savePwWin.webContents;
+    if (!fromPrompt || !savePwPending) return;
+    const payload = savePwPending;
+    savePwPending = null;
+    try { savePwWin.close(); } catch { /* ignore */ }
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.action === 'never') {
+        try { getPwStore().setNeverAsk(payload.origin); } catch { /* ignore */ }
+        return;
+    }
+    if (msg.action === 'save') {
+        const username = String(msg.username === undefined ? payload.username : msg.username).trim().slice(0, 300);
+        const password = String(msg.password === undefined ? payload.password : msg.password);
+        try { getPwStore().upsert({ origin: payload.origin, username, password }); } catch { /* 存不上不阻塞 */ }
+    }
+});
+
+// 捕获一:<form> submit(preload 捕获阶段送来)
+ipcMain.on('pw:captured', (e, payload) => {
+    if (!containerContents.has(e.sender) || !payload || typeof payload !== 'object') return;
+    const origin = frameOrigin(e);
+    if (!origin) return;
+    offerPasswordSave({ origin, username: cleanText(payload.username), password: String(payload.password || '') });
+});
+
+// 捕获二:SPA 无 form 登录的 pending 输入,等 did-navigate 消费(见 attachContainerCapture)
+ipcMain.on('pw:typed', (e, payload) => {
+    if (!containerContents.has(e.sender) || !payload || typeof payload !== 'object') return;
+    const origin = frameOrigin(e);
+    if (!origin) return;
+    try {
+        typedCaptures.set(e.sender.id, {
+            origin,
+            url: e.sender.getURL(),
+            username: cleanText(payload.username),
+            password: String(payload.password || ''),
+            ts: Date.now(),
+        });
+    } catch { /* ignore */ }
+});
+
+// 自动填充:该 origin 恰好一条已存条目才自动回填(多账号走右键菜单显式选,不自动猜)
+ipcMain.on('pw:focus', (e) => {
+    if (!containerContents.has(e.sender)) return;
+    const origin = frameOrigin(e);
+    if (!origin) return;
+    const store = getPwStore();
+    if (!store.isAvailable() || store.isNeverAsk(origin)) return;
+    let entries = [];
+    try { entries = store.listForOrigin(origin); } catch { return; }
+    if (entries.length !== 1) return;
+    try {
+        const password = store.reveal(entries[0].id);
+        e.sender.send('pw:fill', { origin, username: entries[0].username, password });
+    } catch { /* ignore */ }
+});
+
+// ── 管理已保存的密码(列表/手动添加/改/显示/复制/两步删除) ──
+let pwMgrWin = null;
+function promptManagePasswords() {
+    if (pwMgrWin && !pwMgrWin.isDestroyed()) { pwMgrWin.focus(); return; }
+    pwMgrWin = new BrowserWindow({
+        width: 800,
+        height: 520,
+        parent: (win && !win.isDestroyed()) ? win : null,
+        alwaysOnTop: true,
+        title: tr('pw.mgr.title'),
+        autoHideMenuBar: true,
+        show: true,
+        webPreferences: { contextIsolation: false, nodeIntegration: true, sandbox: false },
+    });
+    attachContextMenu(pwMgrWin);
+    const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const html = `<!doctype html><html><head><meta charset="utf-8"></head>
+<body style="font-family:inherit;margin:0;padding:12px;display:flex;flex-direction:column;gap:8px;background:transparent">
+<div id="err" style="display:none;font-size:12px;color:#c0392b"></div>
+<div id="add" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px dashed #8885;border-radius:8px;padding:8px"></div>
+<div id="list" style="display:flex;flex-direction:column;gap:6px"></div>
+<script>
+const { ipcRenderer, clipboard } = require('electron');
+const BTN = 'padding:3px 10px;font-size:12px;border:1px solid #8883;border-radius:6px;cursor:pointer;background:transparent';
+const INP = 'flex:1;min-width:0;padding:4px 8px;font-size:13px;border:1px solid #8883;border-radius:6px;outline:none';
+const ORIGIN = 'flex-basis:100%;font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+const ERRS = { invalidOrigin: 'ERR_INVALID', needPw: 'ERR_NEEDPW', failed: 'ERR_FAILED' };
+const errBox = document.getElementById('err');
+function showErr(key) { errBox.textContent = ERRS[key] || ERRS.failed; errBox.style.display = 'block'; }
+function clearErr() { errBox.style.display = 'none'; }
+function rpc(msg) { return ipcRenderer.sendSync('pw:mgr', msg) || {}; }
+// 行内容全部用 DOM API 构建(textContent/value),不拼 HTML 字符串,天然免注入
+function row(it) {
+    const rowEl = document.createElement('div');
+    rowEl.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid #8883;border-radius:8px;padding:8px';
+    const o = document.createElement('div');
+    o.style.cssText = ORIGIN;
+    o.textContent = it.origin;
+    o.title = it.origin;
+    const un = document.createElement('input');
+    un.style.cssText = INP + ';flex:2';
+    un.value = it.username || '';
+    un.placeholder = 'USER_PH';
+    const pin = document.createElement('input');
+    pin.style.cssText = INP + ';flex:2';
+    pin.type = 'password';
+    pin.placeholder = 'KEEP_PW_PH';
+    let revealed = false;
+    const show = document.createElement('button');
+    show.style.cssText = BTN;
+    show.textContent = 'SHOW_LBL';
+    show.onclick = () => {
+        if (!revealed) {
+            const r = rpc({ action: 'reveal', id: it.id });
+            if (!r.ok) return showErr(r.error || 'failed');
+            pin.value = String(r.plain || '');
+            pin.type = 'text';
+            show.textContent = 'HIDE_LBL';
+            revealed = true;
+        } else {
+            pin.value = '';
+            pin.type = 'password';
+            show.textContent = 'SHOW_LBL';
+            revealed = false;
+        }
+    };
+    const save = document.createElement('button');
+    save.style.cssText = BTN;
+    save.textContent = 'SAVE_LBL';
+    save.onclick = () => {
+        const r = rpc({ action: 'update', id: it.id, username: un.value, password: pin.value });
+        if (!r.ok) return showErr(r.error || 'failed');
+        clearErr();
+        render();
+    };
+    const copy = document.createElement('button');
+    copy.style.cssText = BTN;
+    copy.textContent = 'COPY_LBL';
+    copy.onclick = () => {
+        const r = rpc({ action: 'reveal', id: it.id });
+        if (!r.ok) return showErr(r.error || 'failed');
+        clipboard.writeText(String(r.plain || ''));
+        copy.textContent = 'COPIED_LBL';
+        setTimeout(() => { copy.textContent = 'COPY_LBL'; }, 1200);
+    };
+    const del = document.createElement('button');
+    del.style.cssText = BTN;
+    del.textContent = 'DEL_LBL';
+    del.onclick = () => {
+        // 两步删除:第一次点变「确认删除?」,render 重建节点自动复位
+        if (del.dataset.arm !== '1') { del.dataset.arm = '1'; del.textContent = 'CONFIRM_LBL'; return; }
+        rpc({ action: 'remove', id: it.id });
+        render();
+    };
+    rowEl.append(o, un, pin, show, save, copy, del);
+    return rowEl;
+}
+function render() {
+    const box = document.getElementById('list');
+    box.textContent = '';
+    const res = rpc({ action: 'list' });
+    const list = Array.isArray(res.list) ? res.list : [];
+    if (!list.length) { box.textContent = 'EMPTY_PLACEHOLDER'; return; }
+    for (const it of list) box.appendChild(row(it));
+}
+// 手动添加行(origin/用户名/密码)
+const addBox = document.getElementById('add');
+const aO = document.createElement('input');
+aO.style.cssText = INP + ';flex-basis:100%';
+aO.placeholder = 'ORIGIN_PH';
+const aU = document.createElement('input');
+aU.style.cssText = INP;
+aU.placeholder = 'USER_PH';
+const aP = document.createElement('input');
+aP.style.cssText = INP;
+aP.type = 'password';
+aP.placeholder = 'PASS_PH';
+const addBtn = document.createElement('button');
+addBtn.style.cssText = BTN;
+addBtn.textContent = 'ADD_LBL';
+addBtn.onclick = () => {
+    if (!aP.value) return showErr('needPw');
+    const r = rpc({ action: 'add', origin: aO.value.trim(), username: aU.value, password: aP.value });
+    if (!r.ok) return showErr(r.error || 'failed');
+    clearErr();
+    aO.value = ''; aU.value = ''; aP.value = '';
+    render();
+};
+addBox.append(aO, aU, aP, addBtn);
+render();
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') window.close(); });
+</script>
+</body></html>`;
+    const filled = html
+        .replace('EMPTY_PLACEHOLDER', esc(tr('pw.mgr.empty')))
+        .replace('ORIGIN_PH', esc(tr('pw.mgr.originPh')))
+        .replace('USER_PH', esc(tr('pw.mgr.userPh')))
+        .replace('PASS_PH', esc(tr('pw.mgr.passPh')))
+        .replace('KEEP_PW_PH', esc(tr('pw.mgr.keepPw')))
+        .replace('ADD_LBL', esc(tr('pw.mgr.add')))
+        .replace('SHOW_LBL', esc(tr('pw.mgr.reveal')))
+        .replace('HIDE_LBL', esc(tr('pw.mgr.hide')))
+        .replace('SAVE_LBL', esc(tr('appmenu.mgr.save')))
+        .replace('COPY_LBL', esc(tr('pw.mgr.copy')))
+        .replace('COPIED_LBL', esc(tr('pw.mgr.copied')))
+        .replace('DEL_LBL', esc(tr('appmenu.mgr.delete')))
+        .replace('CONFIRM_LBL', esc(tr('pw.mgr.confirmDel')))
+        .replace('ERR_INVALID', esc(tr('pw.mgr.invalid')))
+        .replace('ERR_NEEDPW', esc(tr('pw.mgr.needPw')))
+        .replace('ERR_FAILED', esc(tr('pw.mgr.err')));
+    pwMgrWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(filled))
+        .catch((e) => { log(`pw mgr load failed: ${e.message}`); try { pwMgrWin.close(); } catch { /* ignore */ } });
+    pwMgrWin.on('closed', () => { pwMgrWin = null; });
+}
+
+// 管理窗与主进程的单通道 RPC(sendSync):list/add/update/remove/reveal,一律回当前全表
+ipcMain.on('pw:mgr', (e, msg) => {
+    const fromMgr = pwMgrWin && !pwMgrWin.isDestroyed() && e.sender === pwMgrWin.webContents;
+    const out = { ok: !!fromMgr };
+    if (fromMgr && msg && typeof msg === 'object') {
+        const store = getPwStore();
+        try {
+            if (msg.action === 'add') {
+                if (!String(msg.password || '')) { out.ok = false; out.error = 'needPw'; }
+                else store.upsert({ origin: msg.origin, username: cleanText(msg.username), password: String(msg.password) });
+            } else if (msg.action === 'update') {
+                store.update(String(msg.id || ''), {
+                    username: msg.username !== undefined ? cleanText(msg.username) : undefined,
+                    password: String(msg.password || ''),
+                });
+            } else if (msg.action === 'remove') {
+                store.remove(String(msg.id || ''));
+            } else if (msg.action === 'reveal') {
+                out.plain = store.reveal(String(msg.id || ''));
+            }
+        } catch (err) {
+            out.ok = false;
+            out.error = /invalid origin/i.test(String(err && err.message)) ? 'invalidOrigin' : 'failed';
+        }
+    }
+    out.list = listPasswords();
+    e.returnValue = out;
+});
+
 // ──────────────────────── 右键菜单(网页/TUI 复制粘贴) ────────────────────────
 // Electron 窗口没有浏览器右键菜单:在 Hermes 这类 web TUI 里,选中复制/粘贴
 // 只能靠它(Chrome 的右键在壳里是空的)。菜单项走 webContents 原生动作,
@@ -1021,11 +1528,32 @@ ipcMain.on('recent-mgr', (e, msg) => {
 let externalView = false;   // 主窗体当前视图是否为外部页面(非本地仪表盘)
 function attachContextMenu(target) {
     target.webContents.on('context-menu', (e, params) => {
-        const menu = Menu.buildFromTemplate([
+        const items = [
             { label: tr('appmenu.copy'), enabled: params.editFlags.canCopy, click: () => target.webContents.copy() },
             { label: tr('appmenu.paste'), enabled: params.editFlags.canPaste, click: () => target.webContents.paste() },
             { label: tr('appmenu.selectall'), enabled: params.editFlags.canSelectAll, click: () => target.webContents.selectAll() },
-        ]);
+        ];
+        // 容器页:当前 frame 的 origin 有已存密码 → 右键列出账号显式填充(多账号的
+        // 唯一填充入口;单账号走聚焦自动填充)。管理窗/输入弹窗不在 containerContents
+        // 登记里,天然跳过;明文只在点击那一刻 reveal。
+        try {
+            const origin = params.frameURL ? new URL(params.frameURL).origin : null;
+            if (origin && containerContents.has(target.webContents)) {
+                const store = getPwStore();
+                if (store.isAvailable()) {
+                    const fillItems = store.listForOrigin(origin).map((en) => ({
+                        label: tr('pw.mgr.fill', { user: en.username || tr('pw.mgr.noUser') }),
+                        click: () => {
+                            try {
+                                target.webContents.send('pw:fill', { origin, username: en.username, password: store.reveal(en.id) });
+                            } catch { /* ignore */ }
+                        },
+                    }));
+                    if (fillItems.length) items.unshift({ type: 'separator' }, ...fillItems.reverse(), { type: 'separator' });
+                }
+            }
+        } catch { /* 右键菜单主体不受影响 */ }
+        const menu = Menu.buildFromTemplate(items);
         menu.popup({ window: target, x: params.x, y: params.y });
     });
 }
@@ -1061,6 +1589,9 @@ function setAppMenu() {
                     items.push({ label: tr('appmenu.clearrecent'), enabled: recents.length > 0, click: clearRecentUrls });
                     return items;
                 })(),
+                { type: 'separator' },
+                // 密码管理入口:空列表也开着(首条密码就靠这里手动补录)
+                { label: tr('appmenu.managePw'), accelerator: 'CmdOrCtrl+Shift+P', click: promptManagePasswords },
             ],
         },
         {
