@@ -6,26 +6,9 @@ import { translate } from "@/i18n/runtime";
 
 const PAGE_SIZE = 10;
 
-// Quota names are English dictionary keys ("Monthly", "Total Points"), but
-// generated names embed numbers ("Bonus Pack 1") that exact-match translate()
-// can't hit. Translate the base word, keep the numeric suffix.
-export function translateQuotaName(name) {
-  const trimmed = String(name || "").trim();
-  if (!trimmed) return "";
-  const direct = translate(trimmed);
-  if (direct !== trimmed) return direct;
-  const mBonus = /^Bonus Pack (\d+)$/.exec(trimmed);
-  if (mBonus) return `${translate("Bonus Pack")} ${mBonus[1]}`;
-  const mWeekly = /^weekly\s+(.+)\s+\(7d\)$/i.exec(trimmed);
-  if (mWeekly) return `${translate("Weekly")} ${mWeekly[1]} (7d)`;
-  const mBalance = /^Balance(?:\s*\((.+)\))?$/i.exec(trimmed);
-  if (mBalance) return mBalance[1] ? `${translate("Balance")} (${mBalance[1]})` : translate("Balance");
-  const mVoucher = /^Voucher(?:\s*\((.+)\))?$/i.exec(trimmed);
-  if (mVoucher) return mVoucher[1] ? `${translate("Voucher")} (${mVoucher[1]})` : translate("Voucher");
-  const mCash = /^Cash(?:\s*\((.+)\))?$/i.exec(trimmed);
-  if (mCash) return mCash[1] ? `${translate("Cash")} (${mCash[1]})` : translate("Cash");
-  return trimmed;
-}
+// Quota name translation lives in shared/utils/quotaName.js so the quota-block
+// summary (QuotaPackBar) renders the same localized pack names.
+export { translateQuotaName } from "@/shared/utils/quotaName";
 
 /**
  * Format reset time display (Today, 12:00 PM)

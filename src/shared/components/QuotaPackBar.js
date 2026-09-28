@@ -2,6 +2,7 @@
 
 import PropTypes from "prop-types";
 import { translate } from "@/i18n/runtime";
+import { translateQuotaName } from "@/shared/utils/quotaName";
 import { cn } from "@/shared/utils/cn";
 
 /**
@@ -132,7 +133,12 @@ export default function QuotaPackBar({ packs = [], className }) {
 
   // Non-recurring rows: same-base-name groups with ≥2 members are a pack
   // family; singletons are stored-value pools (余额/代金券) → meter rows.
-  const nonRecurring = withNums.filter((p) => p !== monthly && !isRecurringQuotaRow(p));
+  // Qoder-style 合集行「资源包」已在上游包含全部赠送包：存在时排除赠送包
+  // 家族行，防止资源包 Credits 与赠送包被重复计数（用户实测重复）。
+  const hasCollectionRow = withNums.some((p) => String(p.name || "") === "资源包");
+  const nonRecurring = withNums
+    .filter((p) => p !== monthly && !isRecurringQuotaRow(p))
+    .filter((p) => !(hasCollectionRow && String(p.name || "").startsWith("赠送包")));
   const groups = new Map();
   for (const p of nonRecurring) {
     const base = String(p.name || "").replace(/\s*\d+\s*$/, "").trim();
@@ -149,7 +155,17 @@ export default function QuotaPackBar({ packs = [], className }) {
     })
     .filter((f) => f.members.length >= 2 && f.totalNum > 0);
   const familyMemberSet = new Set(families.flatMap((f) => f.members));
-  const singletonPools = nonRecurring.filter((p) => !familyMemberSet.has(p));
+  // Stored-value singletons with IDENTICAL values are the same pool rendered
+  // twice upstream (stepfun-cn: 余额(CNY) + 代金券(CNY) both 14.95/14.95) —
+  // 去重，不累加（用户实测「其实是一个」）。
+  const seenSig = new Set();
+  const singletonPools = nonRecurring.filter((p) => {
+    if (familyMemberSet.has(p)) return false;
+    const sig = `${Number(p.used || 0)}|${Number(p.total || 0)}|${p.resetAt || ""}`;
+    if (seenSig.has(sig)) return false;
+    seenSig.add(sig);
+    return true;
+  });
 
   // Other recurring windows (每周/滚动…) without a family to join: meter rows.
   const parallelWindows = withNums.filter(
@@ -239,24 +255,32 @@ export default function QuotaPackBar({ packs = [], className }) {
 
   return (
     <div className={cn("min-w-0 space-y-2", className)}>
-      {/* Line 1: icon + 大号余额（无「剩余」二字）←→ 剩 X / 共 T */}
+      {/* Line 1: icon + 大号余额（无「剩余」二字）←→ X / 共 T */}
       {pool.length > 0 && (
         <div className="flex items-center justify-between gap-3">
           <span className="inline-flex items-center gap-1.5 tabular-nums">
             <CreditIcon className="size-[13px] text-primary" />
             <b className="text-xl font-bold text-text">{fmt(poolRemaining)}</b>
           </span>
-          <span className="inline-flex items-center gap-1 text-xs tabular-nums text-text-muted">
-            {translate("remaining {remaining} of {total}")
-              .replace("{remaining}", fmt(poolRemaining))
-              .replace("{total}", fmt(poolTotal))}
+          <span className="inline-flex items-center text-xs tabular-nums text-text-muted">
+            {fmt(poolRemaining)} / {fmt(poolTotal)}
           </span>
         </div>
       )}
       {/* Additive pool bar: family packs + monthly (月度并入聚合，不单独成行) */}
       {pool.length > 0 && renderPoolBar(pool, poolTotal)}
 
-      {/* 资源包计数行：可用数 + 最近一个包（实际名称）的剩余与绝对到期。
+      {/* Qoder 系合集说明：资源包 Credits 已包含套餐内 Credits 等（用户要求同步标注） */}
+      {hasCollectionRow && (
+        <div className="text-[11px] text-text-muted">
+          {translate("includes {names}").replace(
+            "{names}",
+            [...singletonPools.map((p) => translateQuotaName(displayPackName(p.name))), "资源包 Credits"].join("、")
+          )}
+        </div>
+      )}
+
+      {/* 资源包计数行：可用数（可用）+ 最近一个包（实际名称）的剩余与绝对到期。
           无到期信息的卡（Qoder 系）省略此行。 */}
       {pool.length > 0 && (() => {
         const liveCount = pool.filter((p) => p.remainingNum > 0).length;
@@ -271,14 +295,10 @@ export default function QuotaPackBar({ packs = [], className }) {
             </span>
             <span className="inline-flex min-w-0 items-center gap-2 truncate text-text-muted">
               <span className="truncate">
-                {displayPackName(soonestLive.name)}
+                {translateQuotaName(displayPackName(soonestLive.name))}
               </span>
               <span>
-                {translate("remaining {remaining} of {total}")
-                  .replace("{remaining}", fmt(soonestLive.remainingNum))
-                  .replace("{total}", fmt(soonestLive.totalNum))}
-                {" "}
-                {translate("expires on {date}").replace("{date}", shortDate(soonestLive.resetAt))}
+                （{fmt(soonestLive.remainingNum)} 于 {shortDate(soonestLive.resetAt)} 到期）
               </span>
             </span>
           </div>
