@@ -109,3 +109,13 @@ curl -X POST "https://api.z.ai/api/anthropic/v1/messages" \
 - 套餐有效期短（Weekend Build 09-07 过期），后续验证 `grant_units` 剩余值时以 billing/current 实时返回为准（当前接口只给 grant，不给已用量；已用量要从 ZCode 本地 `~/.zcode/cli/db/db.sqlite` 的 model_usage 侧算，sync 插件已有读法）。
 - 若用户再提「代理 3 亿」：直接引用 §3.2/§3.3 结论与 §1 的路线拒绝，不再重测。
 - 若智谱未来把 Weekend Build 放到标准 API key 体系（观察点：billing entitlement 的 capabilities 是否出现非 `model:` 前缀的标准 API 授权），走 §5.1 零开发接入。
+
+---
+
+## 9. 后续（2026-09-28）：观察点部分兑现，coding-plan 通道已接入
+
+- **ZCode 开源**（09-21，`zai-org/ZCode`，Apache-2.0，git 历史事件整改后清洗版）。社区出现反代工具与账号工具：`TriDefender/zcode-api`（本机 8080 出 OpenAI/Anthropic/Responses 三格式，**内嵌阿里云验证码 V3 无头求解器**——happy-dom 进程内求解 + token 池预热 + 指纹稳定工程防 F001）、`liu5269/zcode2api`、`pjpv/zcode-switch`（账号加密导出）等；CreditDaddy 本就承担 ZCode 多账号管理。
+- **bigmodel 渠道凭证形态变化**：`builtin:bigmodel-coding-plan` 现在明文落盘一把 49 位 key，且在标准端点直接可用。实测（2026-09-28）：`open.bigmodel.cn` 的 `/api/anthropic/v1/messages`（x-api-key）、`/api/paas/v4` 与 `/api/coding/paas/v4`（Bearer）对 **glm-4.7 / glm-4.5-air 返回 200**；glm-5.3 / glm-5.3-flash / glm-4.6 返回 1113 无资源包——**免费额度（仅 glm-5.3-flash）仍只存在于 zcode.z.ai 套餐端点**。
+- **§5.1 零开发路径兑现**：10Router 以「zcode」openai 兼容自定义节点（prefix `zcode`，baseUrl `open.bigmodel.cn/api/paas/v4`）+ 该 key 建连接，`/v1/models` 列出 `zcode/glm-4.5 … zcode/glm-5.3-flashx`，`zcode/glm-4.7` 全链路 200（用户点名不叫 glm-cn，glm-cn 连接已删）。
+- **start-plan 免费额度仍关闭**：套餐补全端点 3007 当日复测依旧；原生接入 = 内嵌验证码求解器 = §1 拒绝的那类（同时也是维护黑洞——sceneId/风控指纹/求解器全在上游手里）。如需免费额度，外部方案是本机跑 zcode-api 反代后把 zcode 节点的 baseUrl 改指 `127.0.0.1:8080`（网关零改动、不内置绕验证码）；长期方案仍是等智谱给免费套餐开标准 key（观察点不变）。
+- **连带坑位记录**：裸模型名无前缀无别名时按前缀推断兜底 "openai"（`No active credentials for provider: openai` 的来源）；`glm-cn` 是半注册态（open-sse registry 有、`open-sse/config/providerModels.js` 无 → /v1/models 不列其模型），自定义 openai 兼容节点会 live 拉模型列表、绕开该坑。
