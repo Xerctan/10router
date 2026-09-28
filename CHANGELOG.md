@@ -4,6 +4,15 @@
 
 ## v1.2.2 (未发布)
 
+### ✨ 新功能
+
+- **桌面壳「容器」密码管理（浏览器式全自动，`639f77a8`）**：主窗体/壳内弹窗加载的外部网页（「前往→打开网址/最近打开」的 WorkBuddy、CodeBuddy 等）此前零密码能力。三件套：`desktop/passwordStore.js`（纯 Node 密码库，cipher 注入可测；`userData/passwords.json` 只落 Electron safeStorage 密文——Windows 即 DPAPI 绑当前系统用户；同 origin+username 幂等、密码不同即更新、neverAsk 站点黑名单、上限 200 条）+ `desktop/preload-container.js`（sandbox 安全 preload，不向页面暴露任何东西）+ `main.js` 容器登记 / 保存询问窗 / 管理窗 / 右键填充。行为与边界：
+  - **捕获双路**：`<form>` submit 直接抓用户名+密码；SPA 无 form 登录靠启发式——密码框输入防抖上报，主进程在 did-navigate 同 origin 换路径时视为登录成功转保存询问（原地提交 / 换站 / 超 10 分钟不算）；多密码框值不同=注册/改密表单，跳过。询问窗可改完用户名密码再存，或「永不保存此站点」。
+  - **填充**：该站恰好一条已存条目时，聚焦空密码框/配对用户名框自动回填（React 受控输入走原型 setter + input/change 事件）；多账号只在右键菜单「填充密码：用户名」条目上显式选，明文在点击那一刻才 reveal。漏网的走「前往→管理已保存的密码…」（Ctrl+Shift+P）手动补录 / 改 / 复制 / 两步删除。
+  - **安全边界**：preload 只认 isTrusted 输入事件（程序化填充派发的合成事件不会再被捕获，防「填充→上报→重复弹窗」回环）；归属 origin 只信主进程侧 `senderFrame.url`，渲染层传参一律不采信；`pw:fill` 广播给全部 frame、各 frame 按 location.origin 自滤，跨域 iframe 拿不到；safeStorage 不可用→功能停用 + 气泡提示，绝不落明文。HTTP Basic/Digest（`app.on('login')`）、同步、导出为 v1 非目标。
+  - **打包注意**：`desktop/package.json` 的 `build.files` 白名单同步补了两个新文件——壳新增文件漏登记 = 打包后功能静默消失。
+  - 单测 `desktop-password-store.test.js` 17 例（假 cipher 纯 Node：origin 归一化 / 幂等 / 持久化 / 坏文件自愈 / cipher 不可用拒写）。
+
 ### 🐛 修复
 
 - **反重力（Antigravity）请求：工具清洗升级 + 去掉 `requestType:"agent"`**（对照 9router v0.5.91 与 OmniRoute 的同类修复，按本仓风格重写，未合入上游代码）。
