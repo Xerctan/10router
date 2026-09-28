@@ -156,12 +156,20 @@ export default function QuotaPackBar({ packs = [], className }) {
     (p) => isRecurringQuotaRow(p) && p !== monthly
   );
 
-  // Additive pool (签到积分型): family packs + the monthly window.
-  const pool = monthly && families.length > 0
-    ? [...families.flatMap((f) => f.members), monthly]
-    : [];
+  // Additive pool (签到积分型 + Qoder 系列积分): family packs + the monthly
+  // window (当家族存在时并入) + stored-value singletons (余额/代金券/套餐内
+  // Credits——用户拍板：Qoder 也用同一逻辑，都是积分). Parallel recurring
+  // windows without a family stay as meter rows (limits, not additive).
+  const pool = [
+    ...families.flatMap((f) => f.members),
+    ...(monthly && families.length > 0 ? [monthly] : []),
+    ...singletonPools,
+  ];
   const poolTotal = pool.reduce((s, p) => s + p.totalNum, 0);
   const poolRemaining = pool.reduce((s, p) => s + p.remainingNum, 0);
+
+  // 原生包名展示修正：合集池「资源包」→「资源包 Credits」。
+  const displayPackName = (name) => (name === "资源包" ? "资源包 Credits" : name);
 
   const hasFamily = families.length > 0;
 
@@ -231,47 +239,51 @@ export default function QuotaPackBar({ packs = [], className }) {
 
   return (
     <div className={cn("min-w-0 space-y-2", className)}>
-      {/* 余额 total (+30% 大号) + 最近一个到期的包（相对时间） */}
+      {/* Line 1: icon + 大号余额（无「剩余」二字）←→ 剩 X / 共 T */}
       {pool.length > 0 && (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-3">
           <span className="inline-flex items-center gap-1.5 tabular-nums">
-            <span className="text-xs text-text-muted">{translate("Remaining")}</span>
             <CreditIcon className="size-[13px] text-primary" />
             <b className="text-xl font-bold text-text">{fmt(poolRemaining)}</b>
+          </span>
+          <span className="inline-flex items-center gap-1 text-xs tabular-nums text-text-muted">
+            {translate("remaining {remaining} of {total}")
+              .replace("{remaining}", fmt(poolRemaining))
+              .replace("{total}", fmt(poolTotal))}
           </span>
         </div>
       )}
       {/* Additive pool bar: family packs + monthly (月度并入聚合，不单独成行) */}
       {pool.length > 0 && renderPoolBar(pool, poolTotal)}
 
-      {/* 资源包计数行：可用数 + 最近的绝对到期（xx 于 MM-DD 到期） */}
+      {/* 资源包计数行：可用数 + 最近一个包（实际名称）的剩余与绝对到期。
+          无到期信息的卡（Qoder 系）省略此行。 */}
       {pool.length > 0 && (() => {
         const liveCount = pool.filter((p) => p.remainingNum > 0).length;
         const soonestLive = pool
           .filter((p) => p.resetAt && p.remainingNum > 0)
           .sort((a, b) => String(a.resetAt).localeCompare(String(b.resetAt)))[0] || null;
+        if (!soonestLive) return null;
         return (
           <div className="flex items-center justify-between gap-3 text-[11px] tabular-nums">
             <span className="text-text-muted">
               {translate("{count} resource packs").replace("{count}", String(liveCount))}
-              {" · "}
-              {translate("remaining {remaining} of {total}")
-                .replace("{remaining}", fmt(poolRemaining))
-                .replace("{total}", fmt(poolTotal))}
             </span>
-            {soonestLive && (
-              <span className="text-text-muted">
-                {fmt(soonestLive.remainingNum)} {translate("expires on {date}").replace("{date}", shortDate(soonestLive.resetAt))}
+            <span className="inline-flex min-w-0 items-center gap-2 truncate text-text-muted">
+              <span className="truncate">
+                {displayPackName(soonestLive.name)}
               </span>
-            )}
+              <span>
+                {translate("remaining {remaining} of {total}")
+                  .replace("{remaining}", fmt(soonestLive.remainingNum))
+                  .replace("{total}", fmt(soonestLive.totalNum))}
+                {" "}
+                {translate("expires on {date}").replace("{date}", shortDate(soonestLive.resetAt))}
+              </span>
+            </span>
           </div>
         );
       })()}
-
-      {/* Stored-value singletons (余额/代金券): own meter rows, 不并入 余额 */}
-      {singletonPools.map((p, i) => (
-        <MeterRow key={`${p.name || "pool"}-${i}`} row={{ ...p, totalNum: p.totalNum, remainingNum: p.remainingNum }} />
-      ))}
 
       {/* Parallel-constraint recurring windows without a family (每周/滚动…):
           own meter rows — limits, not an additive pool. */}
