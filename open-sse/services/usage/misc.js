@@ -124,7 +124,7 @@ export async function getGlmUsage(apiKey, provider, proxyOptions = null) {
     return { message: "GLM API key not available." };
   }
 
-  const region = provider === "glm-cn" ? "china" : "international";
+  const region = provider === "glm-cn" || provider === "zcode" ? "china" : "international";
   const quotaUrl = GLM_QUOTA_URLS[region];
 
   try {

@@ -144,7 +144,11 @@ export default function OAuthTransferModal({ isOpen, mode, provider, providerNam
     }
     setBusy(true);
     try {
-      const res = await fetch("/api/oauth/transfer/import", {
+      // ZCode: CreditDaddy files carry the real material in meta.credentials
+      // behind a marker accessToken and usually need the biz-API mint — the
+      // dedicated import route adapts both shapes (plain accounts too).
+      const importUrl = provider === "zcode" ? "/api/oauth/zcode/import" : "/api/oauth/transfer/import";
+      const res = await fetch(importUrl, {
         method: "POST",
         headers,
         body: JSON.stringify({ provider, passphrase, blob }),

@@ -1,4 +1,8 @@
 {
+  "Local ZCode import failed": "本機 ZCode 匯入失敗",
+  "No usable ZCode credentials found in local install": "本機 ZCode 安裝中未找到可用憑證",
+  "Imported from local ZCode install": "已從本機 ZCode 安裝匯入",
+  "Import Local Install": "從本機安裝匯入",
   "Models refreshed": "模型已重新整理",
   "Off-peak discount": "離峰折扣",
   "Off-peak discount active": "離峰折扣進行中",

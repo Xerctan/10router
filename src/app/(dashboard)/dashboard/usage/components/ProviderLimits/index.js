@@ -140,6 +140,7 @@ const KNOWN_PROVIDER_NAMES = {
   "codebuddy-intl": "CodeBuddy Intl",
   "minimax-cn": "MiniMax CN",
   "glm-cn": "GLM CN",
+  zcode: "ZCode",
   "kimi-cn": "Kimi CN",
 };
 

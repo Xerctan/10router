@@ -95,6 +95,7 @@ export const LOBE_PROVIDER_ICONS = {
   kimi: Moonshot,
   glm: Zhipu,
   "glm-cn": Zhipu,
+  zcode: Zhipu,
   "aws-polly": Aws,
   azure: Azure,
   "cloudflare-ai": Cloudflare,

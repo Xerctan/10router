@@ -39,6 +39,12 @@ import {
   getXiaomiMimoSessionStatus,
   clearXiaomiMimoSession,
   completeXiaomiMimoFlow,
+  startZcodeProxy,
+  stopZcodeProxy,
+  registerZcodeSession,
+  getZcodeSessionStatus,
+  clearZcodeSession,
+  completeZcodeLogin,
 } from "@/lib/oauth/utils/server";
 import { detectIdeInstalled } from "@/lib/oauth/utils/ideDetect";
 import { ZED_HOSTED_CONFIG } from "@/lib/oauth/constants/oauth";
@@ -129,6 +135,25 @@ export async function GET(request, { params }) {
         });
       }
 
+      // ZCode: the auth-code flow needs no PKCE — state + redirect are all the
+      // bigmodel login page takes; the session stores the exact callback URL
+      // because the token endpoint requires redirect_uri to match it.
+      if (provider === "zcode") {
+        const redirectUri = searchParams.get("redirect_uri");
+        if (!redirectUri) {
+          return NextResponse.json({ error: "Missing redirect_uri" }, { status: 400 });
+        }
+        const { newZcodeState, buildZcodeAuthorizeUrl } = await import("@/lib/oauth/providers/zcode.js");
+        const state = newZcodeState();
+        registerZcodeSession({ state, callbackUrl: redirectUri });
+        return NextResponse.json({
+          authUrl: buildZcodeAuthorizeUrl(redirectUri, state),
+          state,
+          callbackUrl: redirectUri,
+          flowType: "authorization_code",
+        });
+      }
+
       const redirectUri = searchParams.get("redirect_uri") || "http://localhost:8080/callback";
       // Collect provider-specific meta params (e.g. gitlab passes baseUrl, clientId, clientSecret)
       const reservedParams = new Set(["redirect_uri"]);
@@ -144,6 +169,12 @@ export async function GET(request, { params }) {
     }
 
     if (action === "start-proxy") {
+      // ZCode: dynamic-port local callback server (singleton session, state is
+      // registered by /authorize which also builds the bigmodel authorize URL).
+      if (provider === "zcode") {
+        const result = await startZcodeProxy();
+        return NextResponse.json(result);
+      }
       // Trae/Windsurf/Zed use a dynamic-port local callback server (singleton session,
       // state is registered separately via /register-session after /authorize).
       if (provider === "trae") {
@@ -188,7 +219,23 @@ export async function GET(request, { params }) {
         return NextResponse.json({ error: "Missing state" }, { status: 400 });
       }
       let session;
-      if (provider === "trae") session = getTraeSessionStatus(state);
+      if (provider === "zcode") {
+        session = getZcodeSessionStatus(state);
+        if (!session) return NextResponse.json({ status: "unknown" });
+        if (session.status === "done") {
+          // Redacted: the key never appears here, only which row landed.
+          const payload = { status: session.status, connectionId: session.connectionId, email: session.email };
+          clearZcodeSession(state);
+          return NextResponse.json(payload);
+        }
+        if (session.status === "error") {
+          const payload = { status: session.status, error: session.error };
+          clearZcodeSession(state);
+          return NextResponse.json(payload);
+        }
+        return NextResponse.json({ status: session.status });
+      }
+      else if (provider === "trae") session = getTraeSessionStatus(state);
       else if (provider === "windsurf") session = getWindsurfSessionStatus(state);
       else if (provider === "zed") session = getZedSessionStatus(state);
       else if (provider === "xai") session = getXaiSessionStatus(state);
@@ -224,7 +271,8 @@ export async function GET(request, { params }) {
     }
 
     if (action === "stop-proxy") {
-      if (provider === "trae") stopTraeProxy();
+      if (provider === "zcode") stopZcodeProxy();
+      else if (provider === "trae") stopTraeProxy();
       else if (provider === "windsurf") stopWindsurfProxy();
       else if (provider === "zed") stopZedProxy();
       else if (provider === "xai") stopXaiProxy();
@@ -480,6 +528,48 @@ export async function POST(request, { params }) {
           });
         } catch (err) {
           return NextResponse.json({ error: err.message }, { status: 500 });
+        }
+      }
+
+      // ZCode: paste fallback — the browser may hit a dead localhost redirect
+      // (remote dashboard / popup blocked), so the user pastes the full callback
+      // URL back. Parsed here, completed through the same server-side mint path.
+      if (provider === "zcode") {
+        const { parseZcodeCallback } = await import("@/lib/oauth/providers/zcode.js");
+        const raw = String(code || "").trim();
+        let parsed;
+        try {
+          parsed = raw.includes("authCode=") || raw.includes("code=")
+            ? parseZcodeCallback(raw)
+            : { authCode: raw, state: null };
+        } catch (err) {
+          return NextResponse.json({ error: err.message }, { status: 400 });
+        }
+        const sessionState = parsed.state || state;
+        if (!sessionState) {
+          return NextResponse.json({ error: "Missing state — start the browser login first, then paste the callback URL." }, { status: 400 });
+        }
+        const session = getZcodeSessionStatus(sessionState);
+        if (!session || session.status !== "pending") {
+          return NextResponse.json({ error: "This ZCode sign-in is no longer active. Start the browser login again." }, { status: 400 });
+        }
+        try {
+          const connection = await completeZcodeLogin(session, parsed.authCode);
+          clearZcodeSession(sessionState);
+          stopZcodeProxy();
+          return NextResponse.json({
+            success: true,
+            connection: {
+              id: connection.id,
+              provider: connection.provider,
+              email: connection.email,
+              displayName: connection.displayName,
+            },
+          });
+        } catch (err) {
+          clearZcodeSession(sessionState);
+          stopZcodeProxy();
+          return NextResponse.json({ error: err.message }, { status: 400 });
         }
       }
 

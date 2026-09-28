@@ -1067,3 +1067,134 @@ export function stopXiaomiMimoProxy() {
   // registerXiaomiMimoSession() is what bounds the map, by pendingTtlMs.
 }
 
+
+// ───────────────────────────────────────────────────────────────────────────
+// ZCode (bigmodel auth-code) dynamic-port proxy. Singleton session.
+// Callback path = /oauth/callback/bigmodel with params authCode (or code) + state.
+// On callback: token exchange → biz-API key mint → connection upsert, all
+// server-side; the session only ever carries the connection id, never the key.
+// ───────────────────────────────────────────────────────────────────────────
+
+const ZCODE_OAUTH_TIMEOUT_MS = 300000;
+
+let zcodeProxyServer = null;
+let zcodeProxyTimeout = null;
+let zcodeProxyPort = null;
+let zcodeSession = null;
+
+export function registerZcodeSession({ state, callbackUrl }) {
+  if (!state) return false;
+  // authorize registered the session already (with the callback URL); a repeat
+  // register for the same state must not wipe it.
+  if (zcodeSession && zcodeSession.state === state) {
+    if (callbackUrl && !zcodeSession.callbackUrl) zcodeSession.callbackUrl = callbackUrl;
+    return true;
+  }
+  zcodeSession = { state, status: "pending", createdAt: Date.now(), callbackUrl: callbackUrl || null };
+  return true;
+}
+export function getZcodeSessionStatus(state) {
+  if (!zcodeSession) return null;
+  if (state && zcodeSession.state !== state) return null;
+  return zcodeSession;
+}
+export function clearZcodeSession(state) {
+  if (!state || (zcodeSession && zcodeSession.state === state)) zcodeSession = null;
+}
+
+// Shared completion used by both the localhost callback and the pasted-URL
+// fallback. session.callbackUrl is the exact redirect_uri the authorize URL
+// carried — the token endpoint requires it to match.
+export async function completeZcodeLogin(session, authCode) {
+  const { exchangeAndMintZcode, buildZcodeConnectionPayload, findZcodeConnection } = await import("../providers/zcode.js");
+  const { getProviderConnections, createProviderConnection, updateProviderConnection } = await import("@/models");
+  const { fullKey, userId } = await exchangeAndMintZcode({
+    code: authCode,
+    redirectUri: session.callbackUrl,
+    state: session.state,
+  });
+  const payload = buildZcodeConnectionPayload({ fullKey, userId, authMethod: "oauth" });
+  const existing = findZcodeConnection(
+    await getProviderConnections({ provider: "zcode" }),
+    { userId, key: fullKey },
+  );
+  const connection = existing
+    ? await updateProviderConnection(existing.id, { ...payload, resetErrorState: true })
+    : await createProviderConnection(payload);
+  session.status = "done";
+  session.connectionId = connection.id;
+  session.email = connection.email;
+  return connection;
+}
+
+export function startZcodeProxy() {
+  return new Promise((resolve) => {
+    if (zcodeProxyServer) {
+      resolve({ success: true, port: zcodeProxyPort, callbackUrl: `http://127.0.0.1:${zcodeProxyPort}/oauth/callback/bigmodel` });
+      return;
+    }
+    const server = http.createServer(async (req, res) => {
+      const url = new URL(req.url, "http://localhost");
+      if (url.pathname !== "/oauth/callback/bigmodel") {
+        res.writeHead(404);
+        res.end("Not found");
+        return;
+      }
+      const session = zcodeSession;
+      if (!session) {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(renderCodexResultPage(false, "No active ZCode login session"));
+        return;
+      }
+      // Anti-CSRF: reject cross-origin fetches (legit redirects send no Origin).
+      if (!isLoopbackOrigin(req.headers.origin)) {
+        res.writeHead(403, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(renderCodexResultPage(false, "Cross-origin callback rejected"));
+        return;
+      }
+      const cbState = url.searchParams.get("state");
+      if (!cbState || !session.state || cbState !== session.state) {
+        session.status = "error";
+        session.error = "ZCode callback state mismatch";
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(renderCodexResultPage(false, session.error));
+        stopZcodeProxy();
+        return;
+      }
+      const authCode = url.searchParams.get("authCode") || url.searchParams.get("code");
+      if (!authCode) {
+        session.status = "error";
+        session.error = "ZCode callback missing authCode";
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(renderCodexResultPage(false, session.error));
+        stopZcodeProxy();
+        return;
+      }
+      try {
+        await completeZcodeLogin(session, authCode);
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(renderCodexResultPage(true, "You can close this window."));
+      } catch (err) {
+        session.status = "error";
+        session.error = err.message;
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(renderCodexResultPage(false, err.message));
+      } finally {
+        stopZcodeProxy();
+      }
+    });
+    server.listen(0, "127.0.0.1", () => {
+      zcodeProxyServer = server;
+      zcodeProxyPort = server.address().port;
+      zcodeProxyTimeout = setTimeout(() => stopZcodeProxy(), ZCODE_OAUTH_TIMEOUT_MS);
+      resolve({ success: true, port: zcodeProxyPort, callbackUrl: `http://127.0.0.1:${zcodeProxyPort}/oauth/callback/bigmodel` });
+    });
+    server.on("error", (err) => resolve({ success: false, reason: err.message }));
+  });
+}
+
+export function stopZcodeProxy() {
+  if (zcodeProxyTimeout) { clearTimeout(zcodeProxyTimeout); zcodeProxyTimeout = null; }
+  if (zcodeProxyServer) { zcodeProxyServer.close(); zcodeProxyServer = null; }
+  zcodeProxyPort = null;
+}

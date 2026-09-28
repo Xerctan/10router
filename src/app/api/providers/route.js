@@ -9,6 +9,7 @@ import {
 import { APIKEY_PROVIDERS } from "@/shared/constants/config";
 import { AI_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, isCustomEmbeddingProvider } from "@/shared/constants/providers";
 import { normalizeProviderId, normalizeProviderSpecificData } from "@/lib/providerNormalization";
+import { proxyPoolUrlError } from "@/lib/network/outboundProxy.js";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,13 @@ function normalizeProxyConfig(body = {}) {
 
   if (enabled && !url) {
     return { error: "Connection proxy URL is required when connection proxy is enabled" };
+  }
+
+  if (url) {
+    const urlError = proxyPoolUrlError(url);
+    if (urlError) {
+      return { error: urlError };
+    }
   }
 
   return {
@@ -146,7 +154,10 @@ export async function POST(request) {
     // 脚本复用名字（"Key 1"、"Key 2"…）曾把连接池里已有的条目直接覆盖掉，
     // 无 409 无警告。仅约束 API 入口——oauth 重连等内部 upsert 流程不受影响。
     if (name && !isWebCookieProvider) {
-      const existing = (await getProviderConnections(provider)).find(
+      // Filter arg must be the object form — a bare string is ignored by
+      // getProviderConnections(filter) and the name check went cross-provider
+      // (a "ZCode Coding Plan" node on another provider blocked the same name here).
+      const existing = (await getProviderConnections({ provider })).find(
         (c) => c.authType === "apikey" && c.name === connectionName
       );
       if (existing) {

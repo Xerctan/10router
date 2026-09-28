@@ -685,6 +685,7 @@ async function testApiKeyConnection(connection, effectiveProxy = null, options =
         const valid = res.status !== 401 && res.status !== 403;
         return { valid, error: valid ? null : "Invalid API key" };
       }
+      case "zcode":
       case "glm-cn": {
         const testModel = model || "glm-4.7";
         const res = await fetchWithConnectionProxy("https://open.bigmodel.cn/api/coding/paas/v4/chat/completions", {

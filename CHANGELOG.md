@@ -6,6 +6,15 @@
 
 ### ✨ 新功能
 
+- **ZCode 原生供应商内置（智谱编码套餐，浏览器登录 + CreditDaddy 导入 + 本机导入）**：
+  - **链路与零验证码闭环**：验证了社区 zcode-api 代理机制——OAuth 登录换得 access_token 后，走 bigmodel.cn biz API 找/建名为 `zcode-api-key` 的密钥并获取 secret，换得标准 API 密钥（`id.secret` 格式），请求直打 `open.bigmodel.cn/api/coding/paas/v4`（OpenAI 格式）与 `/api/anthropic`（Claude 格式）标准端点，**补全流量完全不碰 captcha-gated (3007) 的 zcode.z.ai plan 接口**，既定拒绝规避风控的路线得到保持。智谱 upstream 无 token 刷新机制，mint 出的标准 key 长效可用。
+  - **注册表 `open-sse/providers/registry/zcode.js`**：id/alias `zcode`，display ZCode（ZC 紫色），`category:"oauth"`，`authModes:["oauth","apikey"]` 双认证模式（仿 kimi 先例）；transports 双端点直连；models 收录 11 个 GLM 编码模型（glm-5.3/5.3-flash/5.2/5.1/5v-turbo/5-turbo/5/4.7/4.6/4.6v/4.5-air）；`features.usage:true` 挂接 bigmodel 配额查询。三份注册表基线（providers/alias/oauth-urls）已同步重快照。
+  - **浏览器登录全链**：`src/lib/oauth/providers/zcode.js` + `src/lib/oauth/utils/server.js` 实现现行 auth-code 协议（旧 cli/init+poll 已被智谱 404 删除）：本地动态端口回调监听（`/oauth/callback/bigmodel`）+ 浏览器打开 `bigmodel.cn/login?appId=zcode`，回调命中即服务端完成 token 交换与 biz API mint，写入 `zcode` 连接（标记 `authMethod:"oauth"`）。弹窗被拦截时支持手动粘贴重定向 URL 走同一服务端 mint 路径（NAS 等远程场景兜底）。`OAuthModal.js` 接线自动纳入弹窗与轮询。
+  - **CreditDaddy 账号导入（`POST /api/oauth/zcode/import`）**：针对 techysy/CreditDaddy 导出的 `10router-oauth-secure-v1` 信封，适配其 `accessToken` 为 `zcode-creds:<uid>` 占位标记、真实料在 `meta.credentials` 的结构；对未 mint 凭证自动走 biz API 换标准 key；z.ai 侧账号在 v1 阶段显式拒绝并提示（避免打错 bigmodel 端点）。守卫接入 loopback 免登录放行（同通用 transfer/import）。
+  - **本机 ZCode 安装导入（`GET /api/oauth/zcode/auto-import`）**：`src/lib/oauth/zcodeLocalInstall.js` 只读扫描本机的 `~/.zcode/v2/config.json` 与 `credentials.json`。内置 enc:v1 AES-256-GCM 解密算法（按 platform/home/username 派生 fallback key，纯 Node 无依赖），优先提取 ZCode 运行时已缓存的 `account-provider:coding-plan:account:bigmodel-*:api-key`，做到完全离线零网络导入；无缓存 key 时退回 access_token 再 mint。跳过非 bigmodel 侧凭据。dashboardGuard LOCAL_ONLY 锁死。
+  - **仪表盘 UI 与连接名排重**：`OAuthTransferModal.js` 对 zcode 路由重定向到专属导入器；提供商详情页挂出「从本机安装导入」按钮；修复 `POST /api/providers` 同名校验此前裸传字符串导致同名拦截跨 provider 误杀其他同名节点（如自定义节点）的预存 bug（改为 `{ provider }` 对象）。zh-CN/zh-TW 最小补全 4 个新词条。
+  - **单测 29 例**：`zcode-key-mint.test.js`（17 例，mock fetch 验证 token 交换、默认组织/项目提取、find-or-create、secret 降级、z.ai login、回调解析、payload 组装、去重匹配）；`zcode-local-install.test.js`（9 例，fixture 注入验证密钥派生、enc:v1 往返、config.json 提取、缓存 key 提取、access_token 回退、多源去重、跨主机拒解）；`zcode-import.test.js`（3 例，真实 sqlite 落地、同 key 幂等更新、去重、3007 隔离红线断言）。
+
 - **桌面壳「容器」密码管理（浏览器式全自动，`639f77a8`）**：主窗体/壳内弹窗加载的外部网页（「前往→打开网址/最近打开」的 WorkBuddy、CodeBuddy 等）此前零密码能力。三件套：`desktop/passwordStore.js`（纯 Node 密码库，cipher 注入可测；`userData/passwords.json` 只落 Electron safeStorage 密文——Windows 即 DPAPI 绑当前系统用户；同 origin+username 幂等、密码不同即更新、neverAsk 站点黑名单、上限 200 条）+ `desktop/preload-container.js`（sandbox 安全 preload，不向页面暴露任何东西）+ `main.js` 容器登记 / 保存询问窗 / 管理窗 / 右键填充。行为与边界：
   - **捕获双路**：`<form>` submit 直接抓用户名+密码；SPA 无 form 登录靠启发式——密码框输入防抖上报，主进程在 did-navigate 同 origin 换路径时视为登录成功转保存询问（原地提交 / 换站 / 超 10 分钟不算）；多密码框值不同=注册/改密表单，跳过。询问窗可改完用户名密码再存，或「永不保存此站点」。
   - **填充**：该站恰好一条已存条目时，聚焦空密码框/配对用户名框自动回填（React 受控输入走原型 setter + input/change 事件）；多账号只在右键菜单「填充密码：用户名」条目上显式选，明文在点击那一刻才 reveal。漏网的走「前往→管理已保存的密码…」（Ctrl+Shift+P）手动补录 / 改 / 复制 / 两步删除。
