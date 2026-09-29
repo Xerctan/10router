@@ -323,19 +323,8 @@ export async function proxy(request) {
   }
 
   // Always protected - require valid JWT or local CLI token (machineId-based).
-  // Exception: agent-managed custom provider write (POST create node / add
-  // connection) may use a dashboard LLM API key, so remote agents can self-serve
-  // custom OpenAI/Anthropic-compatible endpoints without a CLI token. Only the
-  // bare root paths + POST match; list/update/delete on [id] routes stay protected.
-  const isAgentProviderWrite =
-    request.method === "POST" &&
-    (pathname === "/api/provider-nodes" || pathname === "/api/providers");
   if (ALWAYS_PROTECTED.some((p) => pathname.startsWith(p))) {
-    if (
-      (await hasValidCliToken(request)) ||
-      (await hasValidToken(request)) ||
-      (isAgentProviderWrite && (await hasValidApiKey(request)))
-    )
+    if ((await hasValidCliToken(request)) || (await hasValidToken(request)))
       return NextResponse.next();
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -359,6 +348,21 @@ export async function proxy(request) {
   // a dashboard virtual key (sk-…) is enough, the same trust level as the
   // usage-import self-serve path. GET only; the route returns no credentials.
   if (request.method === "GET" && pathname === "/api/usage/quotas" && (await hasValidApiKey(request))) {
+    return NextResponse.next();
+  }
+
+  // Agent-managed custom provider write (POST create node / add connection) may
+  // use a dashboard virtual key, so remote agents (e.g. CreditDaddy's account
+  // sync) can self-serve connections without a CLI token. Only the bare root
+  // paths + POST match; list/update/delete on [id] routes stay protected.
+  // (issue #38: this used to live inside the ALWAYS_PROTECTED branch, which
+  // never matches these paths, so the exception was dead code and every
+  // remote virtual-key write fell through to the deny-by-default 401.)
+  if (
+    request.method === "POST" &&
+    (pathname === "/api/provider-nodes" || pathname === "/api/providers") &&
+    (await hasValidApiKey(request))
+  ) {
     return NextResponse.next();
   }
 
