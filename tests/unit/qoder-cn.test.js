@@ -91,7 +91,10 @@ describe("qoder-cn OAuth configuration", () => {
 });
 
 describe("qoder and qoder-cn quota normalization", () => {
-  it("normalizes user and addOn quota (resource package) and skips empty org", () => {
+  it("emits only buckets that carry allowance, and skips empty org/user", () => {
+    // total=0 buckets used to be charted as "剩 0 / 0"; they carry no allowance,
+    // so they are hidden now. Qoder accounts always have an empty `user` and
+    // `organization`, which made the card half empty rows.
     const raw = {
       quotas: {
         user: { total: 0, used: 0, remaining: 0, unit: "credits" },
@@ -101,11 +104,9 @@ describe("qoder and qoder-cn quota normalization", () => {
     };
 
     const cnNormalized = parseQuotaData("qoder-cn", raw);
-    expect(cnNormalized).toHaveLength(2);
-    expect(cnNormalized[0].name).toBe("Plan Credits");
-    expect(cnNormalized[0].total).toBe(0);
-    expect(cnNormalized[1].name).toBe("Resource Package");
-    expect(cnNormalized[1].total).toBe(600);
+    expect(cnNormalized).toHaveLength(1);
+    expect(cnNormalized[0].name).toBe("Resource Package");
+    expect(cnNormalized[0].total).toBe(600);
 
     const intlNormalized = parseQuotaData("qoder", {
       quotas: {
@@ -114,13 +115,15 @@ describe("qoder and qoder-cn quota normalization", () => {
         organization: { total: 0, used: 0, remaining: 0, unit: "credits" },
       },
     });
-    expect(intlNormalized).toHaveLength(2);
-    expect(intlNormalized[0].name).toBe("Plan Credits");
-    expect(intlNormalized[1].name).toBe("Resource Package");
-    expect(intlNormalized[1].total).toBe(100);
+    expect(intlNormalized).toHaveLength(1);
+    expect(intlNormalized[0].name).toBe("Resource Package");
+    expect(intlNormalized[0].total).toBe(100);
   });
 
-  it("expands addOn packs into per-pack rows (soonest-expiring first)", () => {
+  it("keeps addOn as ONE aggregate row — packs are its breakdown, not siblings", () => {
+    // Regression: emitting addOn AND its packs[] double-counted the same credits
+    // (500 + 100 inside a 600 total). The card charts the aggregate only; the
+    // per-pack table reads the packs off the raw payload.
     const raw = {
       quotas: {
         user: { total: 0, used: 0, remaining: 0, unit: "credits" },
@@ -140,23 +143,14 @@ describe("qoder and qoder-cn quota normalization", () => {
     };
 
     const normalized = parseQuotaData("qoder-cn", raw);
-    expect(normalized).toHaveLength(4);
-    expect(normalized[0].name).toBe("Plan Credits");
-    expect(normalized[1].name).toBe("Resource Package");
-    expect(normalized[1].total).toBe(600);
-    // Aggregate row hides its countdown (mixed per-pack expiries, matches
-    // the official web UI); the dates live on the pack rows instead.
-    expect(normalized[1].resetAt).toBe(null);
-    expect(normalized[2].name).toBe("Bonus Pack 1");
-    expect(normalized[2].used).toBe(100);
-    expect(normalized[2].total).toBe(500);
-    expect(normalized[2].resetAt).toBe("2026-09-30T15:59:00.000Z");
-    expect(normalized[2].recurring).toBe(false);
-    expect(normalized[3].name).toBe("Bonus Pack 2");
-    expect(normalized[3].used).toBe(0);
-    expect(normalized[3].total).toBe(100);
-    expect(normalized[3].resetAt).toBe("2026-10-18T02:00:00.000Z");
-    expect(normalized[3].recurring).toBe(false);
+    expect(normalized.map((q) => q.name)).toEqual(["Resource Package"]);
+    expect(normalized[0].total).toBe(600);
+    expect(normalized[0].used).toBe(100);
+    // Mixed per-pack expiries → no single countdown on the aggregate (matches
+    // the official web UI); the dates live in the per-pack table.
+    expect(normalized[0].resetAt).toBe(null);
+    expect(normalized[0].aggregate).toBe(true);
+    expect(normalized.filter((q) => q.name.startsWith("Bonus Pack"))).toEqual([]);
   });
 
   it("labels Qoder connections by display name, not email", () => {

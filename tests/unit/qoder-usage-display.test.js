@@ -14,7 +14,11 @@ describe("Qoder usage & sentinel timestamp display", () => {
     expect(formatResetTime(year3000)).toBe("-");
   });
 
-  it("parseQuotaData should normalize Qoder 0 credits without sentinel expiry", () => {
+  it("hides a zero-total bucket instead of charting 剩 0 / 0", () => {
+    // A bucket with no allowance carries no information on the card, so a
+    // total=0 `user` / `organization` row is dropped rather than rendered as a
+    // 0/0 bar. Qoder accounts always carry both, which is why they used to be
+    // half the card.
     const rawQoderUsage = {
       userId: "test-user",
       userType: "personal_standard",
@@ -34,13 +38,38 @@ describe("Qoder usage & sentinel timestamp display", () => {
       },
     };
 
-    const parsed = parseQuotaData("qoder", rawQoderUsage);
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0].name).toBe("Plan Credits");
-    expect(parsed[0].total).toBe(0);
-    expect(parsed[0].used).toBe(0);
+    expect(parseQuotaData("qoder", rawQoderUsage)).toEqual([]);
+  });
+
+  it("still emits a bucket that HAS allowance, with the sentinel date nulled", () => {
+    const raw = {
+      quotas: {
+        user: {
+          total: 0,
+          used: 0,
+          remaining: 0,
+          unit: "credits",
+          resetAt: "9999-12-31T00:00:00.000Z",
+          unlimited: false,
+        },
+        addOn: {
+          total: 900,
+          used: 800,
+          remaining: 100,
+          unit: "credits",
+          resetAt: "2026-09-30T15:59:00.000Z",
+          unlimited: false,
+        },
+      },
+    };
+
+    const parsed = parseQuotaData("qoder", raw);
+    expect(parsed.map((q) => q.name)).toEqual(["Resource Package"]);
+    expect(parsed[0].total).toBe(900);
+    expect(parsed[0].used).toBe(800);
+    // Aggregate row: no single countdown, because its packs expire on different
+    // days. Per-pack dates stay available in the details table.
     expect(parsed[0].resetAt).toBeNull();
-    expect(parsed[0].unlimited).toBe(false);
   });
 
   it("extractEarliestPackageExpiry should ignore sentinel dates beyond 2099", () => {
@@ -180,23 +209,22 @@ describe("Qoder unpacked-remainder row rendering", () => {
     },
   };
 
-  it("labels the unitemized pack instead of numbering it", () => {
+  it("does NOT re-emit addOn packs — they are already summed into the aggregate", () => {
+    // Regression: emitting `addOn` AND its `packs[]` double-counted the same
+    // credits (the card showed both "Resource Package 700/800" and the
+    // "Bonus Pack 1 / 2 / (unitemized)" rows that make up that 800). The packs
+    // are a BREAKDOWN of addOn.total, not siblings of it, so they are no longer
+    // emitted — the per-pack table reads them off the raw payload instead.
     const parsed = parseQuotaData("qoder", rawWithRemainder);
-    expect(parsed.map((q) => q.name)).toEqual([
-      "Plan Credits",
-      "Resource Package",
-      "Bonus Pack 1",
-      "Bonus Pack 2",
-      "Bonus Pack (unitemized)",
-    ]);
-    const row = parsed[parsed.length - 1];
-    expect(row.total).toBe(100);
-    expect(row.resetAt).toBeNull(); // nothing to count down to
-    const packRows = parsed.filter((q) => q.name.startsWith("Bonus Pack"));
-    expect(packRows.reduce((sum, q) => sum + q.total, 0)).toBe(700);
+    // `user` is a zero-total bucket in this fixture, so it is hidden.
+    expect(parsed.map((q) => q.name)).toEqual(["Resource Package"]);
+    const aggregate = parsed.find((q) => q.name === "Resource Package");
+    expect(aggregate.total).toBe(700); // 500 + 100 + 100
+    expect(aggregate.aggregate).toBe(true);
+    expect(parsed.filter((q) => q.name.startsWith("Bonus Pack"))).toEqual([]);
   });
 
-  it("has a translation for the new row label in every dashboard locale", () => {
+  it("keeps the pack labels translated for the per-pack table", () => {
     for (const lang of ["zh-CN", "zh-TW"]) {
       const dict = JSON.parse(
         readFileSync(new URL(`../../public/i18n/literals/${lang}.json`, import.meta.url), "utf8"),

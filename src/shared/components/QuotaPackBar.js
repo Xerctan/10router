@@ -123,7 +123,7 @@ function QuotaRow({ row, depth = 0, widthPct = null }) {
         <div className="flex min-w-0 items-baseline justify-between gap-2 tabular-nums">
           <span className="flex min-w-0 items-baseline gap-1">
             <CreditIcon className="size-[11px] shrink-0 self-center text-text-muted" />
-            <b className="text-[15px] font-bold text-text">{fmt(remaining)}</b>
+            <b className="text-[12px] font-bold text-text">{fmt(remaining)}</b>
             {unit ? <span className="text-[10px] text-text-muted">（{unit}）</span> : null}
           </span>
           <span className="shrink-0 text-[11px] text-text-muted">
@@ -171,6 +171,93 @@ function QuotaRow({ row, depth = 0, widthPct = null }) {
     </div>
   );
 }
+
+/**
+ * The nested cycle allowance as ONE bar.
+ *
+ * 滚动 ⊂ 每周 ⊂ 月度额度 are three scopes of the same allowance, so they share a
+ * single track rather than stacking three bars: the outermost layer is the full
+ * track, and each inner layer is a span nested inside its parent's span.
+ *
+ *   [██████████████████████████]  ← 月度额度 9.96/10 (outermost, full track)
+ *   [██████████████            ]  ← 每周 5.96/6   (inset, 99.4% of the month)
+ *   [██████████████            ]  ← 滚动 3/3      (inset again, fills那个每周 span)
+ *
+ * Rendered with absolutely-positioned bands inside one track, each a bit
+ * shorter and lighter than its parent so all three are visible at once.
+ */
+function NestedCycleTrack({ ladder }) {
+  // ladder is outermost-first; its last entry is the innermost span.
+  const bands = ladder.map(({ row, widthPct }, i) => ({
+    row,
+    widthPct,
+    // Innermost looks strongest; each outer ring is progressively softer.
+    opacity: 0.25 + (0.55 * (i + 1)) / ladder.length,
+  }));
+
+  const outer = ladder[0]?.row;
+  const inner = ladder[ladder.length - 1]?.row;
+
+  return (
+    <div className="min-w-0 space-y-1">
+      <div className="flex min-w-0 items-center justify-between gap-2 text-[11px] tabular-nums">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <CreditIcon className="size-[11px] shrink-0 text-text-muted" />
+          <span className="truncate text-text-muted">
+            {translateQuotaName(outer?.name || "")}
+          </span>
+        </span>
+        <span className="shrink-0 text-text-muted">
+          {translate("remaining {remaining} of {total}")
+            .replace("{remaining}", fmt(ladder[0].ownRemaining))
+            .replace("{total}", fmt(ladder[0].ownTotal))}
+          {outer?.resetAt ? ` · ${translate("resets")} ${shortDate(outer.resetAt)}` : ""}
+        </span>
+      </div>
+
+      <div
+        className="relative h-[7px] w-full overflow-hidden rounded-[3px] bg-black/10 dark:bg-white/10"
+        role="img"
+        aria-label={ladder
+          .map(({ row, ownRemaining, ownTotal }) =>
+            `${translateQuotaName(row.name)} ${fmt(ownRemaining)}/${fmt(ownTotal)}`)
+          .join("，")}
+      >
+        {bands.map(({ row, widthPct, opacity }, i) => (
+          <span
+            key={`${row.name || "band"}-${i}`}
+            className="absolute inset-y-0 left-0 rounded-[3px] bg-sky-500"
+            style={{ width: `${widthPct}%`, opacity }}
+            title={`${translateQuotaName(row.name)} ${fmt(ladder[i].ownRemaining)}/${fmt(ladder[i].ownTotal)}`}
+          />
+        ))}
+      </div>
+
+      {/* Each layer's own numbers, so the nesting is readable without hovering.
+          The innermost line is what actually binds you right now. */}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] tabular-nums text-text-muted">
+        {ladder.map(({ row, ownRemaining, ownTotal }, i) => (
+          <span key={`${row.name || "lbl"}-${i}`} className="inline-flex min-w-0 items-center gap-1">
+            {i > 0 ? <span className="shrink-0 opacity-50">└</span> : null}
+            <span className="truncate">{translateQuotaName(row.name)}</span>
+            <span className="shrink-0">
+              {fmt(ownRemaining)} / {fmt(ownTotal)}
+            </span>
+          </span>
+        ))}
+        {inner?.resetAt ? (
+          <span className="shrink-0">
+            {translate("resets")} {shortDate(inner.resetAt)}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+NestedCycleTrack.propTypes = {
+  ladder: PropTypes.arrayOf(PropTypes.object).isRequired,
+};
 
 QuotaRow.propTypes = {
   row: PropTypes.shape({
@@ -328,7 +415,7 @@ export default function QuotaPackBar({ packs = [], className }) {
         <div className="flex items-center justify-between gap-3">
           <span className="inline-flex items-center gap-1.5 tabular-nums">
             <CreditIcon className="size-[13px] text-primary" />
-            <b className="text-xl font-bold text-text">{fmt(poolRemaining)}</b>
+            <b className="text-[16px] font-bold text-text">{fmt(poolRemaining)}</b>
           </span>
           <span className="inline-flex items-center text-xs tabular-nums text-text-muted">
             {fmt(poolRemaining)} / {fmt(poolTotal)}
@@ -397,13 +484,13 @@ export default function QuotaPackBar({ packs = [], className }) {
           `cycleLines` (not `cycle.windows`) is the flat list, because a MONTHLY
           row belongs in both places: it is summed into the pool bar above AND
           gets its own progress row here. */}
-      {ladder.length > 0
-        ? ladder.map(({ row, depth, widthPct }) => (
-            <QuotaRow key={`${row.name || "win"}-${depth}`} row={row} depth={depth} widthPct={widthPct} />
-          ))
-        : cycleLines.map((row, i) => (
-            <QuotaRow key={`${row.name || "win"}-${i}`} row={row} />
-          ))}
+      {ladder.length > 0 ? (
+        // A real containment chain → ONE track with nested spans, not one bar
+        // per layer. 滚动 ⊂ 每周 ⊂ 月度额度 share a single measure.
+        <NestedCycleTrack ladder={ladder} />
+      ) : (
+        cycleLines.map((row, i) => <QuotaRow key={`${row.name || "win"}-${i}`} row={row} />)
+      )}
     </div>
   );
 }

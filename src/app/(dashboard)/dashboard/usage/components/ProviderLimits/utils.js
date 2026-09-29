@@ -561,20 +561,26 @@ export function parseQuotaData(provider, data) {
 
       case "qoder":
       case "qoder-cn":
-        // Qoder ships a `user` quota, `addOn` quota (resource package),
-        // and (optionally) an `organization` quota, all with shape: {total, used, remaining, unit, resetAt}.
-        // Skip an organization or addOn bucket when its total is 0.
-        // Don't forward Qoder's `remaining` field: it's an absolute credit
-        // count, but getRemainingPercentage / QuotaTable interpret
-        // `remaining` as a 0-100 percentage and would render 348 credits
-        // as "348%". The percentage is computed from used/total instead.
+        // Qoder ships `user`, `addOn` (resource packages) and optionally
+        // `organization`, each {total, used, remaining, unit, resetAt}. `addOn`
+        // additionally carries `packs[]` — but those packs ARE the addOn
+        // breakdown, already summed into addOn.total (500+400 = 900). Emitting
+        // both the aggregate AND its members double-counted the same credits, so
+        // only the aggregates are emitted here and the pack detail stays in the
+        // raw payload for the per-pack table.
+        //
+        // Don't forward Qoder's `remaining`: it is an absolute credit count, but
+        // getRemainingPercentage / QuotaTable read `remaining` as a 0-100
+        // percentage and would render 348 credits as "348%". Percent comes from
+        // used/total instead.
         if (data.quotas) {
           Object.entries(data.quotas).forEach(([quotaType, quota]) => {
-            if (quotaType === "organization" && (!quota || (Number(quota.total) || 0) === 0)) {
-              return;
-            }
-            if (quotaType === "addOn" && (!quota || (Number(quota.total) || 0) === 0)) {
-              return;
+            const total = Number(quota?.total) || 0;
+            // A zero-total bucket carries no allowance; showing it as "剩 0 / 0"
+            // is noise (and on Qoder every account has an empty `user` row and an
+            // empty `organization` row).
+            if (quotaType === "organization" || quotaType === "user" || quotaType === "addOn") {
+              if (total === 0) return;
             }
             const resetAt =
               quota.resetAt && new Date(quota.resetAt).getFullYear() <= 2099
@@ -591,40 +597,16 @@ export function parseQuotaData(provider, data) {
             normalizedQuotas.push({
               name: displayName,
               used: quota.used || 0,
-              total: quota.total || 0,
+              total,
               unit: quota.unit,
-              // The addOn total mixes packs with different expiry dates; a
-              // single countdown on the aggregate row is misleading (and the
-              // official web UI shows none). Real dates live on the per-pack
-              // rows below.
+              // The addOn total mixes packs with different expiry dates; a single
+              // countdown on it would be misleading (the official web UI shows
+              // none). Per-pack dates remain available in the details table.
               resetAt: quotaType === "addOn" ? null : resetAt,
               unlimited: quota.unlimited === true,
+              // One aggregate per bucket — this is the “综合” row the card charts.
+              aggregate: true,
             });
-            // Qoder's addOn aggregates every gifted pack; when the usage
-            // service resolved the per-campaign breakdown, surface each one
-            // as its own row (soonest-expiring first), mirroring the web
-            // account page's "包含 N 个资源包" list. Packs are one-shot
-            // (recurring:false) so they render "expires in Xd" like
-            // CodeBuddy's bonus packs.
-            if (quotaType === "addOn" && Array.isArray(quota.packs)) {
-              quota.packs.forEach((pack, i) => {
-                normalizedQuotas.push({
-                  // The last row may be an aggregate-only remainder: credits the
-                  // device-token API cannot itemise (no campaign), so it carries
-                  // no expiry and is labelled instead of numbered.
-                  name: pack.unitemized ? "Bonus Pack (unitemized)" : `Bonus Pack ${i + 1}`,
-                  used: pack.used || 0,
-                  total: pack.total || 0,
-                  unit: quota.unit,
-                  resetAt:
-                    pack.expiresAt && new Date(pack.expiresAt).getFullYear() <= 2099
-                      ? pack.expiresAt
-                      : null,
-                  unlimited: false,
-                  recurring: false,
-                });
-              });
-            }
           });
         }
         break;
