@@ -1911,9 +1911,13 @@ export default function ProviderDetailPage() {
               )}
               <InviteCodeChip code={providerInfo.notice?.inviteCode} />
             </div>
-            <p className="text-text-muted">
-              {connections.length} connection{connections.length === 1 ? "" : "s"}
-            </p>
+            {/* noAuth 免授权供应商（opencode/mimo-free/zcode-free）永远没有连接行，
+                「0 connections」是噪音——直接不渲染 */}
+            {!isFreeNoAuth && (
+              <p className="text-text-muted">
+                {connections.length} connection{connections.length === 1 ? "" : "s"}
+              </p>
+            )}
           </div>
         </div>
       </div>
