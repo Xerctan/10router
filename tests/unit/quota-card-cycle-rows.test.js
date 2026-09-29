@@ -113,6 +113,31 @@ describe("cycleRowLines", () => {
     const monthly = row("Monthly Credits", { recurring: true, total: 10 });
     expect(cycleRowLines([weekly, session, monthly])).toEqual([monthly, weekly, session]);
   });
+
+  it("a GIFT-pack monthly stays collapsed (CodeBuddy's monthly grant)", () => {
+    // CodeBuddy's "Monthly" is a monthly credit GRANT — the same kind of thing
+    // as its Bonus Packs — not a plan window. It must not get its own line; it
+    // lives in the per-pack details only. `parseQuotaData` marks it.
+    const grant = row("Monthly", { recurring: true, total: 500, giftPack: true });
+    expect(cycleRowLines([grant])).toEqual([]);
+    // ...but it still belongs to the pool/total, so nothing is lost.
+    expect(classifyCycleRows([grant]).monthly).toEqual([grant]);
+  });
+
+  it("a PLAN monthly window still gets its own line (opencode-go)", () => {
+    const planMonthly = row("Monthly", { recurring: true, total: 100 });
+    expect(cycleRowLines([planMonthly])).toEqual([planMonthly]);
+  });
+
+  it("mixes them: only the plan window shows, the grant stays collapsed", () => {
+    const planMonthly = row("Monthly", { recurring: true, total: 100 }); // opencode-go
+    const weekly = row("Weekly", { recurring: true, total: 50 });
+    expect(cycleRowLines([weekly, planMonthly])).toEqual([planMonthly, weekly]);
+
+    const grant = row("Monthly", { recurring: true, total: 500, giftPack: true });
+    const bonus = row("Bonus Pack 1", { recurring: false, total: 100 });
+    expect(cycleRowLines([grant, bonus])).toEqual([]);
+  });
 });
 
 describe("buildNestedCycle", () => {
@@ -185,6 +210,28 @@ describe("buildNestedCycle", () => {
   it("returns empty for no cycle rows, so a plain card renders no ladder", () => {
     expect(buildNestedCycle([])).toEqual([]);
     expect(buildNestedCycle([row("Bonus Pack 21"), row("Balance (CNY)")])).toEqual([]);
+  });
+
+  it("a LONE monthly is not a ladder (this is what hid the CodeBuddy grant)", () => {
+    // Regression: the renderer prefers the ladder whenever one exists and skips
+    // `cycleRowLines` entirely. A single loose row produced a one-entry "ladder",
+    // so the CodeBuddy monthly grant kept rendering even after being excluded
+    // from the row list. A chain needs ≥ 2 layers.
+    const grant = row("Monthly", { recurring: true, total: 500, giftPack: true });
+    expect(buildNestedCycle([grant, row("Bonus Pack 1", { total: 100 })])).toEqual([]);
+
+    // Same rule for a plan monthly with nothing under it.
+    expect(buildNestedCycle([row("Monthly", { recurring: true, total: 100 })])).toEqual([]);
+  });
+
+  it("a gift-pack monthly can never head a chain", () => {
+    // Even paired with a weekly, a GRANT monthly is not a plan window, so it is
+    // skipped as a head — the weekly then has nothing to nest inside and falls
+    // through to a flat row.
+    const grant = row("Monthly", { recurring: true, total: 500, giftPack: true });
+    const weekly = row("Weekly", { recurring: true, total: 100, remainingNum: 80 });
+    expect(buildNestedCycle([grant, weekly])).toEqual([]);
+    expect(cycleRowLines([grant, weekly])).toEqual([weekly]);
   });
 
   it("antigravity: 5h + weekly are PARALLEL windows, never a ladder", () => {

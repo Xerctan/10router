@@ -683,6 +683,16 @@ export function parseQuotaData(provider, data) {
         // displayRemaining: these rows are CREDIT packs — the UI renders
         // remaining/total counting DOWN as you spend (fresh = "100/100 100%"),
         // not used/total counting up ("0/100 100%", which reads as empty).
+        //
+        // giftPack: CodeBuddy's "Monthly" is a monthly GRANT — the same kind of
+        // thing as the Bonus Packs, just on a cycle (the fetcher derives that
+        // label from the cycle length; see `refillCadence` in
+        // open-sse/services/usage/codebuddy-cn.js). It is NOT a plan window.
+        // The card therefore keeps it out of the cycle rows and leaves it to the
+        // per-pack details. Only a subscription's own monthly window
+        // (opencode-go's `usage.monthly`) gets a line of its own. Upstream both
+        // are spelled "Monthly", so the distinction has to be made HERE, while
+        // the provider is still known.
         if (data.quotas) {
           Object.entries(data.quotas).forEach(([name, quota]) => {
             normalizedQuotas.push({
@@ -692,6 +702,7 @@ export function parseQuotaData(provider, data) {
               resetAt: quota.resetAt || null,
               recurring: quota.recurring !== false,
               displayRemaining: true,
+              ...(name === "Monthly" ? { giftPack: true } : {}),
             });
           });
         }

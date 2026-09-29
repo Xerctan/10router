@@ -117,6 +117,10 @@ const CYCLE_LAYER_RE = {
 export function buildNestedCycle(rows = []) {
   const buckets = { monthly: null, weekly: null, rolling: null };
   for (const row of rows) {
+    // A monthly GRANT (CodeBuddy) is a credit pack, not a plan window, so it
+    // cannot be the head of a containment chain — it is collapsed to the
+    // per-pack details instead.
+    if (row?.giftPack === true) continue;
     const name = String(row?.name || "");
     for (const [layer, re] of Object.entries(CYCLE_LAYER_RE)) {
       if (!buckets[layer] && re.test(name)) {
@@ -131,6 +135,13 @@ export function buildNestedCycle(rows = []) {
   if (!buckets.monthly) return [];
 
   const ladder = [buckets.monthly, buckets.weekly, buckets.rolling].filter(Boolean);
+
+  // A chain needs at least two layers. One loose row is not a ladder — it must
+  // fall through to the flat `cycleRowLines` list, otherwise the renderer (which
+  // prefers the ladder when one exists) would draw it and skip that filter
+  // entirely. That is exactly how a lone CodeBuddy `Monthly` grant kept
+  // appearing on the card after being excluded from `cycleRowLines`.
+  if (ladder.length < 2) return [];
 
   /** remaining/total in the row's OWN unit, 0–100 (0 when the unit is unknown). */
   const shareOfSelf = (row) => {
@@ -192,10 +203,16 @@ export function classifyCycleRows(rows = []) {
 /**
  * The cycle rows that get their own progress line under the pool bar, in
  * display order: monthly first (the widest window), then the other windows.
- * Monthly is here *in addition to* its pool membership, not instead of it.
+ *
+ * `giftPack` monthly rows are EXCLUDED — a provider's monthly *grant* (CodeBuddy
+ * hands out a fresh credit pack each month) is not a plan window, so it belongs
+ * only in the per-pack details, collapsed. Only a subscription's own monthly
+ * window keeps a line. Both arrive spelled "Monthly", so `parseQuotaData` marks
+ * the grant at the source; see the codebuddy-cn branch there.
  */
 export function cycleRowLines(rows = []) {
   const { monthly, windows } = classifyCycleRows(rows);
+  const planMonthly = monthly.filter((r) => r?.giftPack !== true);
   const nonMonthly = windows.filter((r) => !monthly.includes(r));
-  return [...monthly, ...nonMonthly];
+  return [...planMonthly, ...nonMonthly];
 }
