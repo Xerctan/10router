@@ -343,11 +343,21 @@ export default function QuotaPackBar({ packs = [], className }) {
   const poolTotal = pool.reduce((s, p) => s + p.totalNum, 0);
   const poolRemaining = pool.reduce((s, p) => s + p.remainingNum, 0);
   // A one-row pool is already fully described by the big aggregate line and the
-  // segmented bar above, so its individual row must not repeat it underneath.
+  // When the pool collapses to ONE logical thing, its individual row must not be
+  // re-listed underneath — the aggregate line above already is that row (Qoder:
+  // 资源包; stepfun: 余额). The BAR still renders: it is the visual meter for that
+  // same value, and dropping it removed the only progress indication on the card.
+  //
   // Counts COLLAPSED families too: Qoder's `资源包` is a 2-member family shown as
-  // a single aggregate row, and re-listing it read as a second quota.
+  // a single aggregate row, so it counts as one.
   const poolRowCount = families.length + singletonPools.length + monthlyPacks.length;
   const isPoolFullyRepresented = poolRowCount <= 1;
+  // A "settled balance" is a single stored-value pool: nothing decrements its
+  // total, so `remaining / total` is always the full amount and printing it is
+  // noise. True for stepfun's 余额/代金券; false for Qoder's 资源包 (a real
+  // 100 / 900) and for any summing family.
+  const poolIsSettledBalance =
+    poolRowCount === 1 && pool.length > 0 && pool.every((p) => isStoredValueRow(p));
 
   // 原生包名展示修正：合集池「资源包」→「资源包 Credits」。
   const displayPackName = (name) => (name === "资源包" ? "资源包 Credits" : name);
@@ -427,10 +437,11 @@ export default function QuotaPackBar({ packs = [], className }) {
             <CreditIcon className="size-[13px] text-primary" />
             <b className="text-[16px] font-bold text-text">{fmt(poolRemaining)}</b>
           </span>
-          {/* The "X / Y" only adds information when the pool SUMS several packs.
-              On a settled single balance (stepfun's 余额) it just reprints the big
-              number next to it, which read as two separate rows. */}
-          {!isPoolFullyRepresented && (
+          {/* A settled balance has no denominator worth printing — `14.95 / 14.95`
+              just reprinted the big number beside it. Everything else keeps it:
+              a summing family (CodeBuddy's packs) and a single pool with a real
+              denominator (Qoder 100 / 900, the number the bar below measures). */}
+          {!poolIsSettledBalance && (
             <span className="inline-flex items-center text-xs tabular-nums text-text-muted">
               {fmt(poolRemaining)} / {fmt(poolTotal)}
             </span>
@@ -441,7 +452,7 @@ export default function QuotaPackBar({ packs = [], className }) {
           Hidden when the pool is one settled balance — a "progress" bar over a
           value with no denominator says nothing, and it was the second of the
           two bars stepfun showed. */}
-      {pool.length > 0 && !isPoolFullyRepresented && renderPoolBar(pool, poolTotal)}
+      {pool.length > 0 && renderPoolBar(pool, poolTotal)}
 
       {/* Qoder 系合集说明：资源包 Credits 已包含套餐内 Credits 等（用户要求同步标注） */}
       {hasCollectionRow && (
