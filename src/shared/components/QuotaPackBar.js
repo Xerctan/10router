@@ -6,6 +6,7 @@ import { translateQuotaName } from "@/shared/utils/quotaName";
 import {
   buildNestedCycle,
   classifyCycleRows,
+  cycleRowLines,
   isAggregateQuotaRow,
   isRecurringQuotaRow,
   isStoredValueRow,
@@ -198,6 +199,9 @@ export default function QuotaPackBar({ packs = [], className }) {
   // additive pool; everything else recurring forms the nested 滚动⊂每周 ladder.
   const cycle = classifyCycleRows(withNums);
   const ladder = buildNestedCycle(withNums);
+  // Rows that get their own line under the pool bar. Monthly is in here TOO —
+  // it counts into the pool and the total, and still shows its own window row.
+  const cycleLines = cycleRowLines(withNums);
   const monthlyPacks = cycle.monthly;
 
   // Non-recurring rows: same-base-name groups with ≥2 members are a pack
@@ -388,12 +392,16 @@ export default function QuotaPackBar({ packs = [], className }) {
           - Independent windows (antigravity: a family's `5h Window` and
             `Weekly Window`, or mimo's lone Weekly) → no ladder; each renders as
             its own plain full-width bar. They measure different things and
-            must not be stacked. */}
+            must not be stacked.
+
+          `cycleLines` (not `cycle.windows`) is the flat list, because a MONTHLY
+          row belongs in both places: it is summed into the pool bar above AND
+          gets its own progress row here. */}
       {ladder.length > 0
         ? ladder.map(({ row, depth, widthPct }) => (
             <QuotaRow key={`${row.name || "win"}-${depth}`} row={row} depth={depth} widthPct={widthPct} />
           ))
-        : cycle.windows.map((row, i) => (
+        : cycleLines.map((row, i) => (
             <QuotaRow key={`${row.name || "win"}-${i}`} row={row} />
           ))}
     </div>

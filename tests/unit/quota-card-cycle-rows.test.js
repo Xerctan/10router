@@ -21,6 +21,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildNestedCycle,
   classifyCycleRows,
+  cycleRowLines,
   isRecurringQuotaRow,
   isStoredValueRow,
   nameWithoutUnit,
@@ -54,13 +55,17 @@ describe("nameWithoutUnit / quotaUnitOf (the card-name regression)", () => {
 });
 
 describe("classifyCycleRows", () => {
-  it("treats Monthly as a resource pack, not a cycle window", () => {
+  it("monthly is a DUAL citizen: in the pool AND its own row", () => {
+    // A `Monthly` allowance expires at month end, so it counts into the pool bar
+    // and the big total. It ALSO renders as its own progress row underneath —
+    // the card shows both. `monthly` is the pool feed; `cycleRowLines` is the
+    // row list, and it contains the monthly row too.
     const monthly = row("Monthly Credits", { recurring: true, total: 10, used: 0.04 });
     const c = classifyCycleRows([monthly]);
     expect(c.monthly).toEqual([monthly]);
-    // No windows → the card renders no cycle block at all.
-    expect(c.hasAnyCycle).toBe(false);
-    expect(c.windows).toEqual([]);
+
+    const lines = cycleRowLines([monthly]);
+    expect(lines).toEqual([monthly]);
   });
 
   it("keeps rolling/weekly as windows and excludes the monthly pack", () => {
@@ -70,7 +75,7 @@ describe("classifyCycleRows", () => {
 
     const c = classifyCycleRows([session, weekly, monthly]);
     expect(c.hasAnyCycle).toBe(true);
-    expect(c.windows).toEqual([session, weekly]);
+    expect(c.windows).toEqual([session, weekly, monthly]);
     expect(c.monthly).toEqual([monthly]);
   });
 
@@ -82,8 +87,9 @@ describe("classifyCycleRows", () => {
 
     const c = classifyCycleRows([weekly]);
     expect(c.windows).toEqual([weekly]);
-    // The old 0% "Monthly" placeholder is gone — nothing synthetic is added.
+    // No monthly row exists upstream, so none is synthesised for the card.
     expect(c.monthly).toEqual([]);
+    expect(cycleRowLines([weekly])).toEqual([weekly]);
   });
 
   it("a pure stored-value card has no cycle rows at all (stepfun-cn)", () => {
@@ -94,6 +100,18 @@ describe("classifyCycleRows", () => {
     expect(c.hasAnyCycle).toBe(false);
     expect(c.windows).toEqual([]);
     expect(c.monthly).toEqual([]);
+    expect(cycleRowLines([
+      row("Balance (CNY)", { displayRemaining: true, total: 14.95 }),
+    ])).toEqual([]);
+  });
+});
+
+describe("cycleRowLines", () => {
+  it("orders monthly first, then the remaining windows", () => {
+    const session = row("session (5h)", { recurring: true, total: 3 });
+    const weekly = row("weekly (7d)", { recurring: true, total: 6 });
+    const monthly = row("Monthly Credits", { recurring: true, total: 10 });
+    expect(cycleRowLines([weekly, session, monthly])).toEqual([monthly, weekly, session]);
   });
 });
 

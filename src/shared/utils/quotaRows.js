@@ -176,10 +176,26 @@ export function classifyCycleRows(rows = []) {
   const windows = cycleRows.filter((r) => !monthly.includes(r));
 
   return {
-    hasAnyCycle: windows.length > 0,
-    /** Rolling / weekly (and anything else recurring that isn't a monthly pack). */
-    windows,
-    /** Monthly resource packs — fed to the pool bar, never a card block. */
+    hasAnyCycle: cycleRows.length > 0,
+    /** Rolling / weekly windows (+ monthly, which also gets its own row). */
+    windows: [...windows, ...monthly],
+    /**
+     * Monthly rows are DUAL-CITIZEN, by the user's call: they count into the
+     * additive pool bar and the big total (they are allowances that expire at
+     * month end), AND they render as their own progress row under the pool. So
+     * this list is consumed for the pool — it is not "excluded from the card".
+     */
     monthly,
   };
+}
+
+/**
+ * The cycle rows that get their own progress line under the pool bar, in
+ * display order: monthly first (the widest window), then the other windows.
+ * Monthly is here *in addition to* its pool membership, not instead of it.
+ */
+export function cycleRowLines(rows = []) {
+  const { monthly, windows } = classifyCycleRows(rows);
+  const nonMonthly = windows.filter((r) => !monthly.includes(r));
+  return [...monthly, ...nonMonthly];
 }
