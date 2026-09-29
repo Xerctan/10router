@@ -159,7 +159,9 @@ function QuotaRow({ row, depth = 0, widthPct = null }) {
           {translate("remaining {remaining} of {total}")
             .replace("{remaining}", fmt(remaining))
             .replace("{total}", fmt(total))}
-          {row.resetAt ? ` · ${word} ${shortDate(row.resetAt)}` : ""}
+          {row.resetAt
+            ? `　${word.replace("{date}", shortDate(row.resetAt))}`
+            : ""}
         </span>
       </div>
       <div className="h-[5px] w-full overflow-hidden rounded-[3px] bg-black/10 dark:bg-white/10">
@@ -211,7 +213,9 @@ function NestedCycleTrack({ ladder }) {
           {translate("remaining {remaining} of {total}")
             .replace("{remaining}", fmt(ladder[0].ownRemaining))
             .replace("{total}", fmt(ladder[0].ownTotal))}
-          {outer?.resetAt ? ` · ${translate("resets")} ${shortDate(outer.resetAt)}` : ""}
+          {outer?.resetAt
+            ? `　${translate("resets").replace("{date}", shortDate(outer.resetAt))}`
+            : ""}
         </span>
       </div>
 
@@ -247,7 +251,7 @@ function NestedCycleTrack({ ladder }) {
         ))}
         {inner?.resetAt ? (
           <span className="shrink-0">
-            {translate("resets")} {shortDate(inner.resetAt)}
+            {translate("resets").replace("{date}", shortDate(inner.resetAt))}
           </span>
         ) : null}
       </div>
@@ -338,6 +342,12 @@ export default function QuotaPackBar({ packs = [], className }) {
   ];
   const poolTotal = pool.reduce((s, p) => s + p.totalNum, 0);
   const poolRemaining = pool.reduce((s, p) => s + p.remainingNum, 0);
+  // A one-row pool is already fully described by the big aggregate line and the
+  // segmented bar above, so its individual row must not repeat it underneath.
+  // Counts COLLAPSED families too: Qoder's `资源包` is a 2-member family shown as
+  // a single aggregate row, and re-listing it read as a second quota.
+  const poolRowCount = families.length + singletonPools.length + monthlyPacks.length;
+  const isPoolFullyRepresented = poolRowCount <= 1;
 
   // 原生包名展示修正：合集池「资源包」→「资源包 Credits」。
   const displayPackName = (name) => (name === "资源包" ? "资源包 Credits" : name);
@@ -417,13 +427,21 @@ export default function QuotaPackBar({ packs = [], className }) {
             <CreditIcon className="size-[13px] text-primary" />
             <b className="text-[16px] font-bold text-text">{fmt(poolRemaining)}</b>
           </span>
-          <span className="inline-flex items-center text-xs tabular-nums text-text-muted">
-            {fmt(poolRemaining)} / {fmt(poolTotal)}
-          </span>
+          {/* The "X / Y" only adds information when the pool SUMS several packs.
+              On a settled single balance (stepfun's 余额) it just reprints the big
+              number next to it, which read as two separate rows. */}
+          {!isPoolFullyRepresented && (
+            <span className="inline-flex items-center text-xs tabular-nums text-text-muted">
+              {fmt(poolRemaining)} / {fmt(poolTotal)}
+            </span>
+          )}
         </div>
       )}
-      {/* Additive pool bar: family packs + monthly (月度并入聚合，不单独成行) */}
-      {pool.length > 0 && renderPoolBar(pool, poolTotal)}
+      {/* Additive pool bar: family packs + monthly (月度并入聚合，不单独成行).
+          Hidden when the pool is one settled balance — a "progress" bar over a
+          value with no denominator says nothing, and it was the second of the
+          two bars stepfun showed. */}
+      {pool.length > 0 && !isPoolFullyRepresented && renderPoolBar(pool, poolTotal)}
 
       {/* Qoder 系合集说明：资源包 Credits 已包含套餐内 Credits 等（用户要求同步标注） */}
       {hasCollectionRow && (
@@ -448,12 +466,20 @@ export default function QuotaPackBar({ packs = [], className }) {
             <span className="text-text-muted">
               {translate("{count} resource packs").replace("{count}", String(liveCount))}
             </span>
-            <span className="inline-flex min-w-0 items-center gap-2 truncate text-text-muted">
-              <span className="truncate">
-                {translateQuotaName(displayPackName(soonestLive.name))}
+            <span className="inline-flex min-w-0 items-center gap-3 truncate text-text-muted">
+              {/* No pack name: the credit icon + amount + expiry already say
+                  which pack this is, and "赠送包 21" alongside the pool bar just
+                  repeated the row above. */}
+              <span className="inline-flex shrink-0 items-center gap-1">
+                <CreditIcon className="size-[11px] shrink-0" />
+                {fmt(soonestLive.remainingNum)}
               </span>
-              <span>
-                （{fmt(soonestLive.remainingNum)}）{translate("expires")} {shortDate(soonestLive.resetAt)}
+              <span className="shrink-0">
+                {translate(
+                  soonestLive.recurring === true || isRecurringQuotaRow(soonestLive)
+                    ? "resets"
+                    : "expires {date}"
+                ).replace("{date}", shortDate(soonestLive.resetAt))}
               </span>
             </span>
           </div>
@@ -462,7 +488,13 @@ export default function QuotaPackBar({ packs = [], className }) {
 
       {/* 储值类（余额/代金券/现金）：同样是「一项两行」，但右侧是单值 + 小字
           单位 —— 它们恒为 X/X，显示 "/ 总量" 没有信息量。 */}
-      {singletonPools.length > 0 && (
+      {/* Stored-value singletons (余额/代金券) get their own row. But when the
+          pool is exactly ONE row (Qoder: just 资源包), that row IS what the big
+          aggregate line + segmented bar above already show — rendering it again
+          here printed the same "100 / 100" a second time and read as two
+          separate quotas. Only render the individual rows when the pool holds
+          more than one distinct thing (e.g. stepfun-cn's 余额 + 代金券). */}
+      {singletonPools.length > 0 && !isPoolFullyRepresented && (
         <>
           {singletonPools.map((p, i) => (
             <QuotaRow key={`${p.name || "pool"}-${i}`} row={p} />
