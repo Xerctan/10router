@@ -3,12 +3,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatResetTime, getRemainingPercentage } from "./utils";
 import { translate } from "@/i18n/runtime";
+// Quota name translation lives in shared/utils/quotaName.js so the quota-block
+// summary (QuotaPackBar) renders the same localized pack names.
+//
+// This MUST be a plain import, not `export { translateQuotaName } from "..."`:
+// a re-export creates no local binding, so the component's own call at
+// `translateQuotaName(quota.name)` below compiled to a bare free identifier and
+// threw `ReferenceError: translateQuotaName is not defined` the moment a
+// per-pack row was actually rendered — i.e. only after expanding "逐包明细",
+// which is what made this look like an intermittent blank page. The named
+// export is preserved for ProviderLimitCard / QuotaProgressBar / index.js.
+import { translateQuotaName } from "@/shared/utils/quotaName";
 
 const PAGE_SIZE = 10;
 
-// Quota name translation lives in shared/utils/quotaName.js so the quota-block
-// summary (QuotaPackBar) renders the same localized pack names.
-export { translateQuotaName } from "@/shared/utils/quotaName";
+export { translateQuotaName };
 
 /**
  * Format reset time display (Today, 12:00 PM)
