@@ -358,6 +358,11 @@ export default function QuotaPackBar({ packs = [], className }) {
   // 100 / 900) and for any summing family.
   const poolIsSettledBalance =
     poolRowCount === 1 && pool.length > 0 && pool.every((p) => isStoredValueRow(p));
+  // Currency/credit unit for the settled balance headline ("14.95（CNY）").
+  // Taken from the pool row's name — the settled-balance path renders the
+  // aggregate line rather than a QuotaRow, so it has to re-derive the unit
+  // QuotaRow would otherwise read for itself.
+  const poolUnit = poolIsSettledBalance ? quotaUnitOf(pool[0]?.name) : "";
 
   // 原生包名展示修正：合集池「资源包」→「资源包 Credits」。
   const displayPackName = (name) => (name === "资源包" ? "资源包 Credits" : name);
@@ -436,6 +441,9 @@ export default function QuotaPackBar({ packs = [], className }) {
           <span className="inline-flex items-center gap-1.5 tabular-nums">
             <CreditIcon className="size-[13px] text-primary" />
             <b className="text-[16px] font-bold text-text">{fmt(poolRemaining)}</b>
+            {poolUnit ? (
+              <span className="text-[10px] text-text-muted">（{poolUnit}）</span>
+            ) : null}
           </span>
           {/* A settled balance has no denominator worth printing — `14.95 / 14.95`
               just reprinted the big number beside it. Everything else keeps it:
