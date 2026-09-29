@@ -31,6 +31,7 @@ function buildProviderEntry(r) {
     ...(r.regions ? { regions: r.regions, defaultRegion: r.defaultRegion } : {}),
     ...(r.hasProviderSpecificData ? { hasProviderSpecificData: true } : {}),
     ...(r.noAuth ? { noAuth: true } : {}),
+    ...(r.exposeStaticModels ? { exposeStaticModels: true } : {}),
     ...(r.passthroughModels ? { passthroughModels: true } : {}),
     // Trial provider (体验) — hidden by default on the providers
     // page unless the "Show community providers" toggle is on.

@@ -1134,5 +1134,10 @@
     "baseUrl": "https://api.longcat.ai/openai/v1/chat/completions",
     "validateUrl": "https://api.longcat.ai/openai/v1/models",
     "format": "openai"
+  },
+  "zcode-free": {
+    "baseUrl": "http://127.0.0.1:47860/gateway/v1/messages",
+    "format": "claude",
+    "noAuth": true
   }
 }

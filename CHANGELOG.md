@@ -6,6 +6,17 @@
 
 ### ✨ 新功能
 
+- **ZCode 免费体验包供应商（`zcode-free`，体验分类）**：Start Plan / Trust Build 体验包（GLM-5.3-Flash，1M 上下文 + 视觉）经 CreditDaddy 桌面版「额度网关」接入——上游 `POST http://127.0.0.1:47860/gateway/v1/messages`（Anthropic 形态），CreditDaddy 负责账号轮换 + 隐藏窗口静默过阿里云验证码；本条目只做端点映射，noAuth 无需连接行。体验分类与 OpenCode Free 一致（`community` 默认展示在体验簇）。配套：`/v1/models` 对 noAuth 供应商新增注册表模型发射通道（`exposeStaticModels` 显式 opt-in，不影响 opencode / mimo-free 既有行为）；官方 Z 图标 `public/providers/zcode-free.png`。
+
+- **ZCode 原生供应商内置（智谱编码套餐，浏览器登录 + CreditDaddy 导入 + 本机导入）**：
+  - **链路与零验证码闭环**：验证了社区 zcode-api 代理机制——OAuth 登录换得 access_token 后，走 bigmodel.cn biz API 找/建名为 `zcode-api-key` 的密钥并获取 secret，换得标准 API 密钥（`id.secret` 格式），请求直打 `open.bigmodel.cn/api/coding/paas/v4`（OpenAI 格式）与 `/api/anthropic`（Claude 格式）标准端点，**补全流量完全不碰 captcha-gated (3007) 的 zcode.z.ai plan 接口**，既定拒绝规避风控的路线得到保持。智谱 upstream 无 token 刷新机制，mint 出的标准 key 长效可用。
+  - **注册表 `open-sse/providers/registry/zcode.js`**：id/alias `zcode`，display ZCode（ZC 紫色），`category:"oauth"`，`authModes:["oauth","apikey"]` 双认证模式（仿 kimi 先例）；transports 双端点直连；models 收录 11 个 GLM 编码模型（glm-5.3/5.3-flash/5.2/5.1/5v-turbo/5-turbo/5/4.7/4.6/4.6v/4.5-air）；`features.usage:true` 挂接 bigmodel 配额查询。三份注册表基线（providers/alias/oauth-urls）已同步重快照。
+  - **浏览器登录全链**：`src/lib/oauth/providers/zcode.js` + `src/lib/oauth/utils/server.js` 实现现行 auth-code 协议（旧 cli/init+poll 已被智谱 404 删除）：本地动态端口回调监听（`/oauth/callback/bigmodel`）+ 浏览器打开 `bigmodel.cn/login?appId=zcode`，回调命中即服务端完成 token 交换与 biz API mint，写入 `zcode` 连接（标记 `authMethod:"oauth"`）。弹窗被拦截时支持手动粘贴重定向 URL 走同一服务端 mint 路径（NAS 等远程场景兜底）。`OAuthModal.js` 接线自动纳入弹窗与轮询。
+  - **CreditDaddy 账号导入（`POST /api/oauth/zcode/import`）**：针对 techysy/CreditDaddy 导出的 `10router-oauth-secure-v1` 信封，适配其 `accessToken` 为 `zcode-creds:<uid>` 占位标记、真实料在 `meta.credentials` 的结构；对未 mint 凭证自动走 biz API 换标准 key；z.ai 侧账号在 v1 阶段显式拒绝并提示（避免打错 bigmodel 端点）。守卫接入 loopback 免登录放行（同通用 transfer/import）。
+  - **本机 ZCode 安装导入（`GET /api/oauth/zcode/auto-import`）**：`src/lib/oauth/zcodeLocalInstall.js` 只读扫描本机的 `~/.zcode/v2/config.json` 与 `credentials.json`。内置 enc:v1 AES-256-GCM 解密算法（按 platform/home/username 派生 fallback key，纯 Node 无依赖），优先提取 ZCode 运行时已缓存的 `account-provider:coding-plan:account:bigmodel-*:api-key`，做到完全离线零网络导入；无缓存 key 时退回 access_token 再 mint。跳过非 bigmodel 侧凭据。dashboardGuard LOCAL_ONLY 锁死。
+  - **仪表盘 UI 与连接名排重**：`OAuthTransferModal.js` 对 zcode 路由重定向到专属导入器；提供商详情页挂出「从本机安装导入」按钮；修复 `POST /api/providers` 同名校验此前裸传字符串导致同名拦截跨 provider 误杀其他同名节点（如自定义节点）的预存 bug（改为 `{ provider }` 对象）。zh-CN/zh-TW 最小补全 4 个新词条。
+  - **单测 29 例**：`zcode-key-mint.test.js`（17 例，mock fetch 验证 token 交换、默认组织/项目提取、find-or-create、secret 降级、z.ai login、回调解析、payload 组装、去重匹配）；`zcode-local-install.test.js`（9 例，fixture 注入验证密钥派生、enc:v1 往返、config.json 提取、缓存 key 提取、access_token 回退、多源去重、跨主机拒解）；`zcode-import.test.js`（3 例，真实 sqlite 落地、同 key 幂等更新、去重、3007 隔离红线断言）。
+
 - **桌面壳「容器」密码管理（浏览器式全自动，`639f77a8`）**：主窗体/壳内弹窗加载的外部网页（「前往→打开网址/最近打开」的 WorkBuddy、CodeBuddy 等）此前零密码能力。三件套：`desktop/passwordStore.js`（纯 Node 密码库，cipher 注入可测；`userData/passwords.json` 只落 Electron safeStorage 密文——Windows 即 DPAPI 绑当前系统用户；同 origin+username 幂等、密码不同即更新、neverAsk 站点黑名单、上限 200 条）+ `desktop/preload-container.js`（sandbox 安全 preload，不向页面暴露任何东西）+ `main.js` 容器登记 / 保存询问窗 / 管理窗 / 右键填充。行为与边界：
   - **捕获双路**：`<form>` submit 直接抓用户名+密码；SPA 无 form 登录靠启发式——密码框输入防抖上报，主进程在 did-navigate 同 origin 换路径时视为登录成功转保存询问（原地提交 / 换站 / 超 10 分钟不算）；多密码框值不同=注册/改密表单，跳过。询问窗可改完用户名密码再存，或「永不保存此站点」。
   - **填充**：该站恰好一条已存条目时，聚焦空密码框/配对用户名框自动回填（React 受控输入走原型 setter + input/change 事件）；多账号只在右键菜单「填充密码：用户名」条目上显式选，明文在点击那一刻才 reveal。漏网的走「前往→管理已保存的密码…」（Ctrl+Shift+P）手动补录 / 改 / 复制 / 两步删除。
@@ -15,7 +26,13 @@
 
 ### 🐛 修复
 
-- **连接创建同名拦截跨 provider 误杀修复**：`POST /api/providers` 的同名 apikey 409 校验此前把过滤器参数裸传字符串给 `getProviderConnections(filter)`（对象形态才生效），同名检查实际跨全部 provider 生效——其他供应商下已有同名连接（如自定义节点）时新连接被误拒。改为 `{ provider }` 对象形态，同名检查回到供应商内部。
+- **代理配置合法性校验与严格代理链路打通（#36）**：
+  - **保存时协议白名单拦截**：在代理池及供应商独立代理的创建/更新路由接入协议校验（`http/https/socks4/5/5h/4a`），精准识别并阻断 `enc://` 不支持协议与误粘贴的 `enc:v1:` 密文（给出直观提示），防止非法协议 URL 进库。
+  - **`strictProxy` 穿透聊天主流程**：打通 `connectionProxy` -> `auth.js` -> `chatCore` -> `proxyFetch` 链路，修正此前代理池「严格模式」在对话主链路丢失生效、发生异常始终回退直连的问题。
+  - **代理失败降级显式化**：在非严格模式发生直连降级时，通过 `onProxyFallback` 回调将代理失败详情记录至服务日志及 `requestDetails` 报错备注，避免用户被无上下文的上游 400 误导。
+  - **已有密文兼容解密**：在解析代理池及连接配置时增加 `unwrapProxyUrl`，透明解密误存或迁移遗留的 `enc:v1:` 格式，防止因协议解析异常中断。
+  - 附单测 `issue-36-proxy-strict.test.js` 8 例。
+
 - **反重力（Antigravity）请求：工具清洗升级 + 去掉 `requestType:"agent"`**（对照 9router v0.5.91 与 OmniRoute 的同类修复，按本仓风格重写，未合入上游代码）。
   - **不再发 `requestType:"agent"`**：官方客户端在 agent（对话）路径上根本不带这个字段，带上后 Google 会把请求归入另一个桶，**有额度也回无详情的 429 RESOURCE_EXHAUSTED**。翻译器两处信封不再写入，执行器再兜底删除（防止入站信封经 `...body` 展开带出）；`image_gen` 保留自己的 requestType。
   - **空字符串工具结果被丢 → 400**：openai→gemini 用 `if (!toolResponses[fid])` 判断有无结果，`""` 是假值被跳过——无输出的命令（`mkdir`、写文件）照样触发；更糟的是本仓自己的 `fixMissingToolResponses` 给未应答调用补的占位就是 `content: ""`，于是这道修复对 Gemini / 反重力**从来没生效过**，留下没有 functionResponse 的 functionCall，Gemini 直接 400。改为按 `undefined` 判定。对 gemini / vertex / gemini-cli 同样生效。

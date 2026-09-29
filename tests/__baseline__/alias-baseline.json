@@ -236,6 +236,7 @@
     "xai": "xai",
     "xiaomi-mimo": "xiaomi-mimo",
     "xiaomi-tokenplan": "xiaomi-tokenplan",
+    "zcode-free": "zcode-free",
     "zed": "zd"
   },
   "modelKeys": [
@@ -352,6 +353,7 @@
     "xiaomi-mimo",
     "xiaomi-mimo-tts-models",
     "xiaomi-tokenplan",
+    "zcode-free",
     "zd"
   ]
 }
