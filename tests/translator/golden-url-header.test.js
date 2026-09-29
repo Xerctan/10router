@@ -28,6 +28,16 @@ const SPECIALIZED = new Set([
   "mimo-desktop",
 ]);
 
+// Phiên bản app được nướng vào vài header (đọc từ package.json lúc chạy):
+//   `9Router/<ver>` (cline/clinepass) và `X-CLIENT-VERSION` / `X-CORE-VERSION` / `X-Msh-Version`.
+// Bản test cục bộ mang số `X.Y.Z-test.N`, nên nếu không khử thì mỗi vòng test lại làm mismatch
+// cline/clinepass/kimi — dù hình dạng header không đổi.
+// CHỈ khử đúng các field mang phiên bản app: một regex `\d+\.\d+\.\d+` trần sẽ nuốt luôn
+// `claude-cli/2.1.92` và `x-9r-core-version` của provider khác, tức snapshot khoá nhầm
+// thứ không phải phiên bản của mình.
+const APP_VERSION_RE = /\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/;
+const APP_VERSION_HEADERS = new Set(["X-CLIENT-VERSION", "X-CORE-VERSION", "X-Msh-Version"]);
+
 // Sanitize header: khử token + field thời gian động (kimi X-Msh-Device-Id) để snapshot ổn định.
 function sanitize(headers) {
   const out = {};
@@ -36,6 +46,8 @@ function sanitize(headers) {
       ? v.replace(/Bearer .+/, "Bearer <TOK>")
           .replace(/sk-test-APIKEY|tok-test-ACCESS/g, "<CRED>")
           .replace(/kimi-\d{10,}/g, "kimi-<TS>")
+          .replace(/9Router\/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/, "9Router/<VER>")
+          .replace(APP_VERSION_HEADERS.has(k) ? APP_VERSION_RE : /(?!)/, "<VER>")
       : v;
   }
   return out;

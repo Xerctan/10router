@@ -5,6 +5,7 @@ import {
   updateProviderConnection,
   deleteProviderConnection,
 } from "@/models";
+import { proxyPoolUrlError } from "@/lib/network/outboundProxy.js";
 
 function normalizeProxyConfig(body = {}) {
   const hasAnyProxyField =
@@ -23,6 +24,13 @@ function normalizeProxyConfig(body = {}) {
       hasAnyProxyField: true,
       error: "Connection proxy URL is required when connection proxy is enabled",
     };
+  }
+
+  if (url) {
+    const urlError = proxyPoolUrlError(url);
+    if (urlError) {
+      return { hasAnyProxyField: true, error: urlError };
+    }
   }
 
   return {

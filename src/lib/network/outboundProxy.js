@@ -5,7 +5,7 @@ function normalizeString(value) {
 
 const ALLOWED_PROXY_SCHEMES = ["http:", "https:", "socks5:", "socks4:", "socks5h:", "socks4a:"];
 
-function validateProxyUrl(url) {
+export function validateProxyUrl(url) {
   if (!url) return null;
   if (/[\n\r`$]/.test(url)) return null;
   try {
@@ -15,6 +15,26 @@ function validateProxyUrl(url) {
   } catch {
     return null;
   }
+}
+
+/**
+ * Proxy-pool save-time validation. Returns null on valid, or the reason on invalid.
+ * Distinguishes "user pasted a ciphertext" from "protocol not supported" so the UI
+ * can show a targeted message instead of a generic 400.
+ */
+export function proxyPoolUrlError(url) {
+  const s = normalizeString(url);
+  if (!s) return "Proxy URL is required";
+  if (s.startsWith("enc:v1:")) {
+    return "The value looks like an encrypted credential (enc:v1:). Proxy pools store plain proxy URLs — paste the decrypted URL (e.g. http://host:port) instead.";
+  }
+  if (s.startsWith("enc://")) {
+    return "enc:// is not a supported proxy protocol. This project stores credentials with enc:v1:, not enc://.";
+  }
+  if (!validateProxyUrl(s)) {
+    return `Invalid proxy URL: protocol must be one of ${ALLOWED_PROXY_SCHEMES.join(", ")}`;
+  }
+  return null;
 }
 
 export function applyOutboundProxyEnv(

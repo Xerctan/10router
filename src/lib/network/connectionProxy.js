@@ -1,9 +1,27 @@
 import { getProxyPoolById } from "@/models";
+import { isEncrypted, decryptSecret } from "@/lib/db/crypto/credentialCipher.js";
 
 // Safely normalize any value into a trimmed string.
 function normalizeString(value) {
   if (value === undefined || value === null) return "";
   return String(value).trim();
+}
+
+/**
+ * Unwrap proxyUrl if it happens to be encrypted (e.g., if an enc:v1: ciphertext
+ * was pasted into a proxy pool or legacy connection).
+ */
+function unwrapProxyUrl(rawUrl) {
+  const s = normalizeString(rawUrl);
+  if (!s) return "";
+  if (isEncrypted(s)) {
+    try {
+      return normalizeString(decryptSecret(s));
+    } catch {
+      return "";
+    }
+  }
+  return s;
 }
 
 // ─── Proxy pool rotation state (in-memory) ─────────────────────────
@@ -40,7 +58,7 @@ function normalizeLegacyProxy(providerSpecificData = {}) {
   const connectionProxyEnabled =
     providerSpecificData?.connectionProxyEnabled === true;
 
-  const connectionProxyUrl = normalizeString(
+  const connectionProxyUrl = unwrapProxyUrl(
     providerSpecificData?.connectionProxyUrl
   );
 
@@ -48,10 +66,13 @@ function normalizeLegacyProxy(providerSpecificData = {}) {
     providerSpecificData?.connectionNoProxy
   );
 
+  const strictProxy = providerSpecificData?.strictProxy === true;
+
   return {
     connectionProxyEnabled,
     connectionProxyUrl,
     connectionNoProxy,
+    strictProxy,
   };
 }
 
@@ -85,7 +106,7 @@ export async function resolveConnectionProxyConfig(
     if (proxyPoolId) {
       const proxyPool = await getProxyPoolById(proxyPoolId);
 
-      const proxyUrl = normalizeString(proxyPool?.proxyUrl);
+      const proxyUrl = unwrapProxyUrl(proxyPool?.proxyUrl);
       const noProxy = normalizeString(proxyPool?.noProxy);
 
       const isValidPool =

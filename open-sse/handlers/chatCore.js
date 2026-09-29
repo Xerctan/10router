@@ -356,11 +356,17 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     log, provider, model, reqTag
   });
 
+  let proxyFallbackWarning = null;
   const proxyOptions = {
     connectionProxyEnabled: credentials?.providerSpecificData?.connectionProxyEnabled === true,
     connectionProxyUrl: credentials?.providerSpecificData?.connectionProxyUrl || "",
     connectionNoProxy: credentials?.providerSpecificData?.connectionNoProxy || "",
     vercelRelayUrl: credentials?.providerSpecificData?.vercelRelayUrl || "",
+    strictProxy: credentials?.providerSpecificData?.strictProxy === true,
+    onProxyFallback: (err) => {
+      proxyFallbackWarning = `Proxy failed (${err?.message || err}); fell back to direct connection`;
+      log?.warn?.("PROXY", `${provider.toUpperCase()} | ${model} | ⚠️ ${proxyFallbackWarning}`);
+    },
   };
 
   if (proxyOptions.vercelRelayUrl) {
@@ -469,23 +475,25 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     trackPendingRequest(model, provider, connectionId, false, true);
     const { statusCode, message, resetsAtMs } = await parseUpstreamError(providerResponse, executor);
     appendRequestLog({ model, provider, connectionId, status: `FAILED ${statusCode}` }).catch(() => { });
+    const responseErrorText = proxyFallbackWarning ? `${message} [Note: ${proxyFallbackWarning}]` : message;
     saveRequestDetail(buildRequestDetail({
       provider, model, connectionId,
       latency: { ttft: 0, total: Date.now() - requestStartTime },
       tokens: { prompt_tokens: 0, completion_tokens: 0 },
       request: extractRequestConfig(body, stream),
       providerRequest: finalBody || translatedBody || null,
-      response: { error: message, status: statusCode, thinking: null },
+      response: { error: responseErrorText, status: statusCode, thinking: null },
       pxpipe: pxpipeSummary,
       status: "error"
     })).catch(() => { });
 
     const errMsg = formatProviderError(new Error(message), provider, model, statusCode);
+    const finalErrMsg = proxyFallbackWarning ? `${errMsg} [Note: ${proxyFallbackWarning}]` : errMsg;
     if (log?.errorLine) {
       const urlStr = providerUrl ? `\n    URL: ${providerUrl}` : "";
-      log.errorLine(reqTag, "✗", `ERROR ${statusCode} · ${provider}/${model} · ${Date.now() - requestStartTime}ms${urlStr}\n    ${errMsg}`);
+      log.errorLine(reqTag, "✗", `ERROR ${statusCode} · ${provider}/${model} · ${Date.now() - requestStartTime}ms${urlStr}\n    ${finalErrMsg}`);
     }
-    reqLogger.logError(new Error(message), finalBody || translatedBody);
+    reqLogger.logError(new Error(finalErrMsg), finalBody || translatedBody);
     // Free-tier models hit upstream rate limits often; surface a friendly,
     // actionable message (with an estimated wait when the upstream gave a reset
     // time) instead of the raw English rate-limit text. Paid models and
@@ -494,7 +502,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       const retryAfterMs = resetsAtMs ? Math.max(0, resetsAtMs - Date.now()) : null;
       return createErrorResult(statusCode, formatFreeRateLimitMessage(provider, model, retryAfterMs), resetsAtMs, upstreamResponseHeaders(providerResponse.headers));
     }
-    return createErrorResult(statusCode, errMsg, resetsAtMs, upstreamResponseHeaders(providerResponse.headers));
+    return createErrorResult(statusCode, finalErrMsg, resetsAtMs, upstreamResponseHeaders(providerResponse.headers));
   }
 
   // The client asked the model to halt at a stop sequence. Some upstreams accept

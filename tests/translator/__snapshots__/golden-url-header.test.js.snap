@@ -422,10 +422,10 @@ exports[`GOLDEN buildHeaders (default executor providers) > cline → headers (a
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
     "HTTP-Referer": "https://cline.bot",
-    "User-Agent": "9Router/1.2.1",
+    "User-Agent": "9Router/<VER>",
     "X-CLIENT-TYPE": "9router",
-    "X-CLIENT-VERSION": "1.2.1",
-    "X-CORE-VERSION": "1.2.1",
+    "X-CLIENT-VERSION": "<VER>",
+    "X-CORE-VERSION": "<VER>",
     "X-IS-MULTIROOT": "false",
     "X-PLATFORM": "win32",
     "X-PLATFORM-VERSION": "v24.20.0",
@@ -435,10 +435,10 @@ exports[`GOLDEN buildHeaders (default executor providers) > cline → headers (a
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
     "HTTP-Referer": "https://cline.bot",
-    "User-Agent": "9Router/1.2.1",
+    "User-Agent": "9Router/<VER>",
     "X-CLIENT-TYPE": "9router",
-    "X-CLIENT-VERSION": "1.2.1",
-    "X-CORE-VERSION": "1.2.1",
+    "X-CLIENT-VERSION": "<VER>",
+    "X-CORE-VERSION": "<VER>",
     "X-IS-MULTIROOT": "false",
     "X-PLATFORM": "win32",
     "X-PLATFORM-VERSION": "v24.20.0",
@@ -449,10 +449,10 @@ exports[`GOLDEN buildHeaders (default executor providers) > cline → headers (a
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
     "HTTP-Referer": "https://cline.bot",
-    "User-Agent": "9Router/1.2.1",
+    "User-Agent": "9Router/<VER>",
     "X-CLIENT-TYPE": "9router",
-    "X-CLIENT-VERSION": "1.2.1",
-    "X-CORE-VERSION": "1.2.1",
+    "X-CLIENT-VERSION": "<VER>",
+    "X-CORE-VERSION": "<VER>",
     "X-IS-MULTIROOT": "false",
     "X-PLATFORM": "win32",
     "X-PLATFORM-VERSION": "v24.20.0",
@@ -468,10 +468,10 @@ exports[`GOLDEN buildHeaders (default executor providers) > clinepass → header
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
     "HTTP-Referer": "https://cline.bot",
-    "User-Agent": "9Router/1.2.1",
+    "User-Agent": "9Router/<VER>",
     "X-CLIENT-TYPE": "9router",
-    "X-CLIENT-VERSION": "1.2.1",
-    "X-CORE-VERSION": "1.2.1",
+    "X-CLIENT-VERSION": "<VER>",
+    "X-CORE-VERSION": "<VER>",
     "X-IS-MULTIROOT": "false",
     "X-PLATFORM": "win32",
     "X-PLATFORM-VERSION": "v24.20.0",
@@ -481,10 +481,10 @@ exports[`GOLDEN buildHeaders (default executor providers) > clinepass → header
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
     "HTTP-Referer": "https://cline.bot",
-    "User-Agent": "9Router/1.2.1",
+    "User-Agent": "9Router/<VER>",
     "X-CLIENT-TYPE": "9router",
-    "X-CLIENT-VERSION": "1.2.1",
-    "X-CORE-VERSION": "1.2.1",
+    "X-CLIENT-VERSION": "<VER>",
+    "X-CORE-VERSION": "<VER>",
     "X-IS-MULTIROOT": "false",
     "X-PLATFORM": "win32",
     "X-PLATFORM-VERSION": "v24.20.0",
@@ -495,10 +495,10 @@ exports[`GOLDEN buildHeaders (default executor providers) > clinepass → header
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
     "HTTP-Referer": "https://cline.bot",
-    "User-Agent": "9Router/1.2.1",
+    "User-Agent": "9Router/<VER>",
     "X-CLIENT-TYPE": "9router",
-    "X-CLIENT-VERSION": "1.2.1",
-    "X-CORE-VERSION": "1.2.1",
+    "X-CLIENT-VERSION": "<VER>",
+    "X-CORE-VERSION": "<VER>",
     "X-IS-MULTIROOT": "false",
     "X-PLATFORM": "win32",
     "X-PLATFORM-VERSION": "v24.20.0",
@@ -933,7 +933,7 @@ exports[`GOLDEN buildHeaders (default executor providers) > kimi → headers (ap
     "X-Msh-Device-Model": "Windows x64",
     "X-Msh-Device-Name": "MX-PC",
     "X-Msh-Platform": "9router",
-    "X-Msh-Version": "1.2.1",
+    "X-Msh-Version": "<VER>",
     "x-api-key": "<CRED>",
   },
   "nonStream": {
@@ -944,7 +944,7 @@ exports[`GOLDEN buildHeaders (default executor providers) > kimi → headers (ap
     "X-Msh-Device-Model": "Windows x64",
     "X-Msh-Device-Name": "MX-PC",
     "X-Msh-Platform": "9router",
-    "X-Msh-Version": "1.2.1",
+    "X-Msh-Version": "<VER>",
     "x-api-key": "<CRED>",
   },
   "oauth": {
@@ -956,7 +956,7 @@ exports[`GOLDEN buildHeaders (default executor providers) > kimi → headers (ap
     "X-Msh-Device-Model": "Windows x64",
     "X-Msh-Device-Name": "MX-PC",
     "X-Msh-Platform": "9router",
-    "X-Msh-Version": "1.2.1",
+    "X-Msh-Version": "<VER>",
     "x-api-key": "<CRED>",
   },
 }
@@ -1626,21 +1626,24 @@ exports[`GOLDEN buildHeaders (default executor providers) > xiaomi-mimo → head
 }
 `;
 
-exports[`GOLDEN buildHeaders (default executor providers) > zcode → headers (apiKey / oauth) 1`] = `
+exports[`GOLDEN buildHeaders (default executor providers) > zcode-free → headers (apiKey / oauth) 1`] = `
 {
   "apiKey": {
     "Accept": "text/event-stream",
-    "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
+    "anthropic-version": "2023-06-01",
+    "x-api-key": undefined,
   },
   "nonStream": {
-    "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
+    "anthropic-version": "2023-06-01",
+    "x-api-key": undefined,
   },
   "oauth": {
     "Accept": "text/event-stream",
-    "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
+    "anthropic-version": "2023-06-01",
+    "x-api-key": undefined,
   },
 }
 `;
@@ -2192,10 +2195,10 @@ exports[`GOLDEN buildUrl (default executor providers) > xiaomi-mimo → url (str
 }
 `;
 
-exports[`GOLDEN buildUrl (default executor providers) > zcode → url (stream + non-stream) 1`] = `
+exports[`GOLDEN buildUrl (default executor providers) > zcode-free → url (stream + non-stream) 1`] = `
 {
-  "nonStream": "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
-  "stream": "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
+  "nonStream": "http://127.0.0.1:47860/gateway/v1/messages",
+  "stream": "http://127.0.0.1:47860/gateway/v1/messages",
 }
 `;
 
