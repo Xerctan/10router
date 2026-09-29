@@ -435,14 +435,18 @@ export default function QuotaPackBar({ packs = [], className }) {
 
   return (
     <div className={cn("min-w-0 space-y-2", className)}>
-      {/* Line 1: icon + 大号余额（无「剩余」二字）←→ X / 共 T */}
+      {/* Line 1: 大号余额（无「剩余」二字）←→ X / 共 T。
+          用户拍板：数字保持 16px 大字，唯一要求是**底部对齐** ——
+          小字（单位/分母）的盒底与大字的盒底齐平，不再是垂直居中的浮标。
+          做法：整行 items-end，给大字加 leading-none 让它的盒子贴合字形
+          （否则 `b` 的 line-box 高出字形，任何基线/底边对齐都会差半个行高）。 */}
       {pool.length > 0 && (
-        <div className="flex items-center justify-between gap-3">
-          <span className="inline-flex items-center gap-1.5 tabular-nums">
-            <CreditIcon className="size-[13px] text-primary" />
-            <b className="text-[16px] font-bold text-text">{fmt(poolRemaining)}</b>
+        <div className="flex items-end justify-between gap-3">
+          <span className="flex items-end gap-1.5 tabular-nums">
+            <CreditIcon className="size-[13px] shrink-0 self-center text-primary" />
+            <b className="text-[16px] font-bold leading-none text-text">{fmt(poolRemaining)}</b>
             {poolUnit ? (
-              <span className="text-[10px] text-text-muted">（{poolUnit}）</span>
+              <span className="text-[10px] leading-none text-text-muted">（{poolUnit}）</span>
             ) : null}
           </span>
           {/* A settled balance has no denominator worth printing — `14.95 / 14.95`
@@ -450,7 +454,7 @@ export default function QuotaPackBar({ packs = [], className }) {
               a summing family (CodeBuddy's packs) and a single pool with a real
               denominator (Qoder 100 / 900, the number the bar below measures). */}
           {!poolIsSettledBalance && (
-            <span className="inline-flex items-center text-xs tabular-nums text-text-muted">
+            <span className="inline-flex shrink-0 items-baseline text-xs leading-none tabular-nums text-text-muted">
               {fmt(poolRemaining)} / {fmt(poolTotal)}
             </span>
           )}
