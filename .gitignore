@@ -121,3 +121,11 @@ desktop/dist2/
 /browser-probe.png
 /probe-*.json
 /probe-*.png
+
+# `desktop/dist/` above only covers the release flavor. The 2.0 test flavor
+# writes to `desktop/dist-flavor/` (electron-builder output dir, overridden per
+# build in desktop/test-local.ps1) and it holds a ~375MB win-unpacked tree. It is
+# NOT ignored, so a `git add -A` here pulls 2.8k files from another branch's build
+# into main. Same for the UI-audit screenshot/artifact dir.
+/desktop/dist-flavor/
+/.ui-audit/
