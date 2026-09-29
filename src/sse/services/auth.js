@@ -124,10 +124,13 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       // 覆盖注册表 baseUrl 的主机部分；端口固定跟 CreditDaddy daemon（47860 起）
       const cdHost = (settings.zcodeGatewayHost || '').trim();
       const virtualPsd = {};
-      if (providerId === 'zcode-free' && cdHost) {
+      if (providerId === 'zcode-free') {
         try {
-          const u = new URL('http://127.0.0.1:47860/gateway/v1/messages');
-          u.hostname = cdHost;
+          // 路径可选：留空 = CreditDaddy 网关（/gateway/v1/messages）；
+          // 直连 zcode-api 时填 /v1/messages（其端点路径与网关别名同形）
+          const gwPath = (settings.zcodeGatewayPath || '').trim() || '/gateway/v1/messages';
+          const u = new URL(`http://127.0.0.1:47860${gwPath.startsWith('/') ? '' : '/'}${gwPath}`);
+          u.hostname = cdHost || '127.0.0.1';
           const port = Number((settings.zcodeGatewayPort || '').trim());
           if (Number.isInteger(port) && port > 0 && port < 65536) u.port = String(port);
           virtualPsd.baseUrl = u.toString();

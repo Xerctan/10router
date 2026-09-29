@@ -21,6 +21,7 @@ export default function NoAuthProxyCard({ providerId }) {
   const [savedFlash, setSavedFlash] = useState(false);
   const [gatewayHost, setGatewayHost] = useState("");
   const [gatewayPort, setGatewayPort] = useState("");
+  const [gatewayPath, setGatewayPath] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -35,6 +36,7 @@ export default function NoAuthProxyCard({ providerId }) {
       setRotateStrategy(override.rotateStrategy || "none");
       setGatewayHost(providerId === "zcode-free" ? settingsData.zcodeGatewayHost || "" : "");
       setGatewayPort(providerId === "zcode-free" ? settingsData.zcodeGatewayPort || "" : "");
+      setGatewayPath(providerId === "zcode-free" ? settingsData.zcodeGatewayPath || "" : "");
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [providerId]);
@@ -78,7 +80,7 @@ export default function NoAuthProxyCard({ providerId }) {
   };
 
   // zcode-free: CreditDaddy 网关主机（本机留空 = 127.0.0.1；局域网填 IP；端口留空 = 47860）
-  const saveGatewayHost = useCallback(async (host, port) => {
+  const saveGatewayHost = useCallback(async (host, port, reqPath) => {
     setSaving(true);
     try {
       const res = await fetch("/api/settings", { cache: "no-store" });
@@ -86,6 +88,7 @@ export default function NoAuthProxyCard({ providerId }) {
       const patch = {
         zcodeGatewayHost: String(host || "").trim(),
         zcodeGatewayPort: String(port || "").trim(),
+        zcodeGatewayPath: String(reqPath || "").trim(),
       };
       await fetch("/api/settings", {
         method: "PATCH",
@@ -169,8 +172,14 @@ export default function NoAuthProxyCard({ providerId }) {
               placeholder="47860"
               className="w-24 py-2 px-3 text-sm text-text-main bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-md focus:ring-1 focus:ring-primary/30 focus:border-primary/50 focus:outline-none transition-all"
             />
+            <input
+              value={gatewayPath}
+              onChange={(e) => setGatewayPath(e.target.value)}
+              placeholder="/gateway/v1/messages"
+              className="w-44 py-2 px-3 text-sm text-text-main bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-md focus:ring-1 focus:ring-primary/30 focus:border-primary/50 focus:outline-none transition-all"
+            />
             <button
-              onClick={() => saveGatewayHost(gatewayHost, gatewayPort)}
+              onClick={() => saveGatewayHost(gatewayHost, gatewayPort, gatewayPath)}
               disabled={saving}
               className="px-3 py-2 text-sm rounded-md bg-primary text-white disabled:opacity-50"
             >
