@@ -7,6 +7,7 @@
 ### ✨ 新功能
 
 - **ZCode 免费体验包供应商（`zcode-free`，体验分类）**：Start Plan / Trust Build 体验包（GLM-5.3-Flash，1M 上下文 + 视觉）经 CreditDaddy 桌面版「额度网关」接入——上游 `POST http://127.0.0.1:47860/gateway/v1/messages`（Anthropic 形态），CreditDaddy 负责账号轮换 + 隐藏窗口静默过阿里云验证码；本条目只做端点映射，noAuth 无需连接行。体验分类与 OpenCode Free 一致（`community` 默认展示在体验簇）。配套：`/v1/models` 对 noAuth 供应商新增注册表模型发射通道（`exposeStaticModels` 显式 opt-in，不影响 opencode / mimo-free 既有行为）；官方 Z 图标 `public/providers/zcode-free.png`。
+  - **CreditDaddy 主机可配置**：`zcode-free` 卡片可设置网关主机（留空 = 本机 127.0.0.1，局域网填 CreditDaddy 主机 IP + 端口，默认 47860）——`getProviderCredentials` 对 noAuth 虚拟连接注入覆盖 baseUrl，执行器按注入值拼 `/messages`；建了带 key 的连接时优先走真实连接（key = 对端「10Router 连接设置」的虚拟 key，远程网关鉴权用）。
 
 - **ZCode 原生供应商内置（智谱编码套餐，浏览器登录 + CreditDaddy 导入 + 本机导入）**：
   - **链路与零验证码闭环**：验证了社区 zcode-api 代理机制——OAuth 登录换得 access_token 后，走 bigmodel.cn biz API 找/建名为 `zcode-api-key` 的密钥并获取 secret，换得标准 API 密钥（`id.secret` 格式），请求直打 `open.bigmodel.cn/api/coding/paas/v4`（OpenAI 格式）与 `/api/anthropic`（Claude 格式）标准端点，**补全流量完全不碰 captcha-gated (3007) 的 zcode.z.ai plan 接口**，既定拒绝规避风控的路线得到保持。智谱 upstream 无 token 刷新机制，mint 出的标准 key 长效可用。

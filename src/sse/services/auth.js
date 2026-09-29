@@ -113,8 +113,26 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     const providerId = resolveProviderId(provider);
 
     // Inject a virtual connection for no-auth free providers (with optional proxy pool from settings)
-    if (FREE_PROVIDERS[providerId]?.noAuth) {
+    // zcode-free: CreditDaddy 网关在本机回环免密，但局域网主机要求虚拟 key ——
+    // 用户建了带 key 的连接时优先走真实连接，无连接才落 noAuth 虚拟行
+    const hasZcodeConnection = providerId === "zcode-free"
+      ? (await getProviderConnections({ provider: providerId, isActive: true })).length > 0
+      : false;
+    if (FREE_PROVIDERS[providerId]?.noAuth && !hasZcodeConnection) {
       const settings = await getSettings();
+      // zcode-free: CreditDaddy 主机可配置（本机 127.0.0.1 或局域网 IP），
+      // 覆盖注册表 baseUrl 的主机部分；端口固定跟 CreditDaddy daemon（47860 起）
+      const cdHost = (settings.zcodeGatewayHost || '').trim();
+      const virtualPsd = {};
+      if (providerId === 'zcode-free' && cdHost) {
+        try {
+          const u = new URL('http://127.0.0.1:47860/gateway/v1/messages');
+          u.hostname = cdHost;
+          const port = Number((settings.zcodeGatewayPort || '').trim());
+          if (Number.isInteger(port) && port > 0 && port < 65536) u.port = String(port);
+          virtualPsd.baseUrl = u.toString();
+        } catch { /* 注册表默认兜底 */ }
+      }
       const override = (settings.providerStrategies || {})[providerId] || {};
       const strategy = override.rotateStrategy || "none";
       let pickedId = override.proxyPoolId || null;
@@ -130,11 +148,13 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
         isActive: true,
         accessToken: "public",
         providerSpecificData: {
+          ...virtualPsd,
           connectionProxyEnabled: resolvedProxy.connectionProxyEnabled,
           connectionProxyUrl: resolvedProxy.connectionProxyUrl,
           connectionNoProxy: resolvedProxy.connectionNoProxy,
           connectionProxyPoolId: resolvedProxy.proxyPoolId || null,
           vercelRelayUrl: resolvedProxy.vercelRelayUrl || "",
+          strictProxy: resolvedProxy.strictProxy === true,
         },
       };
     }
@@ -300,6 +320,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
         connectionNoProxy: resolvedProxy.connectionNoProxy,
         connectionProxyPoolId: resolvedProxy.proxyPoolId || null,
         vercelRelayUrl: resolvedProxy.vercelRelayUrl || "",
+        strictProxy: resolvedProxy.strictProxy === true,
       },
       connectionId: connection.id,
       // Include current status for optimization check
