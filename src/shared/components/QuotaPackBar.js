@@ -3,33 +3,51 @@
 import PropTypes from "prop-types";
 import { translate } from "@/i18n/runtime";
 import { translateQuotaName } from "@/shared/utils/quotaName";
+import {
+  classifyCycleRows,
+  isAggregateQuotaRow,
+  isRecurringQuotaRow,
+  isStoredValueRow,
+  nameWithoutUnit,
+  quotaUnitOf,
+} from "@/shared/utils/quotaRows";
 import { cn } from "@/shared/utils/cn";
 
 /**
  * Connection quota block — CreditDaddy account-card language (签到积分型).
  *
- *   余额 [✦✦] 2,455.33      Bonus Pack 24 于 2 天 23 小时 过期
+ * Aggregate half (additive pool only):
+ *
+ *   [✦✦] 2,455.33                    2,455.33 / 4,182
  *   [family: proportional segments | trailing used chunk]   ← 月度并入：
  *     它就是「以重置日为到期日的资源包」，不再单独成行
+ *   15 个资源包（可用）        赠送包 21（55.33）到期 10-15
+ *
+ * Cycle half — 滚动 → 月度 → 每周, fixed order, each item ALWAYS two lines
+ * (name + numbers, then its own full-width bar):
+ *
+ *   [✦] 每周                       100 / 100 · 于 10-06 重置
+ *   [==================== 100%]
+ *
+ * Stored-value rows (余额/代金券) are two-line too, but the right-hand side is a
+ * single value with the unit as small print — they are settled balances that
+ * always read X/X, so "X / Y" carried no information:
+ *
+ *   [✦] 余额                            14.95（CNY）
+ *   [==================== 100%]
  *
  * SEMANTICS:
  *  - Aggregate summaries ("Total Points") are derived data — excluded from
  *    the chart; the expanded details show the ORIGINAL rows untouched.
- *  - Additive pool (签到积分型): when a pack family (≥2 same-base-name
- *    non-recurring rows) coexists with a monthly window, the monthly joins
- *    the bar + the 余额 total — its reset day acts as its expiry ("最后一天
- *    的资源包"), and it no longer renders as its own row.
- *  - Parallel-constraint recurring windows without such a family (commandcode
- *    滚动/每周/月度额度) stay as per-window meter rows — they are limits, not
- *    an additive pool (用户此前的拍板保持).
- *  - Stored-value singletons (余额/代金券) render as meter rows too, but do
- *    not sum into 余额 (不同花费池).
+ *  - Additive pool (签到积分型): only family packs, the monthly window (when a
+ *    family coexists — its reset day acts as its expiry), and stored-value
+ *    singletons sum into 余额. Rolling/weekly are limits, never additive, so
+ *    they stay out of the pool total.
+ *  - Stored-value singletons (余额/代金券) do not sum into 余额 as separate
+ *    pools — identical-value ones are collapsed first (stepfun-cn).
  */
 
 const MAX_SEGMENTS = 20;
-const AGGREGATE_RE = /total|aggregate|summary|^总/i;
-const MONTHLY_RE = /month|月/i;
-const RECURRING_NAME_RE = /month|月|week|周|滚动|rolling/i;
 
 /** CreditDaddy's `credit` icon — twin four-point sparkles (feather-style). */
 function CreditIcon({ className }) {
@@ -66,44 +84,71 @@ function remainingOf(p) {
   return Math.max(0, Number(p.total || 0) - Number(p.used || 0));
 }
 
-/** Aggregate/summary rows are derived data — never charted, never summed. */
-export function isAggregateQuotaRow(row) {
-  return AGGREGATE_RE.test(String(row?.name || ""));
-}
 
-/** Subscription-recurring window: explicit flag or a cycle-named row. */
-export function isRecurringQuotaRow(row) {
-  if (row?.recurring === true) return true;
-  return RECURRING_NAME_RE.test(String(row?.name || ""));
-}
 
-/** One always-visible meter row (name | bar | 剩 X / Y · word date). */
-function MeterRow({ row }) {
+/**
+ * One quota item — ALWAYS two lines, so every row on every card scans the same:
+ *
+ *   [icon] 每周                        100 / 100 · 于 10-06 重置
+ *   [==================== 100%]
+ *
+ * The bar is its own full-width line (not wedged between the label and the
+ * numbers), and is the same height/radius as the aggregate pool bar above.
+ *
+ * Stored-value rows (`balance` 类) swap the right-hand side for a single value
+ * with the unit as small print — they are settled balances that always read
+ * X/X, so `X / Y` would be pure noise:
+ *
+ *   余额                           14.95 (CNY)
+ *   [==================== 100%]
+ */
+function QuotaRow({ row }) {
   const total = Number((row.totalNum ?? row.total) || 0);
   const remaining = Number(row.remainingNum ?? remainingOf(row));
   const pct = total > 0 ? Math.min(100, (remaining / total) * 100) : 0;
+  const stored = isStoredValueRow(row);
   const recurring = row.recurring === true || isRecurringQuotaRow(row);
   const word = recurring ? translate("resets") : translate("expires");
+  const unit = quotaUnitOf(row.name);
+  // The unit lives next to the number, so the label drops it ("余额", not
+  // "余额 (CNY)"). translateQuotaName is a no-op on already-localized names,
+  // which is why the synthetic 0% Monthly placeholder can pass one through.
+  const displayName = translateQuotaName(nameWithoutUnit(row.name) || row.name);
+
   return (
-    <div className="flex min-w-0 items-center gap-2 text-[11px] tabular-nums">
-      <span className="w-16 shrink-0 truncate text-text-muted">{translateQuotaName(row.name)}</span>
-      <div className="h-[5px] min-w-0 flex-1 overflow-hidden rounded-[3px] bg-black/10 dark:bg-white/10">
+    <div className="min-w-0 space-y-1">
+      <div className="flex min-w-0 items-center justify-between gap-2 text-[11px] tabular-nums">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <CreditIcon className="size-[11px] shrink-0 text-text-muted" />
+          <span className="truncate text-text-muted">{displayName}</span>
+        </span>
+        <span className="shrink-0 text-text-muted">
+          {stored ? (
+            <>
+              {fmt(remaining)}
+              {unit ? <span className="ml-0.5 text-[10px]">（{unit}）</span> : null}
+            </>
+          ) : (
+            <>
+              {translate("remaining {remaining} of {total}")
+                .replace("{remaining}", fmt(remaining))
+                .replace("{total}", fmt(total))}
+              {row.resetAt ? ` · ${word} ${shortDate(row.resetAt)}` : ""}
+            </>
+          )}
+        </span>
+      </div>
+      <div className="h-[5px] w-full overflow-hidden rounded-[3px] bg-black/10 dark:bg-white/10">
         <div
           className={cn("h-full rounded-[3px]", recurring ? "bg-sky-500/80" : "bg-green-500/90")}
           style={{ width: `${pct}%` }}
         />
       </div>
-      <span className="shrink-0 text-text-muted">
-        {translate("remaining {remaining} of {total}")
-          .replace("{remaining}", fmt(remaining))
-          .replace("{total}", fmt(total))}
-        {row.resetAt ? ` · ${word} ${shortDate(row.resetAt)}` : ""}
-      </span>
     </div>
   );
 }
 
-MeterRow.propTypes = {
+QuotaRow.propTypes = {
   row: PropTypes.shape({
     name: PropTypes.string,
     used: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
@@ -125,11 +170,11 @@ export default function QuotaPackBar({ packs = [], className }) {
     return { ...p, totalNum, remainingNum: remainingOf(p) };
   });
 
-  // Monthly window (签到积分型): additive resource pack whose "expiry" is its
-  // reset day — joins the bar + the 余额 total when a pack family coexists.
-  const monthly = withNums.find(
-    (p) => isRecurringQuotaRow(p) && MONTHLY_RE.test(String(p.name || ""))
-  ) || null;
+  // Cycle rows (滚动/月度/每周) are rendered as their own fixed-order blocks by
+  // classifyCycleRows; only the MONTHLY one can additionally join the additive
+  // pool when a pack family coexists (its reset day acts as the pool's expiry).
+  const cycle = classifyCycleRows(withNums);
+  const monthly = cycle.monthly;
 
   // Non-recurring rows: same-base-name groups with ≥2 members are a pack
   // family; singletons are stored-value pools (余额/代金券) → meter rows.
@@ -137,7 +182,7 @@ export default function QuotaPackBar({ packs = [], className }) {
   // 家族行，防止资源包 Credits 与赠送包被重复计数（用户实测重复）。
   const hasCollectionRow = withNums.some((p) => String(p.name || "") === "资源包");
   const nonRecurring = withNums
-    .filter((p) => p !== monthly && !isRecurringQuotaRow(p))
+    .filter((p) => !isRecurringQuotaRow(p))
     .filter((p) => !(hasCollectionRow && String(p.name || "").startsWith("赠送包")));
   const groups = new Map();
   for (const p of nonRecurring) {
@@ -167,15 +212,10 @@ export default function QuotaPackBar({ packs = [], className }) {
     return true;
   });
 
-  // Other recurring windows (每周/滚动…) without a family to join: meter rows.
-  const parallelWindows = withNums.filter(
-    (p) => isRecurringQuotaRow(p) && p !== monthly
-  );
-
   // Additive pool (签到积分型 + Qoder 系列积分): family packs + the monthly
   // window (当家族存在时并入) + stored-value singletons (余额/代金券/套餐内
-  // Credits——用户拍板：Qoder 也用同一逻辑，都是积分). Parallel recurring
-  // windows without a family stay as meter rows (limits, not additive).
+  // Credits——用户拍板：Qoder 也用同一逻辑，都是积分). Rolling/weekly windows
+  // are limits, not additive — they never join the pool.
   const pool = [
     ...families.flatMap((f) => f.members),
     ...(monthly && families.length > 0 ? [monthly] : []),
@@ -298,18 +338,45 @@ export default function QuotaPackBar({ packs = [], className }) {
                 {translateQuotaName(displayPackName(soonestLive.name))}
               </span>
               <span>
-                （{fmt(soonestLive.remainingNum)} 于 {shortDate(soonestLive.resetAt)} 到期）
+                （{fmt(soonestLive.remainingNum)}）{translate("expires")} {shortDate(soonestLive.resetAt)}
               </span>
             </span>
           </div>
         );
       })()}
 
-      {/* Parallel-constraint recurring windows without a family (每周/滚动…):
-          own meter rows — limits, not an additive pool. */}
-      {parallelWindows.map((p, i) => (
-        <MeterRow key={`${p.name || "win"}-${i}`} row={{ ...p, totalNum: p.totalNum, remainingNum: p.remainingNum }} />
-      ))}
+      {/* 储值类（余额/代金券/现金）：同样是「一项两行」，但右侧是单值 + 小字
+          单位 —— 它们恒为 X/X，显示 "/ 总量" 没有信息量。 */}
+      {singletonPools.length > 0 && (
+        <>
+          {singletonPools.map((p, i) => (
+            <QuotaRow key={`${p.name || "pool"}-${i}`} row={p} />
+          ))}
+        </>
+      )}
+
+      {/* Cycle windows in a fixed order — 滚动 → 月度 → 每周 — each as its own
+          two-line block. The monthly slot stays in place as a 0% placeholder
+          when the account has no monthly window, so "no monthly allowance" and
+          "row missing" are distinguishable at a glance. */}
+      {cycle.hasAnyCycle && (
+        <>
+          {cycle.rolling && <QuotaRow row={cycle.rolling} />}
+          {cycle.monthly ? (
+            <QuotaRow row={cycle.monthly} />
+          ) : cycle.monthlyPlaceholder ? (
+            // Placed on a 0–100 scale so the bar renders empty ("0%") rather
+            // than dividing by zero.
+            <QuotaRow row={{ name: translate("Monthly"), totalNum: 100, remainingNum: 0 }} />
+          ) : null}
+          {cycle.weekly && <QuotaRow row={cycle.weekly} />}
+          {/* Recurring rows whose names matched no cycle bucket still render, so
+              nothing ever disappears silently. */}
+          {cycle.unmatched.map((p, i) => (
+            <QuotaRow key={`${p.name || "win"}-${i}`} row={p} />
+          ))}
+        </>
+      )}
     </div>
   );
 }
