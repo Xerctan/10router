@@ -1,137 +1,211 @@
 /**
- * Quota card cycle-row classification.
+ * Quota card cycle rows + nested ladder.
  *
- * The usage card renders cycle windows in a fixed order — 滚动 → 月度 → 每周 —
- * each as its own two-line block (label + numbers, then a full-width bar). The
- * monthly slot stays in place as a 0% placeholder when the account has no
- * monthly window, so a reader can tell "no monthly allowance" apart from "the
- * row vanished".
+ * Two behaviors the card depends on, both pure and DOM-free (this suite is
+ * `environment: "node"`, and QuotaPackBar is a JSX .js file vite cannot import
+ * here — no React plugin, no jsdom):
  *
- * `classifyCycleRows` is the pure decision behind that layout, extracted from
- * QuotaPackBar so it can be tested without a DOM (this suite runs under
- * `environment: "node"` — there is no jsdom/react here, and no other test
- * renders this component).
+ *  1. `classifyCycleRows` — which rows are cycle WINDOWS (滚动/每周) versus
+ *     monthly RESOURCE PACKS (codebuddy / qoder's `Monthly`, which expire at
+ *     month end and belong in the additive pool bar, not a card block).
+ *  2. `buildNestedCycle` — the 月度 ⊃ 每周 ⊃ 滚动 ladder. These allowances
+ *     genuinely nest on commandcode (3 ⊂ 6 ⊂ 10), so each layer's bar is
+ *     measured against the OUTERMOST total. That is what makes
+ *     "rolling ≤ weekly ≤ monthly" structural instead of something the renderer
+ *     polices.
  *
- * These payloads are the real shapes the upstream fetchers produce.
+ * Payloads below are the real upstream shapes.
  */
 
 import { describe, it, expect } from "vitest";
 import {
+  buildNestedCycle,
   classifyCycleRows,
-  isStoredValueRow,
   isRecurringQuotaRow,
+  isStoredValueRow,
+  nameWithoutUnit,
+  percentOf,
   quotaUnitOf,
 } from "../../src/shared/utils/quotaRows.js";
 
 const row = (name, extra = {}) => ({ name, used: 0, total: 100, ...extra });
 
-describe("isStoredValueRow", () => {
-  it("flags balance / voucher / cash rows in both languages", () => {
-    expect(isStoredValueRow(row("Balance (CNY)"))).toBe(true);
-    expect(isStoredValueRow(row("Voucher (CNY)"))).toBe(true);
-    expect(isStoredValueRow(row("Cash (USD)"))).toBe(true);
-    expect(isStoredValueRow(row("余额 (CNY)"))).toBe(true);
-    expect(isStoredValueRow(row("代金券 (CNY)"))).toBe(true);
-  });
-
-  it("does not flag cycle or pack rows", () => {
-    expect(isStoredValueRow(row("Weekly"))).toBe(false);
-    expect(isStoredValueRow(row("Monthly"))).toBe(false);
-    expect(isStoredValueRow(row("Bonus Pack 21"))).toBe(false);
-  });
-});
-
-describe("quotaUnitOf", () => {
-  it("lifts the trailing parenthetical off the name", () => {
+describe("nameWithoutUnit / quotaUnitOf (the card-name regression)", () => {
+  it("strips the unit for stored-value rows", () => {
+    expect(nameWithoutUnit("Balance (CNY)")).toBe("Balance");
     expect(quotaUnitOf("Balance (CNY)")).toBe("CNY");
-    expect(quotaUnitOf("Voucher (USD)")).toBe("USD");
-    expect(quotaUnitOf("余额 (CNY)")).toBe("CNY");
   });
 
-  it("returns empty when there is no unit", () => {
-    expect(quotaUnitOf("Weekly")).toBe("");
-    expect(quotaUnitOf("Bonus Pack 21")).toBe("");
+  it("MUST NOT be applied to cycle rows — the suffix is the dictionary key", () => {
+    // Regression guard for the bug this function shipped with. The dictionary
+    // keys are the FULL names:
+    //   "session (5h)" → 滚动, "weekly (7d)" → 每周, "Monthly Credits" → 月度额度
+    // Stripping the parenthetical yields "session" / "weekly", which are NOT
+    // keys, so translateQuotaName fell through and the card rendered the raw
+    // English name while the detail table showed 滚动/每周.
+    expect(nameWithoutUnit("session (5h)")).toBe("session");
+    expect(nameWithoutUnit("weekly (7d)")).toBe("weekly");
+    // Only the stored-value path may strip, and it is keyed on the row, not on
+    // the name shape — so these names must reach the lookup intact.
+    expect(isStoredValueRow(row("session (5h)", { recurring: true }))).toBe(false);
+    expect(isStoredValueRow(row("weekly (7d)", { recurring: true }))).toBe(false);
+    expect(isStoredValueRow(row("Monthly Credits", { recurring: true }))).toBe(false);
   });
 });
 
 describe("classifyCycleRows", () => {
-  it("mimo-desktop: a bare Weekly row is recognised without a recurring flag", () => {
-    // mimo-desktop falls through parseQuotaData's `default` branch and carries
-    // NO `recurring` field — only its name. (Real payload: {"Weekly": {...}})
+  it("treats Monthly as a resource pack, not a cycle window", () => {
+    const monthly = row("Monthly Credits", { recurring: true, total: 10, used: 0.04 });
+    const c = classifyCycleRows([monthly]);
+    expect(c.monthly).toEqual([monthly]);
+    // No windows → the card renders no cycle block at all.
+    expect(c.hasAnyCycle).toBe(false);
+    expect(c.windows).toEqual([]);
+  });
+
+  it("keeps rolling/weekly as windows and excludes the monthly pack", () => {
+    const session = row("session (5h)", { recurring: true, total: 3 });
+    const weekly = row("weekly (7d)", { recurring: true, total: 6 });
+    const monthly = row("Monthly Credits", { recurring: true, total: 10 });
+
+    const c = classifyCycleRows([session, weekly, monthly]);
+    expect(c.hasAnyCycle).toBe(true);
+    expect(c.windows).toEqual([session, weekly]);
+    expect(c.monthly).toEqual([monthly]);
+  });
+
+  it("mimo-desktop: a lone Weekly is a window with no monthly invented", () => {
+    // Real payload: {"Weekly": {...}} — no recurring flag (default branch
+    // provider), so recognition is by name.
     const weekly = row("Weekly", { resetAt: "2026-10-06T08:43:49.000Z" });
     expect(isRecurringQuotaRow(weekly)).toBe(true);
 
     const c = classifyCycleRows([weekly]);
-    expect(c.hasAnyCycle).toBe(true);
-    expect(c.weekly).toBe(weekly);
-    expect(c.rolling).toBe(null);
-    expect(c.monthly).toBe(null);
-    // No monthly on this account → the slot must still render, as 0%.
-    expect(c.monthlyPlaceholder).toBe(true);
+    expect(c.windows).toEqual([weekly]);
+    // The old 0% "Monthly" placeholder is gone — nothing synthetic is added.
+    expect(c.monthly).toEqual([]);
   });
 
-  it("orders rolling before monthly before weekly, keeping each slot separate", () => {
-    const rolling = row("session (5h)", { recurring: true });
-    const monthly = row("Monthly", { recurring: true });
-    const weekly = row("Weekly", { recurring: true });
-
-    const c = classifyCycleRows([weekly, monthly, rolling]);
-    expect(c.rolling).toBe(rolling);
-    expect(c.monthly).toBe(monthly);
-    expect(c.weekly).toBe(weekly);
-    expect(c.monthlyPlaceholder).toBe(false);
-  });
-
-  it("a row named Monthly can never also be picked up as weekly", () => {
-    const monthly = row("Monthly", { recurring: true });
-    const c = classifyCycleRows([monthly]);
-    expect(c.monthly).toBe(monthly);
-    expect(c.weekly).toBe(null);
-  });
-
-  it("collapses to at most one row per slot (never stacks two 每周 blocks)", () => {
-    const w1 = row("Weekly", { recurring: true });
-    const w2 = row("weekly (7d)", { recurring: true });
-    const c = classifyCycleRows([w1, w2]);
-    expect(c.weekly).toBe(w1);
-    // The extra row is not silently dropped — it still renders.
-    expect(c.unmatched).toEqual([w2]);
-  });
-
-  it("stored-value rows are NOT cycle rows (stepfun-cn has no cycles at all)", () => {
-    // Real payload: {"Balance (CNY)": {…}, "Voucher (CNY)": {…}} — both
-    // displayRemaining with no recurring flag.
+  it("a pure stored-value card has no cycle rows at all (stepfun-cn)", () => {
     const c = classifyCycleRows([
-      row("Balance (CNY)", { displayRemaining: true }),
-      row("Voucher (CNY)", { displayRemaining: true }),
+      row("Balance (CNY)", { displayRemaining: true, total: 14.95 }),
+      row("Voucher (CNY)", { displayRemaining: true, total: 14.95 }),
     ]);
     expect(c.hasAnyCycle).toBe(false);
-    // Pure stored-value card → no synthetic monthly 0% placeholder.
-    expect(c.monthlyPlaceholder).toBe(false);
-    expect(c.rolling).toBe(null);
-    expect(c.weekly).toBe(null);
-    expect(c.monthly).toBe(null);
+    expect(c.windows).toEqual([]);
+    expect(c.monthly).toEqual([]);
+  });
+});
+
+describe("buildNestedCycle", () => {
+  // Real commandcode payload.
+  const session = row("session (5h)", { recurring: true, total: 3, used: 0, remaining: 3, remainingNum: 3 });
+  const weekly = row("weekly (7d)", { recurring: true, total: 6, used: 0.0365, remaining: 5.9635, remainingNum: 5.9635 });
+  const monthly = row("Monthly Credits", { recurring: true, total: 10, used: 0.0365, remaining: 9.9635, remainingNum: 9.9635 });
+
+  it("orders outermost-first: 月度 ⊃ 每周 ⊃ 滚动", () => {
+    const ladder = buildNestedCycle([session, weekly, monthly]);
+    expect(ladder.map((l) => l.row.name)).toEqual([
+      "Monthly Credits",
+      "weekly (7d)",
+      "session (5h)",
+    ]);
+    expect(ladder.map((l) => l.depth)).toEqual([0, 1, 2]);
   });
 
-  it("codebuddy-cn: Monthly joins cycles while Bonus Packs stay non-recurring", () => {
-    // Real payload: Monthly recurring=true; Bonus Pack N recurring=false.
-    const monthly = row("Monthly", { recurring: true, total: 500, used: 500 });
-    const pack = row("Bonus Pack 21", { recurring: false, total: 100, used: 44.67 });
-    const total = row("Total Points", { recurring: false, total: 4182, used: 2726.67 });
-
-    const c = classifyCycleRows([total, monthly, pack]);
-    expect(c.monthly).toBe(monthly);
-    expect(c.monthlyPlaceholder).toBe(false);
-    // The pack family and the aggregate must not be swept into the cycle slots.
-    expect(c.unmatched).toEqual([]);
-    expect(c.rolling).toBe(null);
-    expect(c.weekly).toBe(null);
+  it("nests each layer inside its parent, monotonically narrowing", () => {
+    const ladder = buildNestedCycle([session, weekly, monthly]);
+    const [m, w, s] = ladder;
+    const weeklyShare = (5.9635 / 6) * 100; // ~99.39% of the month
+    expect(m.widthPct).toBe(100);           // measure bar
+    expect(w.widthPct).toBeCloseTo(weeklyShare, 3);
+    // session is full (3/3), so it fills the weekly span — which is itself
+    // inset in the month. Widths compound down the ladder.
+    expect(s.widthPct).toBeCloseTo(weeklyShare, 3);
+    // The invariant the layout rests on: nested spans never overhang.
+    expect(s.widthPct).toBeLessThanOrEqual(w.widthPct);
+    expect(w.widthPct).toBeLessThanOrEqual(m.widthPct);
   });
 
-  it("an unrecognised recurring row still surfaces instead of vanishing", () => {
-    const odd = row("something window", { recurring: true });
-    const c = classifyCycleRows([odd]);
+  it("each layer keeps its OWN ceiling in the label (X / own-total)", () => {
+    const [m, w, s] = buildNestedCycle([session, weekly, monthly]);
+    expect([m.ownRemaining, m.ownTotal]).toEqual([9.9635, 10]);
+    expect([w.ownRemaining, w.ownTotal]).toEqual([5.9635, 6]);
+    expect([s.ownRemaining, s.ownTotal]).toEqual([3, 3]);
+  });
+
+  it("keeps a depleted parent wider than a full child (nesting by TYPE)", () => {
+    // The nesting is structural, not value-based: a 100%-of-itself session must
+    // still sit INSIDE a 10%-of-itself weekly, because session is carved out of
+    // weekly. Scaling by each layer's own share of its parent guarantees it —
+    // scaling by absolute remaining/outerTotal did not (it compared a session
+    // request count against a monthly credit total, which only looked right
+    // while the live numbers happened to line up).
+    const tightWeekly = row("weekly (7d)", { recurring: true, total: 6, remaining: 0.6, remainingNum: 0.6 });
+    const fullSession = row("session (5h)", { recurring: true, total: 3, remaining: 3, remainingNum: 3 });
+    const ladder = buildNestedCycle([tightWeekly, fullSession, monthly]);
+    expect(ladder.map((l) => l.row.name)).toEqual(["Monthly Credits", "weekly (7d)", "session (5h)"]);
+    const [, w, s] = ladder;
+    expect(w.widthPct).toBeCloseTo(10, 3);   // 0.6 / 6
+    expect(s.widthPct).toBeCloseTo(10, 3);   // 100% of that weekly span
+    expect(s.widthPct).toBeLessThanOrEqual(w.widthPct);
+  });
+
+  it("a lone weekly is NOT a ladder — it renders as one plain flat bar", () => {
+    // mimo: only a Weekly, no monthly. No containment chain exists, so there is
+    // nothing to nest; the renderer draws a single full-width bar instead.
+    const weekly2 = row("Weekly", { recurring: true, total: 100, remaining: 100, remainingNum: 100 });
+    expect(buildNestedCycle([weekly2])).toEqual([]);
+  });
+
+  it("weekly + rolling without a monthly head stay flat (nothing to contain them)", () => {
+    // A weekly/rolling pair only nests when a monthly allowance is the thing
+    // they are carved out of. Absent that, they are parallel windows.
+    expect(buildNestedCycle([session, weekly])).toEqual([]);
+  });
+
+  it("returns empty for no cycle rows, so a plain card renders no ladder", () => {
+    expect(buildNestedCycle([])).toEqual([]);
+    expect(buildNestedCycle([row("Bonus Pack 21"), row("Balance (CNY)")])).toEqual([]);
+  });
+
+  it("antigravity: 5h + weekly are PARALLEL windows, never a ladder", () => {
+    // Real shape: `familyDisplayName · windowLabel`, e.g.
+    //   "Gemini · 5h Window"   {percentScale:true, total:100}
+    //   "Gemini · Weekly Window"
+    // Neither contains the other — they are two independent meters on the same
+    // family. With no monthly head there is no containment chain, so this must
+    // stay flat (the renderer then draws two side-by-side full-width bars).
+    const fiveH = row("Gemini · 5h Window", { percentScale: true, total: 100, remainingNum: 72, remainingPercentage: 72 });
+    const weeklyWin = row("Gemini · Weekly Window", { percentScale: true, total: 100, remainingNum: 41, remainingPercentage: 41 });
+
+    const ladder = buildNestedCycle([fiveH, weeklyWin]);
+    expect(ladder).toEqual([]);
+
+    // ...and they still show up as cycle windows so the caller renders them.
+    const c = classifyCycleRows([fiveH, weeklyWin]);
     expect(c.hasAnyCycle).toBe(true);
-    expect(c.unmatched).toEqual([odd]);
+    expect(c.windows).toHaveLength(2);
+    expect(new Set(c.windows.map((r) => r.name))).toEqual(
+      new Set(["Gemini · 5h Window", "Gemini · Weekly Window"]),
+    );
+    // A "5h Window" is not the same thing as a monthly pack, and must not be
+    // swept into the pool.
+    expect(c.monthly).toEqual([]);
+  });
+
+  it("antigravity weekly ALONE also stays flat (no fabricated parent)", () => {
+    const weeklyWin = row("Claude · Weekly Window", { percentScale: true, total: 100, remainingNum: 41 });
+    expect(buildNestedCycle([weeklyWin])).toEqual([]);
+  });
+});
+
+describe("percentOf", () => {
+  it("clamps to 0–100 and tolerates a missing/zero total", () => {
+    expect(percentOf({ totalNum: 10, remainingNum: 5 })).toBe(50);
+    expect(percentOf({ totalNum: 10, remainingNum: 20 })).toBe(100);
+    expect(percentOf({ totalNum: 10, remainingNum: 0 })).toBe(0);
+    expect(percentOf({ totalNum: 0, remainingNum: 0 })).toBe(0);
+    expect(percentOf({ total: 4, used: 1 })).toBe(75);
   });
 });

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import ProviderIcon from "@/shared/components/ProviderIcon";
 import QuotaPackBar from "@/shared/components/QuotaPackBar";
-import QuotaTable, { translateQuotaName } from "./QuotaTable";
+import { translateQuotaName } from "./QuotaTable";
 import Toggle from "@/shared/components/Toggle";
 import Tooltip from "@/shared/components/Tooltip";
 import {
@@ -202,16 +202,6 @@ export default function ProviderLimits() {
   // and the screen disagreed.
   const [providerMenuOpen, setProviderMenuOpen] = useState(false);
   const [bulkToggling, setBulkToggling] = useState(false);
-  // 逐包明细默认收起（CreditDaddy 语言）：展开才渲染 QuotaTable。
-  const [expandedDetails, setExpandedDetails] = useState(() => new Set());
-  const toggleDetails = useCallback((id) => {
-    setExpandedDetails((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(CONNECTIONS_PAGE_SIZE);
   const [customPageSizeInput, setCustomPageSizeInput] = useState(
@@ -1484,35 +1474,9 @@ export default function ProviderLimits() {
                         </p>
                       </div>
                     )}
-                    {/* 逐包明细默认收起（CreditDaddy 语言）：展开后月度置顶、
-                        聚合汇总行已剔除。 */}
-                    {visibleQuotas.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => toggleDetails(conn.id)}
-                        className="flex w-full items-center gap-1 rounded-lg py-1.5 text-[11px] text-text-muted transition-colors hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
-                        aria-expanded={expandedDetails.has(conn.id)}
-                      >
-                        <span className="material-symbols-outlined text-[14px]">
-                          {expandedDetails.has(conn.id) ? "expand_less" : "expand_more"}
-                        </span>
-                        {translate("Per-pack details")}
-                        <span className="tabular-nums opacity-60">
-                          ({visibleQuotas.length})
-                        </span>
-                      </button>
-                    )}
-                    {expandedDetails.has(conn.id) && (
-                      <QuotaTable
-                        quotas={visibleQuotas}
-                        compact
-                        sortMode="default"
-                        showSortLabel={
-                          conn.provider === "codex" && quotaSortMode !== "default"
-                        }
-                        onHideQuota={(quotaRow) => handleHideQuota(conn.id, quotaRow, conn.provider)}
-                      />
-                    )}
+                    {/* 逐包明细入口已全卡移除（用户拍板）：卡片只呈现聚合与
+                        嵌套周期条，原始行不再在卡上展开。QuotaTable 组件本身
+                        保留，供其他页面/后续需要时复用。 */}
                   </>
                 )}
                 {hiddenQuotaRows.length > 0 && (
