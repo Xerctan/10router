@@ -59,10 +59,12 @@ export default {
   //      price table, and that estimate is now superseded by the measured 6.67
   //      — see the note on that row.
   // Kept out on purpose even though a probe answers 200: kimi-k2.5 (absent from
-  // the published credit list — the CN catalog drops it for the same reason),
-  // deepseek-v4-pro / deepseek-v4-flash / glm-5.3-flash (11102), kimi-k2-thinking,
-  // glm-4.6 / glm-4.5, gpt-5.2 / gpt-5.1 / gpt-5.6, gemini-3.5-pro / gemini-3-flash,
-  // deepseek-v3.2, qwen3-max, claude-sonnet-4.5, hy4 (all 11102).
+  // the published credit list — the CN catalog drops it for the same reason).
+  // Re-probed 2026-09-30, still 11102: deepseek-v4-pro / deepseek-v4-flash,
+  // kimi-k2-thinking, glm-4.6 / glm-4.5, gpt-5.2 / gpt-5.1 / gpt-5.6,
+  // gemini-3.5-pro / gemini-3-flash, deepseek-v3.2, qwen3-max,
+  // claude-sonnet-4.5, hy4. glm-5.3-flash LEFT that list — the same re-probe
+  // saw it answer 200, so it is advertised below now.
   // A listed model may still fail for one account (gemini-3.5-flash answers the
   // live 429 / code 14003 "too many requests" on a rate-limited account) — that
   // is an account/quota state, not a catalog error, so it stays advertised.
@@ -74,9 +76,10 @@ export default {
   models: [
     { id: "hy4-preview", name: "Hy4-Preview", rateMultiplier: 0 },
     { id: "hy3", name: "Hy3", rateMultiplier: 0 },
-    // gpt-6-astra is the only GPT-6 id this gateway answers: gpt-6, gpt-6.0,
+    // The GPT-6 ids this gateway answers (live-probed 2026-09-30): astra plus
+    // the 6.0 sol/luna pair below. Still 11102: bare gpt-6, gpt-6.0,
     // gpt-6-astra-review|-thinking|-mini|-pro|-high|-codex, gpt-6.1-astra,
-    // gpt-6.5-astra and gpt-5.6-astra all come back 11102.
+    // gpt-6.1-sol, gpt-6.1-luna, gpt-6.5-astra and gpt-5.6-astra.
     //
     // Its multiplier is the measured 6.67. v1.1.0 shipped 17.35, which was an
     // ESTIMATE: no CodeBuddy credit figure for this id was reachable in the
@@ -91,6 +94,13 @@ export default {
     // gpt-5.5 rows of open-sse/providers/pricing.js, which share one price but
     // differ 2x in credits).
     { id: "gpt-6-astra", name: "GPT 6.0 Astra", rateMultiplier: 6.67 },
+    // gpt-6-sol / gpt-6-luna answered 200 on the 2026-09-30 probe (the OpenAI
+    // 6.0 rollout reached this gateway). Both are intl-only — CN answers
+    // 11102 — so the shared-credit-system rule has no CN row to inherit from,
+    // and rule (3) forbids deriving one from the 5.6 rates: they ship with NO
+    // rateMultiplier until the credit page publishes a real number.
+    { id: "gpt-6-luna", name: "GPT-6-Luna" },
+    { id: "gpt-6-sol", name: "GPT-6-Sol" },
     { id: "gpt-5.6-sol", name: "GPT-5.6-Sol", rateMultiplier: 3.47 },
     { id: "gpt-5.6-terra", name: "GPT-5.6-Terra", rateMultiplier: 1.39 },
     { id: "gpt-5.6-luna", name: "GPT-5.6-Luna", rateMultiplier: 0.14 },
@@ -100,6 +110,9 @@ export default {
     { id: "gemini-3.5-flash", name: "Gemini-3.5-Flash", rateMultiplier: 0.99 },
     { id: "glm-5v-turbo", name: "GLM-5v-Turbo", rateMultiplier: 0.71 },
     { id: "glm-5.3", name: "GLM-5.3", rateMultiplier: 0.79 },
+    // 11102 through 2026-09; the 2026-09-30 probe saw it answer 200. The
+    // multiplier is the CN credit page value — one credit system, parity test.
+    { id: "glm-5.3-flash", name: "GLM-5.3-Flash", rateMultiplier: 0.06 },
     { id: "glm-5.2", name: "GLM-5.2", rateMultiplier: 0.79 },
     { id: "glm-5.1", name: "GLM-5.1", rateMultiplier: 0.79 },
     { id: "minimax-m3", name: "MiniMax-M3", rateMultiplier: 0.25 },

@@ -51,6 +51,12 @@ export default {
   },
   models: [
     { id: "gpt-6-astra", name: "GPT 6.0 Astra" },
+    // 6.0 lite pair: upstream v0.5.91 ships both over the subscription flow.
+    { id: "gpt-6-sol", name: "GPT 6.0 Sol" },
+    { id: "gpt-6-luna", name: "GPT 6.0 Luna" },
+    // User-observed in the Codex app (2026-09-30); upstream has not picked it
+    // up yet. thinkingLevels' *gpt-6* pattern already covers the id.
+    { id: "gpt-6.1-sol", name: "GPT 6.1 Sol" },
     { id: "gpt-5.6-sol", name: "GPT 5.6 Sol" },
     { id: "gpt-5.6-sol-review", name: "GPT 5.6 Sol Review", upstreamModelId: "gpt-5.6-sol", quotaFamily: "review" },
     { id: "gpt-5.6-terra", name: "GPT 5.6 Terra" },

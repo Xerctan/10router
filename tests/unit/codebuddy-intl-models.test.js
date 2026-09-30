@@ -22,6 +22,12 @@ describe("CodeBuddy international static model catalog", () => {
       "gpt-5.2",
       "gpt-5.1",
       "gpt-5.6",
+      // re-probed 2026-09-30 alongside the 6.0 sol/luna additions
+      "gpt-6",
+      "gpt-6.1-sol",
+      "gpt-6.1-luna",
+      "gpt-6.1-astra",
+      "gpt-6.5-astra",
       "gemini-3.5-pro",
       "gemini-3-flash",
       "qwen3-max",
@@ -39,6 +45,8 @@ describe("CodeBuddy international static model catalog", () => {
       "hy4-preview",
       "hy3",
       "gpt-6-astra",
+      "gpt-6-luna",
+      "gpt-6-sol",
       "gpt-5.6-sol",
       "gpt-5.6-terra",
       "gpt-5.6-luna",
@@ -48,6 +56,7 @@ describe("CodeBuddy international static model catalog", () => {
       "gemini-3.5-flash",
       "glm-5v-turbo",
       "glm-5.3",
+      "glm-5.3-flash",
       "glm-5.2",
       "glm-5.1",
       "minimax-m3",
@@ -103,5 +112,20 @@ describe("CodeBuddy international static model catalog", () => {
     const hy4 = entry.models.find((model) => model.id === "hy4-preview");
     expect(hy4.rateMultiplier).toBe(0);
     expect(hy4.nightFree).toBeUndefined();
+  });
+
+  it("inherits glm-5.3-flash's multiplier from the shared CN credit system", () => {
+    // CN has listed glm-5.3-flash at 0.06 all along; intl answered 11102
+    // until the 2026-09-30 probe. One credit system → same number.
+    const byId = Object.fromEntries(entry.models.map((model) => [model.id, model]));
+    expect(byId["glm-5.3-flash"]).toMatchObject({ name: "GLM-5.3-Flash", rateMultiplier: 0.06 });
+  });
+
+  it("ships the intl-only GPT-6 sol/luna rows without a guessed multiplier", () => {
+    // CN answers 11102 for both, so there is no CN credit-page row to
+    // inherit, and the dead astra-ratio method (Sol × N) must not resurface.
+    const byId = Object.fromEntries(entry.models.map((model) => [model.id, model]));
+    expect(byId["gpt-6-luna"].rateMultiplier).toBeUndefined();
+    expect(byId["gpt-6-sol"].rateMultiplier).toBeUndefined();
   });
 });
