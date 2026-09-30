@@ -95,6 +95,10 @@ export default function ClaudeToolCard({
     if (isExpanded) {
       if (!claudeStatus) checkClaudeStatus();
       fetchModelAliases();
+      // Profiles must load here, not in the toggle handler: the dedicated
+      // [toolId] page mounts the card ALREADY expanded, so a click-based load
+      // never fires and the dropdown stays "no saved profiles" forever.
+      fetchProfiles();
     }
   }, [isExpanded]);
 
@@ -133,13 +137,6 @@ export default function ClaudeToolCard({
     } catch (error) {
       console.log("Error fetching combo profiles:", error);
     }
-  };
-
-  // Profiles load when the card expands — in the toggle handler, not an
-  // effect, so the expansion doesn't add another setState-in-effect site.
-  const handleToggle = () => {
-    onToggle();
-    if (!isExpanded) fetchProfiles();
   };
 
   const matchedProfileId = useMemo(() => {
@@ -412,7 +409,7 @@ export default function ClaudeToolCard({
 
   return (
     <Card padding="xs" className="overflow-hidden">
-      <div className="flex items-start justify-between gap-3 hover:cursor-pointer sm:items-center" onClick={handleToggle}>
+      <div className="flex items-start justify-between gap-3 hover:cursor-pointer sm:items-center" onClick={onToggle}>
         <div className="flex min-w-0 items-center gap-3">
           <div className="size-8 flex items-center justify-center shrink-0">
             <Image src="/providers/claude.png" alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} loading="lazy" decoding="async" />
