@@ -37,13 +37,13 @@ afterAll(() => {
 });
 
 describe("key identity helpers", () => {
-  it("masks while keeping the recognisable prefix", async () => {
+  it("masks while keeping the recognisable prefix and the key's tail", async () => {
     const { maskApiKey } = await import("@/lib/db/crypto/apiKeyIdentity.js");
-    expect(maskApiKey(RAW_KEY)).toBe("sk-496f0***");
+    expect(maskApiKey(RAW_KEY)).toBe("sk-496f0***aa00");
     expect(maskApiKey("short")).toBe("s***");
     expect(maskApiKey(null)).toBe(null);
     // Idempotent — a stored mask survives another round.
-    expect(maskApiKey(maskApiKey(RAW_KEY))).toBe("sk-496f0***");
+    expect(maskApiKey(maskApiKey(RAW_KEY))).toBe("sk-496f0***aa00");
   });
 
   it("hashes deterministically and never reversibly", async () => {
@@ -78,7 +78,7 @@ describe("what actually lands in the database", () => {
     const adapter = await (await import("@/lib/db/driver.js")).getAdapter();
 
     const row = adapter.get(`SELECT apiKey, apiKeyHash FROM usageHistory ORDER BY id DESC LIMIT 1`);
-    expect(row.apiKey).toBe("sk-496f0***");
+    expect(row.apiKey).toBe("sk-496f0***aa00");
     expect(row.apiKeyHash).toHaveLength(64);
 
     // Nothing anywhere in the history table may contain the raw value.
@@ -123,17 +123,17 @@ describe("what actually lands in the database", () => {
     const entries = Object.values(stats.byApiKey);
     const named = entries.find((e) => e.keyName === "Named Key");
     expect(named, "the per-key aggregate should still know the key's name").toBeTruthy();
-    expect(named.apiKeyMasked).toBe(realKey.slice(0, 8) + "***");
+    expect(named.apiKeyMasked).toBe(realKey.slice(0, 8) + "***" + realKey.slice(-4));
   });
 
-  it("keeps two same-machine keys (identical mask, different hash) in separate buckets", async () => {
+  it("keeps two same-machine keys (shared prefix, different hash) in separate buckets", async () => {
     const { maskApiKey, hashApiKey } = await import("@/lib/db/crypto/apiKeyIdentity.js");
-    // The mask is `sk-` + the first 5 chars of the machine id, so every key issued
-    // on one machine shares it. Two such keys must NOT collapse into one usage
-    // bucket — the live-history grouping keys on the sha256, not the mask.
+    // Every key issued on one machine shares the machine-id prefix; the tail-
+    // keeping mask separates their display strings, and the live-history
+    // grouping keys on the sha256 on top of that.
     const keyA = "sk-abc12" + "a".repeat(40);
     const keyB = "sk-abc12" + "b".repeat(40);
-    expect(maskApiKey(keyA)).toBe(maskApiKey(keyB));
+    expect(maskApiKey(keyA)).not.toBe(maskApiKey(keyB));
     expect(hashApiKey(keyA)).not.toBe(hashApiKey(keyB));
 
     const now = new Date().toISOString();
@@ -283,7 +283,7 @@ describe("004-usage-apikey-digest migration", () => {
     const stats = await db.getUsageStats("all");
     const named = Object.values(stats.byApiKey).find((e) => e.keyName === "Legacy Named");
     expect(named, "name lookup must survive the rewrite").toBeTruthy();
-    expect(named.apiKeyMasked).toBe(created.key.slice(0, 8) + "***");
+    expect(named.apiKeyMasked).toBe(created.key.slice(0, 8) + "***" + created.key.slice(-4));
     expect(adapter.get(`SELECT data FROM usageDaily WHERE dateKey = '2026-09-19'`).data).not.toContain(created.key);
   });
 });

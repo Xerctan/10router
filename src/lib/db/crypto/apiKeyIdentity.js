@@ -35,8 +35,9 @@ export function apiKeyIdentity(key) {
   return { apiKeyMasked: maskApiKey(key), apiKeyHash: hashApiKey(key) };
 }
 
-// True when a stored value is already masked (`sk-496f00***`), so migrations can
-// skip rows that have been converted and stay idempotent.
+// True when a stored value is already masked (legacy `sk-496f00***` or the
+// tail-keeping `sk-496f0***aa00`), so migrations can skip rows that have been
+// converted and stay idempotent. Real keys never contain asterisks.
 export function isMaskedApiKey(value) {
-  return typeof value === "string" && value.endsWith("***");
+  return typeof value === "string" && value.includes("***");
 }
