@@ -60,6 +60,7 @@ export default function ClaudeToolCard({
   const [profiles, setProfiles] = useState([]);
   const [profileId, setProfileId] = useState("");
   const [profileName, setProfileName] = useState("");
+  const profileNameRef = useRef(null);
   const hasInitializedModels = useRef(false);
 
   const getConfigStatus = () => {
@@ -295,6 +296,7 @@ export default function ClaudeToolCard({
     setProfileId(id);
     const profile = profiles.find((p) => p.id === id);
     if (!profile) return;
+    setProfileName(profile.name);
     fillFormFromProfile(profile);
     setMessage(null);
     try {
@@ -315,15 +317,30 @@ export default function ClaudeToolCard({
     }
   };
 
+  // Save targets the name in the box (CC-Switch semantics): a name that
+  // already exists updates that profile, a new name saves a new one. An empty
+  // box updates the selected/matched profile keeping its own name — with
+  // nothing selected there is nothing to call it, so ask for a name. Anchoring
+  // on the NAME (not on which profile the on-disk settings equal) is what
+  // keeps repeated saves of one combo from piling up duplicate entries.
   const handleSaveProfile = async () => {
     setMessage(null);
+    const trimmed = profileName.trim();
+    const target = trimmed
+      ? profiles.find((p) => p.name === trimmed)
+      : effectiveProfile;
+    if (!target && !trimmed) {
+      setMessage({ type: "error", text: translate("Enter a profile name to save") });
+      profileNameRef.current?.focus();
+      return;
+    }
     try {
       const res = await fetch("/api/cli-tools/claude-profiles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: effectiveProfileId || undefined,
-          name: profileName,
+          id: target?.id || undefined,
+          name: target && !trimmed ? target.name : trimmed,
           env: buildEnvFromForm(),
           exaMcpEnabled,
           maxContextTokens,
@@ -337,9 +354,10 @@ export default function ClaudeToolCard({
       const saved = data.profile;
       setProfiles((prev) => [...prev.filter((p) => p.id !== saved.id), saved]);
       setProfileId(saved.id);
+      setProfileName(saved.name);
       setMessage({
         type: "success",
-        text: effectiveProfileId
+        text: target
           ? translate(`Profile "{name}" updated`).replace("{name}", saved.name)
           : translate(`Saved profile "{name}"`).replace("{name}", saved.name),
       });
@@ -479,6 +497,7 @@ export default function ClaudeToolCard({
                     </select>
                     <input
                       type="text"
+                      ref={profileNameRef}
                       value={profileName}
                       onChange={(e) => setProfileName(e.target.value)}
                       placeholder={effectiveProfile ? translate(`Rename "{name}"…`).replace("{name}", effectiveProfile.name) : translate("Profile name")}

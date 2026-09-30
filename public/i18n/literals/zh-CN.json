@@ -1916,5 +1916,6 @@
   "Profile deleted": "方案已删除",
   "Failed to save profile": "保存方案失败",
   "Failed to delete profile": "删除方案失败",
-  "Failed to apply profile": "应用方案失败"
+  "Failed to apply profile": "应用方案失败",
+  "Enter a profile name to save": "输入方案名称后再保存"
 }
