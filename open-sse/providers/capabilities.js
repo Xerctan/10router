@@ -148,6 +148,10 @@ export const MODEL_CAPABILITIES = {
   // 表现为「有思考、无档位控制」；要补档位需新增 mimo 专用 thinkingFormat（见提交说明）。
   "mimo-v2.6-pro":   { vision: true, audioInput: true, videoInput: true, contextWindow: 1048576, maxOutput: 131072 },
   "mimo-v2.6-flash": { vision: true, audioInput: true, videoInput: true, contextWindow: 1048576, maxOutput: 131072 },
+  // OpenCode zen 免费档的 v2.6 flash（官方 /zen/v1/models 2026-09-30 在列）：
+  // 与付费 mimo-v2.6-flash 同一族全模态规格；不显式声明会落 *mimo* 兜底被压成
+  // vision-only / 262144 窗口。
+  "mimo-v2.6-flash-free": { vision: true, audioInput: true, videoInput: true, contextWindow: 1048576, maxOutput: 131072 },
   // UltraSpeed 是 pro 的加速档，模态/窗口相同；显式列出，否则同样只落到 `*mimo*` 兜底。
   "mimo-v2.6-pro-ultraspeed": { vision: true, audioInput: true, videoInput: true, contextWindow: 1048576, maxOutput: 131072 },
   // Token Plan 的 Claude 原生变体：upstreamModelId 就是 mimo-v2.6-pro，能力相同。必须显式

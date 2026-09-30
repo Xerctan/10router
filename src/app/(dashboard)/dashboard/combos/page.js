@@ -22,7 +22,9 @@ const CAPACITY_ADAPTER_CAPS = [
   // pdf, videoInput temporarily hidden — no translator support yet for those blocks.
   { key: "audioInput", label: "Audio", icon: "graphic_eq", desc: "Audio input" },
 ];
-const DEFAULT_FALLBACK_MODEL = "oc/mimo-v2.5-free";
+// Kept in sync with capacityAdapter's DEFAULT_FALLBACK_MODEL — v2.5-free is
+// retiring; the live zen free list serves the v2.6 flash id.
+const DEFAULT_FALLBACK_MODEL = "oc/mimo-v2.6-flash-free";
 const EMPTY_CAP_ENTRY = { enabled: true, roundRobin: false, models: [] };
 const EMPTY_CAPACITY_ADAPTER = {
   vision: { ...EMPTY_CAP_ENTRY },
