@@ -242,6 +242,7 @@ describe("mimo-desktop registry (account session)", () => {
     expect(Object.keys(byId).sort()).toEqual([
       "mimo-v2.6-flash",
       "mimo-v2.6-pro",
+      "mimo-v2.6-pro-ultraspeed",
     ]);
     expect(byId["mimo-v2.6-pro"].rateMultiplier).toBe(1);
     expect(byId["mimo-v2.6-flash"].rateMultiplier).toBe(0.4);

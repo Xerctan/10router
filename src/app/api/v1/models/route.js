@@ -744,36 +744,39 @@ export async function buildModelsList(kindFilter, options = {}) {
     }
   }
 
-  // Orphan custom models: custom models whose providerAlias has no active
-  // connection (e.g. noAuth free providers like opencode — they never create
-  // connection records, so the per-connection loop above never sees them).
-  // Without this branch, adding oc/mimo-v2.5-free works in the dashboard but
-  // the model never shows up in /v1/models for clients.
-  if (connections.length > 0) {
-    // noAuth free providers (opencode, mimo-free, zcode-free) never create
-    // connection records — the per-connection loop above never sees their
-    // registry models. Emit them here (honor disabled/kind filters and caps).
-    for (const [pid, p] of Object.entries(AI_PROVIDERS)) {
-      if (!p?.noAuth || !p?.exposeStaticModels) continue; // 显式 opt-in（避免既有 noAuth 供应商模型自动冒出）
-      if (activeConnectionByProvider.has(pid)) continue; // 已由连接循环处理
-      if (!providerMatchesKinds(pid, kindFilter)) continue;
-      const alias = PROVIDER_ID_TO_ALIAS[pid] || pid;
-      for (const m of PROVIDER_MODELS[alias] || []) {
-        const modelId = String(m?.id || "").trim();
-        if (!modelId || isDisabled(alias, modelId)) continue;
-        const kind = getModelKind(m) || LLM_KIND;
-        if (!kindFilter.includes(kind)) continue;
-        const entry = {
-          id: `${alias}/${modelId}`,
-          object: "model",
-          owned_by: alias,
-        };
-        const pinned = capsOverrides[alias]?.[modelId];
-        if (pinned?.contextWindow) entry.context_length = pinned.contextWindow;
-        if (pinned?.maxOutput) entry.max_completion_tokens = pinned.maxOutput;
-        emit(entry, rankOf(alias));
-      }
+  // noAuth free providers (opencode, mimo-free, zcode-free) never create
+  // connection records — the per-connection loop above never sees their
+  // registry models. Emit them here (honor disabled/kind filters and caps).
+  // NOT gated on connections.length: a healthy DB with zero connections (a
+  // fresh install — exactly the onboarding path these providers target) must
+  // still list them.
+  for (const [pid, p] of Object.entries(AI_PROVIDERS)) {
+    if (!p?.noAuth || !p?.exposeStaticModels) continue; // 显式 opt-in（避免既有 noAuth 供应商模型自动冒出）
+    if (activeConnectionByProvider.has(pid)) continue; // 已由连接循环处理
+    if (!providerMatchesKinds(pid, kindFilter)) continue;
+    const alias = PROVIDER_ID_TO_ALIAS[pid] || pid;
+    for (const m of PROVIDER_MODELS[alias] || []) {
+      const modelId = String(m?.id || "").trim();
+      if (!modelId || isDisabled(alias, modelId)) continue;
+      const kind = getModelKind(m) || LLM_KIND;
+      if (!kindFilter.includes(kind)) continue;
+      const entry = {
+        id: `${alias}/${modelId}`,
+        object: "model",
+        owned_by: alias,
+      };
+      const pinned = capsOverrides[alias]?.[modelId];
+      if (pinned?.contextWindow) entry.context_length = pinned.contextWindow;
+      if (pinned?.maxOutput) entry.max_completion_tokens = pinned.maxOutput;
+      emit(entry, rankOf(alias));
     }
+  }
+
+  // Orphan custom models: custom models whose providerAlias has no active
+  // connection. Only meaningful when at least one connection exists — with
+  // zero connections the customModels loop in the `connections.length === 0`
+  // branch above already emitted every valid one.
+  if (connections.length > 0) {
     const connectedAliases = new Set();
     for (const [providerId] of activeConnectionByProvider.entries()) {
       const staticAlias = PROVIDER_ID_TO_ALIAS[providerId] || providerId;

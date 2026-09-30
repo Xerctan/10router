@@ -289,9 +289,14 @@ node scripts/verify-usage-db.mjs
   <a href="https://github.com/weltyang1216" title="weltyang1216 — issue 反馈"><img src="https://github.com/weltyang1216.png?size=80" width="48" height="48" alt="weltyang1216" /></a>
   <a href="https://github.com/anupamme" title="anupamme — PR 贡献"><img src="https://github.com/anupamme.png?size=80" width="48" height="48" alt="anupamme" /></a>
   <a href="https://github.com/yet791080885-jpg" title="yet791080885-jpg — PR 贡献"><img src="https://github.com/yet791080885-jpg.png?size=80" width="48" height="48" alt="yet791080885-jpg" /></a>
+  <a href="https://github.com/fenixggg" title="fenixggg — issue 反馈"><img src="https://github.com/fenixggg.png?size=80" width="48" height="48" alt="fenixggg" /></a>
+  <a href="https://github.com/windcloud01" title="windcloud01 — issue 反馈"><img src="https://github.com/windcloud01.png?size=80" width="48" height="48" alt="windcloud01" /></a>
+  <a href="https://github.com/ThedoRap" title="ThedoRap — issue 反馈"><img src="https://github.com/ThedoRap.png?size=80" width="48" height="48" alt="ThedoRap" /></a>
+  <a href="https://github.com/rua-aaa" title="rua-aaa — issue 反馈"><img src="https://github.com/rua-aaa.png?size=80" width="48" height="48" alt="rua-aaa" /></a>
+  <a href="https://github.com/techysy/CreditDaddy" title="CreditDaddy — 积分领取与额度/用量协同"><img src="https://raw.githubusercontent.com/techysy/CreditDaddy/main/desktop/icon.png" width="48" height="48" alt="CreditDaddy" /></a>
 </p>
 
-<sub>名单由 issue 与 PR 的反馈者汇总，头像取自 GitHub 公开个人信息；若有遗漏请随时提 issue 补充。</sub>
+<sub>名单由 issue 与 PR 的反馈者及协同项目汇总，头像取自 GitHub 公开个人信息（CreditDaddy 用其应用图标）；若有遗漏请随时提 issue 补充。</sub>
 
 ---
 

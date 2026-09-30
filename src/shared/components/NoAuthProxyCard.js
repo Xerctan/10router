@@ -187,7 +187,7 @@ export default function NoAuthProxyCard({ providerId }) {
             </button>
           </div>
           <p className="text-xs text-text-muted">
-            CreditDaddy 桌面版开启「额度网关」后即为本机可用；局域网主机需在其面板开启「局域网」并重启。
+            CreditDaddy 桌面版开启「体验包接口」后即为本机可用；局域网主机需在其面板开启「局域网」并重启。
             远程主机需鉴权——建一个带 key 的连接（key = 其「10Router 连接设置」里的虚拟 key）。
           </p>
         </div>

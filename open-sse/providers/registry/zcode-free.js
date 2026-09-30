@@ -1,8 +1,8 @@
 // ZCode 免费体验包（Start Plan / Trust Build，GLM-5.3-Flash）→ CreditDaddy 本地网关。
-// 上游是 CreditDaddy 桌面版（techysy/CreditDaddy）的「额度网关」：
+// 上游是 CreditDaddy 桌面版（techysy/CreditDaddy）的「体验包接口」（面板旧称「额度网关」）：
 //   POST http://127.0.0.1:<port>/gateway/v1/messages（Anthropic 形态）
 // 它负责账号轮换 + 隐藏窗口静默过阿里云验证码；本条目只做端点映射，模型面固定。
-// 前提：CreditDaddy 桌面版运行 + 面板「额度网关」开启；纯 CLI / NAS 无验证码提供者时
+// 前提：CreditDaddy 桌面版运行 + 面板「体验包接口」开启；纯 CLI / NAS 无验证码提供者时
 // 网关返回 503（错误文案会说明）。体验包额度只存在于 zcode.z.ai plan 端点（3007 风控），
 // 标准端点不可用——详见 docs/zh-CN/archive/zcode-plan-proxy-feasibility.md。
 export default {
