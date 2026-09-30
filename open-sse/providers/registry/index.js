@@ -143,6 +143,7 @@ import p143 from "./zcode-free.js";
 import p144 from "./keenable.js";
 import p145 from "./tinyfish.js";
 import p146 from "./drex.js";
+import p147 from "./opencode-zen.js";
 
 export default [
   p0,
@@ -287,4 +288,5 @@ export default [
   p144,
   p145,
   p146,
+  p147,
 ];

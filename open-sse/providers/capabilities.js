@@ -238,6 +238,7 @@ export const MODEL_CAPABILITIES = {
   // 来源：models.dev 快照，逐条注明条目；多家冲突时取保守值并说明。
   "muse-spark-1.1":            { vision: true, videoInput: true, pdf: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 131072 }, // meta/muse-spark-1.1；与既有-1.2-contributor-free(-1.3) 行同值
   "muse-spark-1.2":            { vision: true, videoInput: true, pdf: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 131072 }, // meta/muse-spark-1.2
+  "muse-spark-1.3":            { vision: true, videoInput: true, pdf: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 131072 }, // meta/muse-spark-1.3（付费档，opencode-zen /zen/v1 在列）
   "muse-spark-1.2-contributor":{ vision: true, videoInput: true, pdf: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 131072 }, // meta/muse-spark-1.2-contributor
   "muse-spark-1.3-contributor":{ vision: true, videoInput: true, pdf: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 131072 }, // meta/muse-spark-1.3-contributor（第一方）；与 -1.2-contributor 同值（另有 -free 变体行）
   // Sakana Fugu Ultra：各家都报 text+image、1M 输入；输出上限有两派——第一方

@@ -17,6 +17,9 @@
 
 - **/v1/models 能力元数据与 Combo 能力聚合（`5c217d34` + `37a6b7e0` 思路重实现）**：新增 `aggregateComboCapabilities` —— 组合能力按成员保守聚合（vision/pdf/audio/video/imageOutput/audioOutput/search 取并集，tools 取交集，reasoning/thinking 字段取主模型，contextWindow 取 min、maxOutput 取 max），支持嵌套组合递归（防环）与 `resolveCaps` 覆盖回调（浏览器端拿不到仅服务端可见的同步目录，仪表盘经 useModelCaps 把服务端答案喂进来，本地表仍独占 tools/pdf/thinking 字段）。`/v1/models` 组合条目带 `capabilities`，静态目录分支的模型行也补齐能力元数据；Combos 卡片显示成员徽章（嵌套组合解析）与聚合 ctx/max 行。Pattern 修正：`*qwen*max*` 补 vision；MiniMax M3 修正为 1M/131072、M2.7 补 vision、补 M2.5 行；MiMo v2.5 代际补 `<think>` 常开 reasoning（deepseek 形态）。用例 `tests/unit/combo-capabilities.test.js` + `tests/unit/combo-caps-resolver.test.js` 18 例。
 
+- **新增 OpenCode Zen PAYG 供应商（`ocz`，`49185137` 思路重实现）**：opencode zen 平台的付费按量通道——真 API key（Bearer）解锁完整目录（Claude / Gemini / GPT / Grok / Kimi / GLM / MiniMax / Qwen / DeepSeek / Muse Spark…），免费档 id 在同一把 key 下照常可用。三端点多 transport（/chat/completions、/messages、/responses）按客户端 sourceFormat 直连，per-model `supportedFormats` 门控路由（与 opencode-go 同契约）；目录按官方定价表 2026-10-01 现值校准（含 Claude Opus 5.5 / Grok 4.7 / Qwen3.8 / DeepSeek V4.1 Flash / MiMo-V2.6-Flash）。专属执行器：免费档指纹（bash/glob/grep/read 四件套 + 强制 stream:true）、x-opencode-client 桌面标识、UA 合规版本透传、zen 会话头（原生透传 / 确定性派生）、Muse Spark 强制 /responses（Responses 形状归一 + reasoning 项剔除 + tool 扁平化）。额度走 GET /zen/v1/usage 滚动/周/月百分比窗口（features 双旗标接入 Provider Limits）。能力表补 muse-spark-1.3（付费档，此前仅 -contributor-free 有行）；audit allowlist +`opencode-zen/union-alpha`（代号）。用例 `tests/unit/opencode-zen-models.test.js` 22 例，providers/alias 基线重快照（alias 探针 +ocz）。
+
+### 🐛 修复
 ### 🐛 修复
 
 - **虚拟 key 可远程写自定义 provider（#38）**：`POST /api/providers` 与 `/api/provider-nodes` 的虚拟 key 例外此前嵌在 `ALWAYS_PROTECTED` 分支内，而这两个路径不在该列表里，例外永不匹配，远程带有效虚拟 key 一律 401（CreditDaddy 同步账号通道）。例外提到该判断之外；`[id]` 上的 list/update/delete 仍受保护。`tests/unit/dashboard-guard-provider-write.test.js` 覆盖远程放行与 `[id]` 仍 401。

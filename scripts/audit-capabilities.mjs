@@ -108,6 +108,7 @@ export const ALLOWLIST = {
   // opencode-go itself, which is the same catalog — not independent evidence). It gets no
   // supportedFormats either, so it keeps the sourceFormat-matched transport untouched.
   "opencode-go/omen-alpha": "codename",
+  "opencode-zen/union-alpha": "codename",
 
   // Sources disagree — held until a first-party spec settles it.
   // kat-coder-pro-v2.5: vercel says 256000/80000 text+image+reasoning, while

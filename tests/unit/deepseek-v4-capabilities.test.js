@@ -126,8 +126,8 @@ const DOTTED_ID = REGISTRY.flatMap((entry) =>
 );
 
 describe("DeepSeek V4.1-Flash id with dots (deepseek-v4.1-flash)", () => {
-  it("is offered by opencode-go and both CodeBuddy gateways", () => {
-    expect(DOTTED_ID.map((m) => m.provider).sort()).toEqual(["codebuddy-cn", "codebuddy-intl", "opencode-go"]);
+  it("is offered by opencode-go, opencode-zen and both CodeBuddy gateways", () => {
+    expect(DOTTED_ID.map((m) => m.provider).sort()).toEqual(["codebuddy-cn", "codebuddy-intl", "opencode-go", "opencode-zen"]);
   });
 
   it("resolves from the canonical row where the provider has no override", () => {

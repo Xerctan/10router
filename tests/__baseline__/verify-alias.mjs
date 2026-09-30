@@ -23,7 +23,7 @@ const ALIAS_TOKENS = [
   "af","airforce","api-airforce","llm7","llm-7","samba","sambanova","bm","bluesminds",
   "bzl","bazaarlink","kgw","kilo-gateway","hunyuan","tencent","qianfan","baidu","ernie",
   "dv","devin","devin-cli","morph","morphllm",
-  "tokenbom","agnes-ai","agnes-ai-cn","drex",
+  "tokenbom","agnes-ai","agnes-ai-cn","drex","ocz",
   "step","stepfun","stepfun-cn","stepfun-plan","stepfun-plan-cn",
   "step-cn","stepp-cn","stepp","sfp-cn","sfp","sfpcn","sf-cn","sfcn","step-plan","step-plan-cn","sf",
 ];

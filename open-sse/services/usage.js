@@ -15,6 +15,7 @@ import { getGrokCliUsage } from "./usage/grok-cli.js";
 import { getKimiUsage } from "./usage/kimi.js";
 import { getDeepseekUsage } from "./usage/deepseek.js";
 import { getOpencodeGoUsage } from "./usage/opencode-go.js";
+import { getOpenCodeZenUsage } from "./usage/opencode-zen.js";
 import { getXiaomiMimoUsage, getXiaomiTokenPlanUsage } from "./usage/xiaomi-mimo.js";
 import { getStepfunUsage, STEPFUN_ACCOUNTS_HOSTS } from "./usage/stepfun.js";
 import { resolveQoderCredentials } from "./qoderModels.js";
@@ -64,6 +65,7 @@ const USAGE_HANDLERS = {
   kimi: (c) => getKimiUsage(c.accessToken, c.apiKey, c.proxyOptions, c.providerSpecificData),
   deepseek: (c) => getDeepseekUsage(c.apiKey, c.proxyOptions),
   "opencode-go": (c) => getOpencodeGoUsage(c.apiKey, c.proxyOptions),
+  "opencode-zen": (c) => getOpenCodeZenUsage(c.apiKey, c.proxyOptions),
   // The cloud card bills through the plan / API at formal rates and owns NO
   // Desktop surface, so it reports no quota at all: no session read (that is how
   // it advertised a "Desktop session" it never had) and no key probe (whose 401
