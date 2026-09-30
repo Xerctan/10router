@@ -2,33 +2,6 @@
 
 User-facing highlights per release. See [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md) for the full developer log.
 
-## v1.3.0 (2026-09-30)
-
-### ✨ New
-
-- **CLI Tools "Model Combo Profiles" (Claude Card, #17)**: The Claude tool card introduces a Profiles section, enabling you to save Opus/Sonnet/Haiku mappings, API Key, and context window settings as named presets. Selecting a preset from the dropdown instantly writes to `~/.claude/settings.json` without requiring an Apply click (parity with CC-Switch). Profiles persist server-side and synchronize across NAS, Tailscale, and tunnel connections.
-- **Quota Visualization Redesign: QuotaToolbar & Window Timeline**: The usage view features a responsive quota toolbar and cycle timeline (`QuotaWindowTimeline`), visualizing rolling reset countdowns across providers. Includes a non-persisted view tab toggle ("Cards" vs. "Quota windows") that always defaults to Cards on fresh page loads. Segmented pack bars align with CreditDaddy visual semantics with absolute nearest-expiry displays.
-- **New Search & Fetch Providers: TinyFish & Keenable (#26)**:
-  - **TinyFish** (Free Tier): Full automated support for Web Search and Web Fetch with zero balance deduction;
-  - **Keenable** (Standard API Key): Realtime/pro search modes and high-fidelity webpage scraping with `live=true`;
-  - Seamlessly integrated across Media Providers and `/v1/search` / `/v1/web/fetch`.
-- **ZCode Free Trial Provider (`zcode-free`)**: Route Start Plan and Trust Build credits (GLM-5.3-Flash) through CreditDaddy desktop gateway, supporting remote/LAN gateway host configuration and detailed architecture documentation.
-- **Qoder Itemized Resource Packs via CreditDaddy Web Session**: Uses synced browser cookies to directly query exact per-pack remaining credits and expiration dates from the web console, avoiding heuristic approximations while validating account ownership.
-- **LongCat-2.5-Preview & International Portal**: Added LongCat-2.5-Preview (1M context, multimodal image/video input, thinking mode toggle) and separate `longcat.ai` provider card.
-- **Desktop In-Container Password Management (`639f77a8`)**: Automatically captures and auto-fills credentials for web apps running in desktop shell containers (WorkBuddy, CodeBuddy), securely encrypted at rest via OS-level safeStorage (DPAPI).
-- **System Theme Adaptive Mode**: Login and dashboard interfaces automatically track OS day/night mode, powered by pre-paint scripts to prevent screen flashing.
-
-### 🐛 Fixes
-
-- **Usage Input Tokens Normalization**: Fixed an issue where prompt tokens on unfolded Claude usage shapes were overridden by cached token counts, resolving the 1:1 display skew for high-cache providers like `zcode-free`.
-- **Fresh Install Static Model Exposure**: Ensures `noAuth` providers (opencode, mimo-free, zcode-free) expose models in `/v1/models` on brand-new installs with empty connection tables.
-- **OpenAI Responses Content Filter Mapping**: Correctly maps Responses `incomplete_details.reason === "content_filter"` to Chat completion `finish_reason: "content_filter"` instead of `"length"`, preventing client SDKs from assuming context cutoffs.
-- **Schemeless Proxy Normalization & Leak Prevention (#36)**: Accepts proxy URLs without explicit schemes (e.g. `127.0.0.1:7890`, normalized to `http://`). Keeps encrypted strings on parse failures to strictly prevent direct IP leak fallbacks.
-- **Antigravity Upstream Stability**: Removed obsolete `requestType: "agent"` to eliminate spurious 429 errors; fixed empty string tool response 400s; added bidirectional long tool name mapping; reinforced tool schema sanitization with local `$ref` resolution.
-- **Strict Bare Model Resolution (#34)**: Rejects unknown bare model names with a clear 400 error rather than guessing upstream providers and producing misleading 404s.
-- **Remote Provider Management Authorization (#38)**: Restored permission for valid virtual dashboard keys to POST `/api/providers` and `/api/provider-nodes`.
-- **MITM Security Hardening (#31)**: Passed `ROUTER_API_KEY` via stdin in sudo invocation scripts rather than leaking it through process command line arguments.
-
 ## v1.2.1 (2026-09-26)
 
 ### 🔒 Security

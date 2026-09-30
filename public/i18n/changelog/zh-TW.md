@@ -2,33 +2,6 @@
 
 這裡展示面向用戶的關鍵更新；完整開發明細見 [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md)。
 
-## v1.3.0 (2026-09-30)
-
-### ✨ 新增
-
-- **CLI 工具「模型組合方案」（Claude 卡，#17）**：Claude 工具卡新增 Profiles 欄，支援將 Opus/Sonnet/Haiku 映射、API Key 與上下文視窗儲存為多套命名方案；下拉切換即自動寫入 `~/.claude/settings.json`，無需再點 Apply，體驗無縫對標 CC-Switch。設定由伺服器端統一持久化，NAS、Tailscale 或通道存取時共享同一份設定。
-- **配額視覺化重構：QuotaToolbar 與配額視窗時間線**：用量頁引入響應式配額工具列與週期視窗時間線（`QuotaWindowTimeline`），直觀呈現各供應商週/月週期的額度重設與倒數計時；頂部增加「卡片」與「配額視窗」檢視切換（工作階段級記憶體保持，重新整理恆定預設展示卡片，不污染 localStorage）。多包分段進度條全面對齊 CreditDaddy 視覺語意，並支援卡片頂部展示精確最近到期時間。
-- **全新搜尋與擷取供應商 TinyFish 與 Keenable（#26）**：
-  - **TinyFish**（免費層）：全自動支援 Web Search 與 Web Fetch，官方任意餘額免扣費，免設定開箱即用；
-  - **Keenable**（標準 API Key）：支援即時/專業模式搜尋，以及帶 `live=true` 的高保真任意網頁擷取；
-  - 媒體提供商頁面（Web Search / Web Fetch）及 `/v1/search`、`/v1/web/fetch` 介面全線接入。
-- **ZCode 免費體驗包供應商接入（`zcode-free`）**：將 Start Plan / Trust Build 免費額度（GLM-5.3-Flash）透過 CreditDaddy 桌面版「額度閘道」接入調度；支援在卡片上設定區域網路 CreditDaddy 主機位址，並產出詳盡的實戰接入指南文件。
-- **Qoder 逐包明細優先用 CreditDaddy 網頁工作階段**：透過同步的瀏覽器工作階段直讀主控台精確逐包用量與到期時間，杜絕近似估算偏差，帶帳號所有權防串號校驗。
-- **LongCat-2.5-Preview 與國際站支援**：接入 LongCat-2.5-Preview（1M 上下文，支援圖像與視訊多模態輸入及思考模式），新增 `longcat.ai` 國際站獨立卡片。
-- **桌面殼「容器」密碼管理（`639f77a8`）**：桌面版內嵌網頁（WorkBuddy、CodeBuddy 等）支援帳號密碼自動擷取、右鍵填入與獨立密碼管理面板，憑證透過系統安全儲存（DPAPI / safeStorage）本機加密落盤。
-- **全站深淺色模式系統自適應**：登入頁及主介面自動跟隨作業系統主題變化，帶首屏防白屏閃爍指令碼。
-
-### 🐛 修正
-
-- **用量詳情輸入 Token 不再被快取值頂替**：徹底修復未折疊 Claude usage 結構導致的高快取命中請求（如 zcode-free）輸入欄與快取欄 1:1 顯示的視覺失真問題。
-- **全新安裝冷啟動靜態模型暴露**：修復在資料庫無任何連線記錄的全新安裝環境下，`noAuth` 體驗供應商（opencode、mimo-free、zcode-free）在 `/v1/models` 中無法展示的問題。
-- **OpenAI Responses 審核中斷原因映射**：將 Responses 的 `incomplete_details.reason === "content_filter"` 正確轉換為 Chat 補全的 `finish_reason: "content_filter"`，防止 SDK 誤判為 length 長度截斷。
-- **代理設定容錯與安全穿透（#36）**：支援不帶 scheme 的代理格式（如 `127.0.0.1:7890`，自動規範為 `http://`）；密文解析失敗時維持密文字符串，堅決杜絕意外降級直連洩漏真實 IP；儲存時嚴格阻斷非法通訊協定。
-- **反重力（Antigravity）穩定性強化**：移除官方已棄用的 `requestType:"agent"` 避免無故觸發 429 報錯；修復空字串工具結果導致的 400 異常；長函數名自動映射與還原；大幅強化工具 schema 清洗（支援本機 `$ref` 內聯解環，避免遺失參數）。
-- **未知裸模型名嚴禁前綴盲猜（#34）**：未命中的裸模型名直接回傳 400 指引，不再隨機推斷為錯誤供應商導致 404。
-- **遠端虛擬 Key 權限修正（#38）**：恢復持有有效虛擬 Key 遠端新增/更新自訂供應商的通道，打通外部工具自動化同步。
-- **MITM 安全加固（#31）**：sudo 啟動時 `ROUTER_API_KEY` 徹底移出命令列參數改走安全標準輸入，避免從系統處理程序清單洩漏。
-
 ## v1.2.1 (2026-09-26)
 
 ### 🔒 安全
