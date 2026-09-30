@@ -178,14 +178,20 @@ export async function handleChat(request, clientRawRequest = null) {
     });
   }
 
-  return handleSingleModelChat(body, modelStr, clientRawRequest, request, apiKey);
+  return handleSingleModelChat(body, modelStr, clientRawRequest, request, apiKey, { inferFallback: false });
 }
 
 /**
  * Handle single model chat request
+ *
+ * `inferFallback` stays TRUE for combo-internal model entries (a combo author
+ * explicitly listed those names) and is FALSE only for the top-level client
+ * request: there a bare name that matches no alias/combo is a client error —
+ * /v1/models never advertises bare ids (#34), and the old prefix guess
+ * produced misleading "No active credentials for provider: <guess>" 404s.
  */
-async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null) {
-  const modelInfo = await getModelInfo(modelStr);
+async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, { inferFallback = true } = {}) {
+  const modelInfo = await getModelInfo(modelStr, { inferFallback });
 
   // If provider is null, this might be a combo name - check and handle
   if (!modelInfo.provider) {
@@ -239,8 +245,11 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         retryOnEmptyLimit
       });
     }
-    log.warn("CHAT", "Invalid model format", { model: modelStr });
-    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid model format");
+    log.warn("CHAT", "Unknown model", { model: modelStr });
+    return errorResponse(
+      HTTP_STATUS.BAD_REQUEST,
+      `Unknown model: "${modelStr}". It is not in /v1/models — send a provider-prefixed model id from GET /v1/models.`
+    );
   }
 
   const { provider, model } = modelInfo;

@@ -91,6 +91,29 @@ export function resolveModelAliasFromMap(alias, aliases) {
  * @param {string} modelStr - Model string
  * @param {object|function} aliasesOrGetter - Aliases object or async function to get aliases
  */
+/**
+ * Resolve a BARE model string through the alias maps (user aliases, then
+ * built-ins). Returns the resolved {provider, model}, or null when nothing
+ * matched — deliberately NO prefix inference, so callers decide what an
+ * unmatched bare name means for their surface.
+ */
+export async function resolveModelAliasCore(modelStr, aliasesOrGetter) {
+  const parsed = parseModel(modelStr);
+  if (!parsed.isAlias) return null;
+
+  // Get aliases (from object or function)
+  const aliases =
+    typeof aliasesOrGetter === "function"
+      ? await aliasesOrGetter()
+      : aliasesOrGetter;
+
+  return (
+    resolveModelAliasFromMap(parsed.model, aliases) ||
+    resolveModelAliasFromMap(parsed.model, BUILTIN_MODEL_ALIASES) ||
+    null
+  );
+}
+
 export async function getModelInfoCore(modelStr, aliasesOrGetter) {
   const parsed = parseModel(modelStr);
 
@@ -101,16 +124,7 @@ export async function getModelInfoCore(modelStr, aliasesOrGetter) {
     };
   }
 
-  // Get aliases (from object or function)
-  const aliases =
-    typeof aliasesOrGetter === "function"
-      ? await aliasesOrGetter()
-      : aliasesOrGetter;
-
-  // Resolve alias
-  const resolved =
-    resolveModelAliasFromMap(parsed.model, aliases) ||
-    resolveModelAliasFromMap(parsed.model, BUILTIN_MODEL_ALIASES);
+  const resolved = await resolveModelAliasCore(modelStr, aliasesOrGetter);
   if (resolved) {
     return resolved;
   }

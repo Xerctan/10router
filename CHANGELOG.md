@@ -7,6 +7,10 @@
 ### ✨ 新功能
 
 - **CLI 工具「模型组合方案」（Claude 卡，#17）**：Claude 工具卡新增 Profiles 栏——把当前表单（Opus/Sonnet/Haiku 映射 + API Key + 上下文窗口）存为命名方案，可存多组；下拉选中**即写入** `~/.claude/settings.json`（对标 CC-Switch 的切换体验，无需再点 Apply）。方案存服务端 settings（`cliToolProfiles` 键）而非浏览器 localStorage，NAS / Tailscale / 隧道多端访问同一实例时共享同一份；卡片按磁盘上当前 settings 自动预选对应方案（端点 + Key + 三模型槽位全等才算命中）。`/api/cli-tools/claude-profiles` CRUD，env 白名单过滤（写用户真实 settings.json 的入口不接受任意键）；组件按 per-tool 通用件写，Codex / Droid 等同构卡后续零成本接入。**保存以名称为目标**（CC-Switch 语义）：重名即更新该方案、新名即另存新方案，空名称且有选中方案时沿用其名——修掉「同一组合反复保存建出一串同名方案 / 选中后另存反被覆盖」的坑。测试 `tests/unit/cli-tool-profiles.test.js` 12 例（清洗/上限/原地更新/匹配器）。
+
+### 🐛 修复
+
+- **未知裸模型名不再按前缀猜 provider 后静默回落（#34）**：`/v1/chat/completions` 发不带 provider 前缀的裸名（如 `deepseek-v4.1-flash`）此前按名字前缀猜 provider（`deepseek-`→openrouter、`claude-`→anthropic、其余→openai），猜中后直接去撞凭证库，报出与真实原因毫不相干的 `No active credentials for provider: <猜的>` 404。现在 chat 主路径对未命中别名/combo 的裸名直接拒绝：400 `Unknown model: "<name>"…`，指向 `/v1/models` 的带前缀 id。**范围刻意收窄**：仅 chat 主路径关闭推断；`/v1/audio|images|embeddings` 等 OpenAI SDK 惯例发裸名（`tts-1`）的面保留推断；combo 内部条目（作者显式写入）与内置/用户别名不受影响。解析重构为 `resolveModelAliasCore`（纯别名解析）+ 可选推断，测试 `tests/unit/bare-model-resolution.test.js` 8 例。
 - **ZCode 免费体验包供应商（`zcode-free`，体验分类）**：Start Plan / Trust Build 体验包（GLM-5.3-Flash，1M 上下文 + 视觉）经 CreditDaddy 桌面版「额度网关」接入——上游 `POST http://127.0.0.1:47860/gateway/v1/messages`（Anthropic 形态），CreditDaddy 负责账号轮换 + 隐藏窗口静默过阿里云验证码；本条目只做端点映射，noAuth 无需连接行。体验分类与 OpenCode Free 一致（`community` 默认展示在体验簇）。配套：`/v1/models` 对 noAuth 供应商新增注册表模型发射通道（`exposeStaticModels` 显式 opt-in，不影响 opencode / mimo-free 既有行为）；官方 Z 图标 `public/providers/zcode-free.png`。
   - **CreditDaddy 主机可配置**：`zcode-free` 卡片可设置网关主机（留空 = 本机 127.0.0.1，局域网填 CreditDaddy 主机 IP + 端口，默认 47860）——`getProviderCredentials` 对 noAuth 虚拟连接注入覆盖 baseUrl，执行器按注入值拼 `/messages`；建了带 key 的连接时优先走真实连接（key = 对端「10Router 连接设置」的虚拟 key，远程网关鉴权用）。
 

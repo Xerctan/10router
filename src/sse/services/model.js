@@ -1,6 +1,6 @@
 // Re-export from open-sse with localDb integration
 import { getModelAliases, getComboByName, getProviderNodes } from "@/lib/localDb";
-import { parseModel as parseModelCore, resolveModelAliasFromMap, getModelInfoCore } from "open-sse/services/model.js";
+import { parseModel as parseModelCore, resolveModelAliasFromMap, resolveModelAliasCore, getModelInfoCore } from "open-sse/services/model.js";
 import REGISTRY from "open-sse/providers/registry/index.js";
 
 // Local provider alias overrides (HMR-friendly, applied on top of open-sse map)
@@ -34,8 +34,14 @@ export async function resolveModelAlias(alias) {
 
 /**
  * Get full model info (parse or resolve)
+ *
+ * `inferFallback: false` opts the caller out of the bare-name prefix guess:
+ * an unmatched bare name then resolves to `provider: null` instead of the
+ * name-prefix heuristic (#34 — the guess used to route `deepseek-v4.1-flash`
+ * to whatever provider shared the prefix and fail there with a misleading
+ * "No active credentials" 404).
  */
-export async function getModelInfo(modelStr) {
+export async function getModelInfo(modelStr, { inferFallback = true } = {}) {
   const parsed = parseModel(modelStr);
 
   if (!parsed.isAlias) {
@@ -75,6 +81,14 @@ export async function getModelInfo(modelStr) {
     return { provider: null, model: parsed.model };
   }
 
+  const resolved = await resolveModelAliasCore(modelStr, getModelAliases);
+  if (resolved) {
+    return resolved;
+  }
+
+  if (!inferFallback) {
+    return { provider: null, model: parsed.model };
+  }
   return getModelInfoCore(modelStr, getModelAliases);
 }
 
