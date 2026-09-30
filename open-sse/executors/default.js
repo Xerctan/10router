@@ -176,7 +176,7 @@ export class DefaultExecutor extends BaseExecutor {
       // 客户端自带的 beta 旗标并入上游计算值（dc198dff）：客户端显式要求的
       // beta 特性（如 context-management）必须在请求里存活。
       const clientBeta = credentials?.rawHeaders?.["anthropic-beta"];
-      headers["Anthropic-Beta"] = mergeAnthropicBeta(selectAnthropicBeta(model), clientBeta);
+      headers["Anthropic-Beta"] = mergeAnthropicBeta(selectAnthropicBeta(model, body), clientBeta);
     } else if (this.provider === "anthropic" && credentials?.rawHeaders?.["anthropic-beta"]) {
       headers["Anthropic-Beta"] = mergeAnthropicBeta(headers["Anthropic-Beta"], credentials.rawHeaders["anthropic-beta"]);
     }
