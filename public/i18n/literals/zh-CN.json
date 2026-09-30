@@ -1893,7 +1893,6 @@
   "expires {date} · used {used} of {total}": " 于 {date} 到期 · 已用 {used} / 共 {total}",
   "Used": "已用",
   "expires": "到期",
-
   "expires {date}": "{date} 到期",
   "remaining {remaining} of {total}": "{remaining} / {total}",
   "earliest {date}": "最早 {date} 到期",
@@ -1902,5 +1901,20 @@
   "expires in {duration}": "{duration}后过期",
   "{count} resource packs": "{count} 个资源包（可用）",
   "expires on {date}": "于 {date} 到期",
-  "includes {names}": "包含 {names}"
+  "includes {names}": "包含 {names}",
+  "Profiles": "方案",
+  "Switch profile…": "切换方案…",
+  "No saved profiles": "暂无已存方案",
+  "Profile name": "方案名称",
+  "Rename \"{name}\"…": "重命名「{name}」…",
+  "Update the selected profile with the current form": "用当前表单更新选中的方案",
+  "Save the current settings as a profile": "把当前配置存为方案",
+  "Delete the selected profile": "删除选中的方案",
+  "Switched to profile \"{name}\" — restart Claude Code to pick it up": "已切换到方案「{name}」——重启 Claude Code 后生效",
+  "Saved profile \"{name}\"": "已保存方案「{name}」",
+  "Profile \"{name}\" updated": "方案「{name}」已更新",
+  "Profile deleted": "方案已删除",
+  "Failed to save profile": "保存方案失败",
+  "Failed to delete profile": "删除方案失败",
+  "Failed to apply profile": "应用方案失败"
 }

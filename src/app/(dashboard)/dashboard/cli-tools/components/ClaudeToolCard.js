@@ -7,6 +7,7 @@ import BaseUrlSelect from "./BaseUrlSelect";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
 import { matchProfileByEnv } from "@/lib/cliToolProfiles";
+import { translate } from "@/i18n/runtime";
 
 const CLOUD_URL = process.env.NEXT_PUBLIC_CLOUD_URL;
 
@@ -305,9 +306,9 @@ export default function ClaudeToolCard({
           settings: { ...(prev?.settings || {}), env: profile.env },
           exaMcpEnabled: profile.exaMcpEnabled === true,
         }));
-        setMessage({ type: "success", text: `Switched to profile "${profile.name}" — restart Claude Code to pick it up` });
+        setMessage({ type: "success", text: translate(`Switched to profile "{name}" — restart Claude Code to pick it up`).replace("{name}", profile.name) });
       } else {
-        setMessage({ type: "error", text: data.error || "Failed to apply profile" });
+        setMessage({ type: "error", text: data.error || translate("Failed to apply profile") });
       }
     } catch (error) {
       setMessage({ type: "error", text: error.message });
@@ -330,13 +331,18 @@ export default function ClaudeToolCard({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMessage({ type: "error", text: data.error || "Failed to save profile" });
+        setMessage({ type: "error", text: data.error || translate("Failed to save profile") });
         return;
       }
       const saved = data.profile;
       setProfiles((prev) => [...prev.filter((p) => p.id !== saved.id), saved]);
       setProfileId(saved.id);
-      setMessage({ type: "success", text: effectiveProfileId ? `Profile "${saved.name}" updated` : `Saved profile "${saved.name}"` });
+      setMessage({
+        type: "success",
+        text: effectiveProfileId
+          ? translate(`Profile "{name}" updated`).replace("{name}", saved.name)
+          : translate(`Saved profile "{name}"`).replace("{name}", saved.name),
+      });
     } catch (error) {
       setMessage({ type: "error", text: error.message });
     }
@@ -349,12 +355,12 @@ export default function ClaudeToolCard({
       const res = await fetch(`/api/cli-tools/claude-profiles?id=${encodeURIComponent(effectiveProfileId)}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMessage({ type: "error", text: data.error || "Failed to delete profile" });
+        setMessage({ type: "error", text: data.error || translate("Failed to delete profile") });
         return;
       }
       setProfiles((prev) => prev.filter((p) => p.id !== effectiveProfileId));
       setProfileId("");
-      setMessage({ type: "success", text: "Profile deleted" });
+      setMessage({ type: "success", text: translate("Profile deleted") });
     } catch (error) {
       setMessage({ type: "error", text: error.message });
     }
@@ -457,7 +463,7 @@ export default function ClaudeToolCard({
                 {/* Combo profiles (issue #17): the whole form as named snapshots;
                     picking one writes ~/.claude/settings.json immediately. */}
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
-                  <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Profiles</span>
+                  <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">{translate("Profiles")}</span>
                   <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
                   <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                     <select
@@ -466,7 +472,7 @@ export default function ClaudeToolCard({
                       disabled={profiles.length === 0}
                       className="min-w-0 flex-1 sm:flex-none px-2 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5 disabled:opacity-50"
                     >
-                      <option value="">{profiles.length ? "Switch profile…" : "No saved profiles"}</option>
+                      <option value="">{profiles.length ? translate("Switch profile…") : translate("No saved profiles")}</option>
                       {profiles.map((p) => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
@@ -475,7 +481,7 @@ export default function ClaudeToolCard({
                       type="text"
                       value={profileName}
                       onChange={(e) => setProfileName(e.target.value)}
-                      placeholder={effectiveProfile ? `Rename "${effectiveProfile.name}"…` : "Profile name"}
+                      placeholder={effectiveProfile ? translate(`Rename "{name}"…`).replace("{name}", effectiveProfile.name) : translate("Profile name")}
                       className="min-w-0 flex-1 sm:w-40 sm:flex-none pl-2 pr-2 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5"
                     />
                   </div>
@@ -484,7 +490,7 @@ export default function ClaudeToolCard({
                       onClick={handleSaveProfile}
                       disabled={!hasActiveProviders}
                       className="rounded border border-border bg-surface px-2 py-2 text-xs transition-colors sm:py-1.5 hover:border-primary disabled:opacity-50"
-                      title={effectiveProfile ? "Update the selected profile with the current form" : "Save the current settings as a profile"}
+                      title={effectiveProfile ? translate("Update the selected profile with the current form") : translate("Save the current settings as a profile")}
                     >
                       <span className="material-symbols-outlined text-[14px] align-middle">{effectiveProfile ? "sync" : "save"}</span>
                     </button>
@@ -492,7 +498,7 @@ export default function ClaudeToolCard({
                       <button
                         onClick={handleDeleteProfile}
                         className="rounded border border-border bg-surface px-2 py-2 text-xs transition-colors sm:py-1.5 hover:border-red-500 hover:text-red-500"
-                        title="Delete the selected profile"
+                        title={translate("Delete the selected profile")}
                       >
                         <span className="material-symbols-outlined text-[14px] align-middle">delete</span>
                       </button>
