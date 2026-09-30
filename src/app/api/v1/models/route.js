@@ -27,7 +27,7 @@ import { resolveCursorModels } from "open-sse/services/cursorModels.js";
 import { resolveZedModels } from "open-sse/shared/zedAuth.js";
 import { updateProviderCredentials } from "@/sse/services/tokenRefresh";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
-import { capabilitiesFromServiceKind, getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
+import { capabilitiesFromServiceKind, getCapabilitiesForModel, aggregateComboCapabilities } from "open-sse/providers/capabilities.js";
 
 // Per-provider live model resolvers. Each receives a connection record and
 // returns { models: [{ id, name? }, ...] } | null on failure.
@@ -453,6 +453,9 @@ export async function buildModelsList(kindFilter, options = {}) {
     return tagged.map((t) => t.model);
   };
 
+  // Lookup map so aggregateComboCapabilities can recursively resolve nested combos
+  const comboByName = Object.fromEntries(combos.map((c) => [c.name, c.models]));
+
   // Combos first (filtered by kind). Web combos expose `kind` so AI knows search vs fetch.
   for (const combo of combos) {
     if (!comboMatchesKinds(combo, kindFilter)) continue;
@@ -463,6 +466,11 @@ export async function buildModelsList(kindFilter, options = {}) {
     };
     if (combo.kind === "webSearch" || combo.kind === "webFetch") {
       entry.kind = combo.kind;
+    } else {
+      // LLM combos carry the aggregate of their members: union of modalities,
+      // intersection of tools, min context / max output (combo-caps contract).
+      const comboCaps = aggregateComboCapabilities(combo.models, comboByName);
+      if (comboCaps) entry.capabilities = comboCaps;
     }
     emit(entry, COMBO_RANK);
   }
@@ -489,6 +497,7 @@ export async function buildModelsList(kindFilter, options = {}) {
             id: `${alias}/${model.id}`,
             object: "model",
             owned_by: alias,
+            capabilities: getCapabilitiesForModel(alias, model.id),
           }, rankOf(providerId));
         }
       }
