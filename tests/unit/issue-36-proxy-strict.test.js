@@ -39,6 +39,16 @@ describe("Issue #36: Proxy URL validation and strictProxy propagation", () => {
       expect(proxyPoolUrlError("ftp://1.2.3.4:21")).toContain("protocol must be one of");
       expect(proxyPoolUrlError("javascript:alert(1)")).toContain("protocol must be one of");
     });
+
+    it("accepts the scheme-less forms the runtime normalizes to http", () => {
+      // normalizeProxyUrl prefixes http:// on anything without a scheme, so a
+      // credentialed "user:pass@host:8080" (the "word:" before @ is userinfo,
+      // not a scheme) must pass save-time exactly as it would run.
+      expect(proxyPoolUrlError("user:pass@host:8080")).toBeNull();
+      expect(proxyPoolUrlError("user:pass@10.0.0.1")).toBeNull();
+      expect(proxyPoolUrlError("127.0.0.1:7890")).toBeNull();
+      expect(proxyPoolUrlError("localhost:7890")).toBeNull();
+    });
   });
 
   describe("resolveConnectionProxyConfig with strictProxy and unwrapProxyUrl", () => {

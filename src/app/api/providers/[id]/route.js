@@ -26,7 +26,9 @@ function normalizeProxyConfig(body = {}) {
     };
   }
 
-  if (url) {
+  // Only an enabled proxy is validated: a stale stored URL must never block
+  // the user from switching the proxy off.
+  if (enabled && url) {
     const urlError = proxyPoolUrlError(url);
     if (urlError) {
       return { hasAnyProxyField: true, error: urlError };

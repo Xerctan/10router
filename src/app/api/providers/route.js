@@ -22,7 +22,9 @@ function normalizeProxyConfig(body = {}) {
     return { error: "Connection proxy URL is required when connection proxy is enabled" };
   }
 
-  if (url) {
+  // Only an enabled proxy is validated: a stale stored URL must never block
+  // the user from switching the proxy off.
+  if (enabled && url) {
     const urlError = proxyPoolUrlError(url);
     if (urlError) {
       return { error: urlError };

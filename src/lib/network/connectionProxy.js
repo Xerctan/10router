@@ -17,8 +17,12 @@ function unwrapProxyUrl(rawUrl) {
   if (isEncrypted(s)) {
     try {
       return normalizeString(decryptSecret(s));
-    } catch {
-      return "";
+    } catch (err) {
+      // Keep the ciphertext rather than "": an empty URL reads as "no proxy
+      // configured" and would silently route a strictProxy pool DIRECT. The
+      // unusable value fails at dispatch instead, where strictProxy refuses.
+      console.warn(`[ConnectionProxy] Could not decrypt proxy URL: ${err?.message || err}`);
+      return s;
     }
   }
   return s;

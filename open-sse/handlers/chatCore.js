@@ -502,7 +502,12 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       const retryAfterMs = resetsAtMs ? Math.max(0, resetsAtMs - Date.now()) : null;
       return createErrorResult(statusCode, formatFreeRateLimitMessage(provider, model, retryAfterMs), resetsAtMs, upstreamResponseHeaders(providerResponse.headers));
     }
-    return createErrorResult(statusCode, finalErrMsg, resetsAtMs, upstreamResponseHeaders(providerResponse.headers));
+    // The API caller only learns THAT the proxy was bypassed: the raw dispatcher
+    // error carries the proxy's host:port, which stays in the local logs above.
+    const clientErrMsg = proxyFallbackWarning
+      ? `${errMsg} [Note: proxy failed; fell back to direct connection]`
+      : errMsg;
+    return createErrorResult(statusCode, clientErrMsg, resetsAtMs, upstreamResponseHeaders(providerResponse.headers));
   }
 
   // The client asked the model to halt at a stop sequence. Some upstreams accept

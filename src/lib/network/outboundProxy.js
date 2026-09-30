@@ -31,7 +31,31 @@ export function proxyPoolUrlError(url) {
   if (s.startsWith("enc://")) {
     return "enc:// is not a supported proxy protocol. This project stores credentials with enc:v1:, not enc://.";
   }
-  if (!validateProxyUrl(s)) {
+  // Save-time must accept exactly what the runtime accepts
+  // (open-sse/utils/proxyFetch.js normalizeProxyUrl): a value without a
+  // "scheme://" prefix is implied http — a bare "127.0.0.1:7890" AND the
+  // "user:pass@host:8080" shortcut alike (the "word:" before the "@" is
+  // credentials, not a scheme), and a `$` in a password is legal.
+  // validateProxyUrl is stricter — it guards values exported into the process
+  // env — so it is not reused here.
+  if (/[\r\n]/.test(s)) return "Invalid proxy URL: must be a single line";
+  const hasSchemePrefix = /^[a-z][a-z0-9+.-]*:\/\//i.test(s);
+  // Anything else with a "word:" prefix is a scheme and is judged as one
+  // (javascript:alert(1)) — except when that "word:" sits before an "@",
+  // where it is userinfo.
+  const bareHost = hasSchemePrefix
+    ? false
+    : s.includes("@")
+      ? /^[^@\s]+@[^:/@\s]+(?::\d+)?(\/.*)?$/.test(s)
+      : (!s.includes(":") || /^[^:/@\s]+:\d+(\/.*)?$/.test(s));
+  const withScheme = bareHost ? `http://${s}` : s;
+  let parsed;
+  try {
+    parsed = new URL(withScheme);
+  } catch {
+    return "Invalid proxy URL";
+  }
+  if (!ALLOWED_PROXY_SCHEMES.includes(parsed.protocol)) {
     return `Invalid proxy URL: protocol must be one of ${ALLOWED_PROXY_SCHEMES.join(", ")}`;
   }
   return null;

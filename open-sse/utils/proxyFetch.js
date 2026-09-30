@@ -190,14 +190,11 @@ function normalizeProxyUrl(proxyUrl) {
   const normalizedInput = normalizeString(proxyUrl);
   if (!normalizedInput) return null;
 
-  try {
-
-    new URL(normalizedInput);
-    return normalizedInput;
-  } catch {
-    // Allow "127.0.0.1:7890" style values
-    return `http://${normalizedInput}`;
-  }
+  // Allow "127.0.0.1:7890" / "localhost:7890" style values. A scheme test, not
+  // `new URL()`: "localhost:7890" parses as the scheme "localhost:".
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(normalizedInput)
+    ? normalizedInput
+    : `http://${normalizedInput}`;
 }
 
 function resolveConnectionProxyUrl(targetUrl, proxyOptions) {
@@ -335,6 +332,9 @@ export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
     } catch (error) {
       console.warn(`[ProxyFetch] MITM bypass failed: ${error.message}`);
     }
+    // The proxy already failed (and was reported) above — go direct rather than
+    // retrying it and firing onProxyFallback a second time.
+    if (proxyUrl) return originalFetch(url, options);
   }
 
   if (proxyUrl) {
