@@ -55,7 +55,9 @@ const NON_CHAT = /embed|bge-|e5-|gte-|nomic|m2-bert|voyage|rerank|tts|speech|voi
 // Providers that only resell media endpoints.
 const MEDIA_ONLY = new Set(["cloudflare-ai", "fal-ai", "stability-ai", "black-forest-labs", "runwayml", "comfyui", "sdwebui", "recraft", "agnes-ai", "agnes-ai-cn", "topaz", "selfhosted-stt", "selfhosted-tts", "selfhosted-embedding", "voyage-ai", "assemblyai", "deepgram", "elevenlabs", "aws-polly", "cartesia", "playht", "inworld", "coqui", "tortoise", "fish-audio", "google-tts", "edge-tts"]);
 
-export const MEDIA_KIND = new Set(["image", "video", "embedding", "tts", "stt", "audio"]);
+// "systemone" = Jev decision models (native /v1/systemone JSON, no chat layer —
+// a vision/context contract would be meaningless for them).
+export const MEDIA_KIND = new Set(["image", "video", "embedding", "tts", "stt", "audio", "systemone"]);
 export const ALL_MODELS = REGISTRY.flatMap((entry) =>
   (entry.models || [])
     .map((m) => (typeof m === "string" ? { id: m } : m))

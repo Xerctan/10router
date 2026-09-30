@@ -1,8 +1,8 @@
 // Free OpenCode models that don't use the "-free" id suffix
 const KNOWN_FREE_OPENCODE_MODELS = ["big-pickle"];
 // Known dead or broken upstream models returned by OpenCode's /zen/v1/models endpoint
+// (jev-1.13-free now rides the System One lane and is allowed through)
 const UNSUPPORTED_OPENCODE_FREE_MODELS = new Set([
-  "jev-1.13-free",
   "deepseek-v4-flash-free",
 ]);
 
