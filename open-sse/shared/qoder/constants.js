@@ -28,6 +28,11 @@ export const QODER_REFRESH_TOKEN_URL = `${QODER_CENTER_BASE}/algo/api/v3/user/re
 // This endpoint is NOT COSY-signed (plain JSON POST).
 export const QODER_JOB_TOKEN_EXCHANGE_URL = `${QODER_OPENAPI_BASE}/api/v1/jobToken/exchange`;
 
+// Web console (browser session) — the per-resource-pack usage breakdown is only
+// served here, and only to the browser's httpOnly session cookie (device/job
+// tokens get 401). CreditDaddy syncs captured cookies via providerSpecificData.
+export const QODER_WEB_BASE = "https://qoder.com";
+
 // ─── Qoder CN (qoder.com.cn deployment, from qodercli-cn v1.1.32) ──
 export const QODER_CN_GATEWAY_BASE = "https://gateway.qoder.com.cn";
 export const QODER_CN_OPENAPI_BASE = "https://openapi.qoder.com.cn";
@@ -36,6 +41,7 @@ export const QODER_CN_DEVICE_TOKEN_URL = `${QODER_CN_OPENAPI_BASE}/api/v1/device
 export const QODER_CN_USERINFO_URL = `${QODER_CN_OPENAPI_BASE}/api/v1/userinfo`;
 export const QODER_CN_QUOTA_USAGE_URL = `${QODER_CN_OPENAPI_BASE}/api/v2/quota/usage`;
 export const QODER_CN_JOB_TOKEN_EXCHANGE_URL = `${QODER_CN_OPENAPI_BASE}/api/v1/jobToken/exchange`;
+export const QODER_CN_WEB_BASE = "https://qoder.cn";
 export const QODER_CN_CHAT_BASE_ALT = QODER_CN_GATEWAY_BASE;
 export const QODER_CN_MODEL_LIST_URL = `${QODER_CN_GATEWAY_BASE}/algo/api/v2/model/list`;
 

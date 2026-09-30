@@ -7,6 +7,8 @@ import { U } from "./shared.js";
 import {
   QODER_OPENAPI_BASE,
   QODER_CN_OPENAPI_BASE,
+  QODER_WEB_BASE,
+  QODER_CN_WEB_BASE,
 } from "../../shared/qoder/constants.js";
 
 // GLM quota endpoints (region-aware) — url from registry transport.usage
@@ -323,7 +325,59 @@ export function buildQoderAddOnPacks({ campaigns = [], used = 0, total = 0, now 
   return { packs, resetAt: packs.length > 0 ? packs[0].expiresAt || null : null };
 }
 
-export async function getQoderUsage(accessToken, proxyOptions = null, providerId = "qoder") {
+/**
+ * Per-resource-pack breakdown from the Qoder WEB console
+ * (GET {web}/api/v2/me/usages/big_model_credits).
+ *
+ * The openapi quota endpoint only exposes the aggregate addOnQuota; the web
+ * console is the sole source of per-pack totals with real per-pack expiry, and
+ * it accepts ONLY the browser's httpOnly session cookie (device/job tokens get
+ * 401). CreditDaddy captures that cookie in its login window and ships it to
+ * 10Router inside providerSpecificData.creditDaddyWebSession on account sync.
+ *
+ * Returns { packs, resetAt, sourceUserId } or null (no cookie / call failed /
+ * response shape changed) so callers fall back to the campaign approximation.
+ */
+export async function fetchQoderWebPacks(cookie, providerId = "qoder", proxyOptions = null) {
+  if (!cookie || typeof cookie !== "string") return null;
+  try {
+    const webBase = providerId === "qoder-cn" ? QODER_CN_WEB_BASE : QODER_WEB_BASE;
+    const res = await proxyAwareFetch(
+      `${webBase}/api/v2/me/usages/big_model_credits`,
+      {
+        method: "GET",
+        headers: {
+          Cookie: cookie,
+          Accept: "application/json",
+          Referer: `${webBase}/account/usage`,
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+      },
+      proxyOptions,
+    );
+    if (!res.ok) return null;
+    const body = await res.json().catch(() => null);
+    if (!body || !body.user_id) return null;
+    const rows = body.resource_package_quota?.quota_detail;
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const packs = rows
+      .map((r) => ({
+        total: Number(r?.limit_value) || 0,
+        used: Number(r?.used_value) || 0,
+        remaining: Number(r?.remaining_value) || 0,
+        expiresAt: Number(r?.expires_at) > 0 ? new Date(Number(r.expires_at)).toISOString() : null,
+        source: r?.source || null,
+      }))
+      .filter((p) => p.total > 0)
+      .sort((a, b) => (a.expiresAt || "9999").localeCompare(b.expiresAt || "9999"));
+    if (!packs.length) return null;
+    return { packs, resetAt: packs[0].expiresAt || null, sourceUserId: body.user_id };
+  } catch {
+    return null;
+  }
+}
+
+export async function getQoderUsage(accessToken, proxyOptions = null, providerId = "qoder", providerSpecificData = null) {
   if (!accessToken) {
     return { message: "Qoder usage unavailable: no access token" };
   }
@@ -373,7 +427,20 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
     // fall back to the aggregate-only view.
     let addOnResetAt = null;
     let addOnPacks = [];
-    try {
+    // Preferred: the web console's real per-pack list, when a synced session
+    // exists and belongs to this same account (userId cross-check guards
+    // against a stale/mismatched cookie attributing someone else's packs).
+    const webSession = providerSpecificData?.creditDaddyWebSession;
+    if (webSession?.cookie) {
+      const web = await fetchQoderWebPacks(webSession.cookie, providerId, proxyOptions);
+      const owner = providerSpecificData?.userId || null;
+      if (web && (!owner || !web.sourceUserId || owner === web.sourceUserId)) {
+        addOnPacks = web.packs;
+        addOnResetAt = web.resetAt;
+      }
+    }
+    const hasWebPacks = addOnPacks.length > 0;
+    if (!hasWebPacks) try {
       const campBase = providerId === "qoder-cn" ? QODER_CN_OPENAPI_BASE : QODER_OPENAPI_BASE;
       const campUrl = `${campBase}/sash/api/v1/me/campaigns?clientType=10`;
       const campRes = await proxyAwareFetch(
