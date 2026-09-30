@@ -5,20 +5,21 @@
 import { getCapabilitiesForModel } from "../../providers/capabilities.js";
 import { getThinkingLevels } from "../../providers/thinkingLevels.js";
 import { PROVIDERS } from "../../providers/index.js";
+import { FORMATS } from "../formats.js";
 import { LEVEL_TO_BUDGET, budgetToLevel, effortToBudget, effortToThinkingLevel } from "./thinking.js";
 
 // Map a target wire-format to its native thinking format (when capability has none).
 const FORMAT_TO_NATIVE = {
-  openai: "openai",
-  "openai-responses": "openai",
-  "openai-response": "openai",
-  codex: "openai",
-  claude: "claude-budget",
-  gemini: "gemini-budget",
-  "gemini-cli": "gemini-budget",
-  vertex: "gemini-budget",
-  antigravity: "gemini-budget",
-  kiro: "kiro",
+  [FORMATS.OPENAI]: "openai",
+  [FORMATS.OPENAI_RESPONSES]: "openai",
+  [FORMATS.OPENAI_RESPONSE]: "openai",
+  [FORMATS.CODEX]: "openai",
+  [FORMATS.CLAUDE]: "claude-budget",
+  [FORMATS.GEMINI]: "gemini-budget",
+  [FORMATS.GEMINI_CLI]: "gemini-budget",
+  [FORMATS.VERTEX]: "gemini-budget",
+  [FORMATS.ANTIGRAVITY]: "gemini-budget",
+  [FORMATS.KIRO]: "kiro",
 };
 
 // Strip a trailing thinking suffix "model(value)" → "model" (no-op when absent).
@@ -238,8 +239,8 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, targetFormat = null,
       // codex provider: its executor owns the final conversion
       // (normalizeReasoningEffort + reasoning.summary re-attachment) and feeds
       // on reasoning_effort.
-      const responsesFamily = (targetFormat === "openai-responses" ||
-        targetFormat === "openai-response") && provider !== "codex";
+      const responsesFamily = (targetFormat === FORMATS.OPENAI_RESPONSES ||
+        targetFormat === FORMATS.OPENAI_RESPONSE) && provider !== "codex";
       const setEffort = (v) => {
         if (responsesFamily) body.reasoning = { ...(body.reasoning || {}), effort: v };
         else body.reasoning_effort = v;

@@ -252,6 +252,20 @@ describe("non-stream Responses upstream for a Chat client (opencode-go responses
     expect(out.choices[0].finish_reason).toBe("length");
   });
 
+  it("maps incomplete (content_filter) to finish_reason content_filter, not length", () => {
+    // As "length" a safety stop reads as a small output budget and clients
+    // respond by raising max_tokens — the refusal must surface as its own kind.
+    const body = {
+      ...RESPONSES_BODY,
+      status: "incomplete",
+      incomplete_details: { reason: "content_filter" },
+      output: [{ id: "rs_1", type: "reasoning", content: [], summary: [] }],
+      usage: { input_tokens: 10, output_tokens: 0, total_tokens: 10 },
+    };
+    const out = translateNonStreamingResponse(body, FORMATS.OPENAI_RESPONSES, FORMATS.OPENAI);
+    expect(out.choices[0].finish_reason).toBe("content_filter");
+  });
+
   it("passes non-`response` bodies through untouched (safety)", () => {
     const chatBody = { object: "chat.completion", choices: [] };
     const out = translateNonStreamingResponse(chatBody, FORMATS.OPENAI_RESPONSES, FORMATS.OPENAI);

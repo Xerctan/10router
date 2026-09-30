@@ -130,6 +130,18 @@ function responsesCompletionToOpenAICompletion(responseBody) {
   const responseDone = responseBody.status === "completed" || responseBody.status === "done";
   const message = { role: "assistant", content: textContent || (hasToolCalls ? null : "") };
   if (hasToolCalls) message.tool_calls = toolCalls;
+  // Responses reports WHY it stopped in incomplete_details.reason; Chat
+  // Completions has one slot for it. "max_output_tokens" (the common case)
+  // and any unknown reason map to "length", but a safety stop must surface as
+  // "content_filter" — as "length" it reads as a small output budget, and
+  // clients respond by raising max_tokens or compacting instead of showing
+  // the refusal.
+  const incompleteReason = responseBody.incomplete_details?.reason;
+  const finishReason = hasToolCalls
+    ? "tool_calls"
+    : incomplete
+      ? (incompleteReason === "content_filter" ? "content_filter" : "length")
+      : (responseDone ? "stop" : (responseBody.status || "stop"));
   const result = {
     id: responseBody.id || `chatcmpl-${Date.now()}`,
     object: "chat.completion",
@@ -138,7 +150,7 @@ function responsesCompletionToOpenAICompletion(responseBody) {
     choices: [{
       index: 0,
       message,
-      finish_reason: hasToolCalls ? "tool_calls" : (incomplete ? "length" : (responseDone ? "stop" : (responseBody.status || "stop"))),
+      finish_reason: finishReason,
     }],
     usage: { prompt_tokens: inTokens, completion_tokens: outTokens, total_tokens: inTokens + outTokens },
   };
