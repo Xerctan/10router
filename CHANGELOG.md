@@ -13,6 +13,8 @@
   - 配套改动：`handlers/search/callers.js` 两个 request builder + `handlers/search/normalizers.js` 两个归一（Keenable `description`→`snippet`、`snippet`→`content.text`；两家非数组 payload 统一回 `{results: [], totalResults: null}`，与既有归一的降级口径一致）；`handlers/fetch/index.js` 两个 runner（上游地址读 `providerConfig.baseUrl`，配置驱动不写死）；`registry/index.js` 追加 `p144/p145`。
   - 用例 `tests/unit/tinyfish-keenable-wiring.test.js`（25 例）：注册契约与前端双 kind 浮现、两个 builder 的字段映射与边界（无 key 报错、单域名 site、mode 越界忽略、0 基分页）、归一与降级、fetch 分派用 stub `globalThis.fetch` 打桩校验 method/auth 头/body、`live=true` 与 `max_chars` 透传、per-URL 错误透出。lint 0 error（3 条 warning 与 `tavily.js` 等既有注册表文件同款匿名默认导出提示），三项 registry 基线（providers/alias/oauth-urls）与 `audit-capabilities` 全部 PASS。
 
+- **新增 System One 决策供应商 Drex（TypeSafe/Jev 线协议兼容）**：nace.ai 的决策模型（drex.nace.ai），官方文档自述 wire-compatible with TypeSafe's Jev——直接复用 `/v1/systemone` 决策 lane，零翻译层（state + noul/choice/score typed questions → 校准概率分布 + confidence），Bearer `nace_sk_` key 由 systemoneCore 注入。模型面按 2026-10-01 实测 GET /v1/models 收录 drex-v1.0 / v1.1 / v1.5（state 上限 131,072 tokens）/ drex-latest；与 search 系供应商同口径：无 chat transport（media-only 先例），API 仅 evaluate + list models 两个端点、无额度接口，不挂 usage 卡。取 key 链接 `dashboard/api-keys`；官方立方体 logo 生成 `public/providers/drex.png`（白色圆角底，深浅色主题通吃）。用例 `tests/unit/drex-wiring.test.js` 4 例，providers/alias 基线重快照（alias 探针 +drex）。
+
 ### 🐛 修复
 
 - **虚拟 key 可远程写自定义 provider（#38）**：`POST /api/providers` 与 `/api/provider-nodes` 的虚拟 key 例外此前嵌在 `ALWAYS_PROTECTED` 分支内，而这两个路径不在该列表里，例外永不匹配，远程带有效虚拟 key 一律 401（CreditDaddy 同步账号通道）。例外提到该判断之外；`[id]` 上的 list/update/delete 仍受保护。`tests/unit/dashboard-guard-provider-write.test.js` 覆盖远程放行与 `[id]` 仍 401。

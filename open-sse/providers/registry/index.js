@@ -142,6 +142,7 @@ import p142 from "./longcat-intl.js";
 import p143 from "./zcode-free.js";
 import p144 from "./keenable.js";
 import p145 from "./tinyfish.js";
+import p146 from "./drex.js";
 
 export default [
   p0,
@@ -285,4 +286,5 @@ export default [
   p143,
   p144,
   p145,
+  p146,
 ];
