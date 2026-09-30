@@ -209,19 +209,23 @@ describe("Qoder unpacked-remainder row rendering", () => {
     },
   };
 
-  it("does NOT re-emit addOn packs — they are already summed into the aggregate", () => {
-    // Regression: emitting `addOn` AND its `packs[]` double-counted the same
+  it("emits addOn packs detail-only — the card charts just the aggregate", () => {
+    // Regression: charting `addOn` AND its `packs[]` double-counted the same
     // credits (the card showed both "Resource Package 700/800" and the
     // "Bonus Pack 1 / 2 / (unitemized)" rows that make up that 800). The packs
-    // are a BREAKDOWN of addOn.total, not siblings of it, so they are no longer
-    // emitted — the per-pack table reads them off the raw payload instead.
+    // are a BREAKDOWN of addOn.total, not siblings of it: they are flagged
+    // `detailOnly`, which QuotaPackBar skips and the per-pack table lists.
     const parsed = parseQuotaData("qoder", rawWithRemainder);
     // `user` is a zero-total bucket in this fixture, so it is hidden.
-    expect(parsed.map((q) => q.name)).toEqual(["Resource Package"]);
+    expect(parsed.filter((q) => !q.detailOnly).map((q) => q.name)).toEqual(["Resource Package"]);
     const aggregate = parsed.find((q) => q.name === "Resource Package");
     expect(aggregate.total).toBe(700); // 500 + 100 + 100
     expect(aggregate.aggregate).toBe(true);
-    expect(parsed.filter((q) => q.name.startsWith("Bonus Pack"))).toEqual([]);
+
+    const packs = parsed.filter((q) => q.detailOnly);
+    expect(packs.map((q) => q.name)).toEqual(["Bonus Pack 1", "Bonus Pack 2", "Bonus Pack (unitemized)"]);
+    expect(packs[2].resetAt).toBeNull(); // nothing to count down to
+    expect(packs.reduce((sum, q) => sum + q.total, 0)).toBe(700);
   });
 
   it("keeps the pack labels translated for the per-pack table", () => {

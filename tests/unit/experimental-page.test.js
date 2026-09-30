@@ -21,6 +21,8 @@ const PROFILE = "src/app/(dashboard)/dashboard/profile/page.js";
 const TOKEN_SAVER = "src/app/(dashboard)/dashboard/token-saver/TokenSaverClient.js";
 const EXPERIMENTAL = "src/app/(dashboard)/dashboard/experimental/ExperimentalClient.js";
 const QUOTA_PAGE_LIMITS = "src/app/(dashboard)/dashboard/usage/components/ProviderLimits/index.js";
+// The toolbar was extracted from index.js into its own component.
+const QUOTA_TOOLBAR = "src/app/(dashboard)/dashboard/usage/components/ProviderLimits/QuotaToolbar.js";
 const SIDEBAR = "src/shared/components/Sidebar.js";
 const HEADER = "src/shared/components/Header.js";
 const NEW_DESCRIPTION = "Beta toggles for provider tools, daily check-ins, and dashboard security";
@@ -128,57 +130,19 @@ describe("settings reorganisation", () => {
     expect(src).not.toContain("setHideNoQuota");
   });
 
-  it("drives the bulk row filter through the SAME hidden list the per-row button writes", () => {
+  it("removes Only with balance bulk button and keeps per-row hide and Hidden chips", () => {
     const src = read(QUOTA_PAGE_LIMITS);
-    // "Only with balance" must not be its own render-time filter. Implementing it
-    // that way (an independent `hideDepleted` boolean) dropped rows with no
-    // "Hidden:" chips to explain them and no way to restore one by name — the
-    // state and the screen disagreed, and the manual per-row hide no longer had
-    // any visible relationship to the bulk control. Both must go through
-    // `quotaVisibility.hidden`, so a row hidden either way shows up as a chip and
-    // can be brought back individually.
-    expect(src).toContain("const handleHideDepletedQuotas = useCallback(");
+    // Commit 57711f3a removed "Only with balance" bulk button and handleHideDepletedQuotas
+    // per user design decision (details collapsed, balance filter noise).
+    // The per-row hide button and "Hidden:" chips remain for manual curation.
+    expect(src).not.toContain("handleHideDepletedQuotas");
+    expect(src).not.toContain('translate("Only with balance")');
     expect(src).toContain("const handleShowAllQuotas = useCallback(");
-    // The bulk paths funnel into the same updater the per-row handlers use.
     expect(src).toContain("applyVisibilityToConnections");
     expect(src).toContain("setQuotaVisibility((current) => {");
-    // "Only with balance" computes its list with the shared helper rather than
-    // filtering the rendered rows itself.
-    expect(src).toMatch(
-      /handleHideDepletedQuotas[\s\S]{0,400}computeDepletedHiddenKeys/,
-    );
-    // The separate boolean, and the parallel render-time filter it fed, are gone.
     expect(src).not.toContain("setHideDepleted");
     expect(src).not.toContain("quotaHideDepleted");
     expect(src).not.toMatch(/if \(hideDepleted\) \{/);
-  });
-
-  it("pairs each bulk row-filter button's icon with its own label", () => {
-    const src = read(QUOTA_PAGE_LIMITS);
-    // Two buttons, not one flip control. Each icon must read as the action its
-    // label names, matching the sibling convention (block/Turn off Empty,
-    // check_circle/Turn on Available): "Only with balance" hides rows so it takes
-    // the struck-through eye, "Show all" takes the open one — the same glyph the
-    // "Hidden:" chip row uses for hidden rows.
-    expect(src).toMatch(
-      /onClick=\{handleHideDepletedQuotas\}[\s\S]{0,400}visibility_off[\s\S]{0,200}translate\("Only with balance"\)/,
-    );
-    expect(src).toMatch(
-      /onClick=\{handleShowAllQuotas\}[\s\S]{0,400}material-symbols-outlined[\s\S]{0,200}\bvisibility\b[\s\S]{0,200}translate\("Show all"\)/,
-    );
-  });
-
-  it("declares the bulk row-filter handlers after the sortedConnections memo they read", () => {
-    const src = read(QUOTA_PAGE_LIMITS);
-    // These read `sortedConnections`. Declaring them above that memo is a
-    // temporal-dead-zone ReferenceError — and it only surfaces at prerender, so
-    // `next build` fails while lint and the unit suite stay green.
-    const sorted = src.indexOf("const sortedConnections = useMemo(");
-    const hideDepleted = src.indexOf("const handleHideDepletedQuotas = useCallback(");
-    const showAll = src.indexOf("const handleShowAllQuotas = useCallback(");
-    expect(sorted).toBeGreaterThan(-1);
-    expect(hideDepleted).toBeGreaterThan(sorted);
-    expect(showAll).toBeGreaterThan(sorted);
   });
 
   it("explains an empty card body instead of collapsing to a bare chip row", () => {
@@ -252,7 +216,7 @@ describe("settings reorganisation", () => {
   });
 
   it("keeps the quota toolbar readable: translated tooltips + a visible refresh label", () => {
-    const src = read(QUOTA_PAGE_LIMITS);
+    const src = read(QUOTA_TOOLBAR);
     // The runtime i18n walker only translates text nodes, never `title`
     // attributes — so an icon-only toolbar button with a raw English `title`
     // shows English on hover for every non-English locale. Every toolbar
@@ -264,6 +228,67 @@ describe("settings reorganisation", () => {
     expect(src).not.toMatch(/title="Disable auto-refresh"/);
     // The auto-refresh button keeps a visible label, not a bare icon.
     expect(src).toContain('{translate("Auto-refresh")}');
+    // The reset-sort toggle is the exception: icon-only, because its label
+    // wrapped the whole toolbar onto a second row. The tooltip names the sort
+    // key (reset OR expiry — one-shot packs carry their expiry in resetAt) and
+    // aria-label keeps an accessible name on the bare button.
+    expect(src).toMatch(/title=\{translate\("Sort accounts by earliest reset or expiry time"\)\}/);
+    expect(src).toMatch(/aria-label=\{translate\("Resets first"\)\}/);
+    expect(src).not.toContain('hidden sm:inline">{translate("Resets first")}');
+  });
+
+  it("keeps the filter row on one line as the toolbar runs out of width", () => {
+    const src = read(QUOTA_TOOLBAR);
+    // The measured failure: the toolbar is 1046px wide in a 1400px window
+    // (the sidebar eats ~300px and can also collapse), but one row with every
+    // label needs 1108px — so the action group wrapped onto a second line.
+    // The collapse ladder must measure the toolbar itself (`@container` +
+    // `@min-[…]`), never the viewport: viewport breakpoints fire at the wrong
+    // width whenever the sidebar state changes.
+    expect(src).toMatch(/className="[^"]*@container/);
+    // Width math (px, from the live DOM): filters 664 (tabs 224 + provider 153
+    // + status radios 231 + sort 32 + gaps 24) + min gap 8 + actions 436
+    // (count 71 + bulk 151 + auto-refresh 158 + refresh 32 + gaps 24) = 1108.
+    // Each tier below drops one label and re-checks the sum, +20px of margin:
+    //   −count (71)                  → 1037  ⇒ hide below 1130
+    //   −bulk label (81)             →  956  ⇒ hide below 1060
+    //   −auto-refresh label (80)     →  876  ⇒ hide below  980
+    //   −tab labels (144)            →  732  ⇒ hide below  900
+    expect(src).toContain("hidden text-xs tabular-nums text-text-muted @min-[1130px]:inline");
+    expect(src).toContain('hidden @min-[1060px]:inline">{translate("Bulk actions")}');
+    expect(src).toContain('hidden @min-[980px]:inline">{translate("Auto-refresh")}');
+    expect(src).toContain('hidden @min-[900px]:inline">{tab.label}');
+    // Viewport breakpoints would reintroduce the wrap at the wrong widths.
+    expect(src).not.toContain('text-text-muted md:inline');
+    expect(src).not.toContain('hidden sm:inline">{translate("Bulk actions")}');
+    expect(src).not.toContain('hidden sm:inline">{translate("Auto-refresh")}');
+    // A label hidden by `display:none` also leaves the accessibility tree, so
+    // the tab and bulk buttons carry their names on the button itself.
+    expect(src).toContain("aria-label={tab.label}");
+    expect(src).toMatch(/aria-label=\{translate\("Bulk actions"\)\}/);
+  });
+
+  it("gives a phone exactly two tidy rows instead of three ragged ones", () => {
+    const src = read(QUOTA_TOOLBAR);
+    // DevTools iPhone emulation put every control on its own line: the
+    // filters (provider 153 + status radios 231) can never share a ~358px
+    // line with anything else. So below 640px of the bar the filter group
+    // becomes a full-width SECOND row — ordered after the view tabs and the
+    // actions, which share the first row. Two rows, deterministically.
+    expect(src).toContain("@max-[640px]:order-last @max-[640px]:w-full");
+    expect(src).toContain("@max-[640px]:order-2");
+    // No overflow-x scrolling on the strip: the provider menu pops over the
+    // cards below and would be clipped by a scroll container.
+    expect(src).not.toMatch(/overflow-x-auto|overflow-x-scroll/);
+    // The status radios go icon-only at phone width (same glyph language as
+    // the bulk menu) — but `display:none` drops the label from the
+    // accessibility tree, so the button carries the label as its name.
+    expect(src).toContain("const ACCOUNT_FILTER_ICONS = { all: \"apps\", active: \"check_circle\", inactive: \"block\" };");
+    expect(src).toContain("aria-label={translate(option.label)}");
+    expect(src).toContain('hidden text-[14px] @max-[640px]:inline');
+    expect(src).toContain('@max-[640px]:hidden">{translate(option.label)}');
+    // The provider label truncates harder on a phone instead of wrapping.
+    expect(src).toContain("@max-[640px]:max-w-[5rem]");
   });
 
   it("has both Chinese dictionaries for every string the move introduced", () => {
@@ -282,6 +307,9 @@ describe("settings reorganisation", () => {
       expect(dict["Refresh all"]).toBeTruthy();
       expect(dict["Disable auto-refresh"]).toBeTruthy();
       expect(dict["Enable auto-refresh"]).toBeTruthy();
+      // Icon-only sort toggle: tooltip + accessible name.
+      expect(dict["Sort accounts by earliest reset or expiry time"]).toBeTruthy();
+      expect(dict["Resets first"]).toBeTruthy();
       expect(dict["Show all quota packs across current connections"]).toBeTruthy();
       expect(dict["Hide depleted (zero-balance) quota packs across current connections"]).toBeTruthy();
       // Empty-body explanation (a card whose rows are all hidden). The chips

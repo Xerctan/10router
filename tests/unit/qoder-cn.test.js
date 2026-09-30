@@ -120,10 +120,10 @@ describe("qoder and qoder-cn quota normalization", () => {
     expect(intlNormalized[0].total).toBe(100);
   });
 
-  it("keeps addOn as ONE aggregate row — packs are its breakdown, not siblings", () => {
-    // Regression: emitting addOn AND its packs[] double-counted the same credits
+  it("charts addOn as ONE aggregate row — packs are detail-only breakdown", () => {
+    // Regression: charting addOn AND its packs[] double-counted the same credits
     // (500 + 100 inside a 600 total). The card charts the aggregate only; the
-    // per-pack table reads the packs off the raw payload.
+    // packs ride along `detailOnly` so the per-pack table keeps their dates.
     const raw = {
       quotas: {
         user: { total: 0, used: 0, remaining: 0, unit: "credits" },
@@ -143,14 +143,23 @@ describe("qoder and qoder-cn quota normalization", () => {
     };
 
     const normalized = parseQuotaData("qoder-cn", raw);
-    expect(normalized.map((q) => q.name)).toEqual(["Resource Package"]);
+    const charted = normalized.filter((q) => !q.detailOnly);
+    expect(charted.map((q) => q.name)).toEqual(["Resource Package"]);
     expect(normalized[0].total).toBe(600);
     expect(normalized[0].used).toBe(100);
     // Mixed per-pack expiries → no single countdown on the aggregate (matches
     // the official web UI); the dates live in the per-pack table.
     expect(normalized[0].resetAt).toBe(null);
     expect(normalized[0].aggregate).toBe(true);
-    expect(normalized.filter((q) => q.name.startsWith("Bonus Pack"))).toEqual([]);
+    // Its packs are itemised below, so the details list them instead of it.
+    expect(normalized[0].summarizesDetail).toBe(true);
+
+    const packs = normalized.filter((q) => q.detailOnly);
+    expect(packs.map((q) => q.name)).toEqual(["Bonus Pack 1", "Bonus Pack 2"]);
+    expect(packs.map((q) => q.resetAt)).toEqual(["2026-09-30T15:59:00.000Z", "2026-10-18T02:00:00.000Z"]);
+    expect(packs.every((q) => q.recurring === false)).toBe(true);
+    // The detail rows are the breakdown: they sum to the aggregate, not beside it.
+    expect(packs.reduce((s, q) => s + q.total, 0)).toBe(charted[0].total);
   });
 
   it("labels Qoder connections by display name, not email", () => {

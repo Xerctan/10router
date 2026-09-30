@@ -23,7 +23,17 @@ import {
   classifyCycleRows,
   cycleRowLines,
   isRecurringQuotaRow,
+  isExpiredPack,
+  isResettingRow,
+  isSpentPack,
+  shortDate,
   isStoredValueRow,
+  detailRows,
+  groupRowsByFamily,
+  healthHue,
+  splitFamilyWindow,
+  meterTone,
+  needsPerPackDetails,
   nameWithoutUnit,
   percentOf,
   quotaUnitOf,
@@ -156,16 +166,14 @@ describe("buildNestedCycle", () => {
     expect(ladder.map((l) => l.depth)).toEqual([0, 1, 2]);
   });
 
-  it("nests each layer inside its parent, monotonically narrowing", () => {
-    const ladder = buildNestedCycle([session, weekly, monthly]);
-    const [m, w, s] = ladder;
-    const weeklyShare = (5.9635 / 6) * 100; // ~99.39% of the month
-    expect(m.widthPct).toBe(100);           // measure bar
-    expect(w.widthPct).toBeCloseTo(weeklyShare, 3);
-    // session is full (3/3), so it fills the weekly span — which is itself
-    // inset in the month. Widths compound down the ladder.
-    expect(s.widthPct).toBeCloseTo(weeklyShare, 3);
-    // The invariant the layout rests on: nested spans never overhang.
+  it("measures every layer on the HEAD's scale (commandcode: all USD)", () => {
+    const [m, w, s] = buildNestedCycle([session, weekly, monthly]);
+    // 9.9635 / 10, 5.9635 / 10, 3 / 10 — one ruler, so the bands line up with
+    // the real amounts instead of each being "100% of itself".
+    expect(m.widthPct).toBeCloseTo(99.635, 3);
+    expect(w.widthPct).toBeCloseTo(59.635, 3);
+    expect(s.widthPct).toBeCloseTo(30, 3);
+    // The invariant the layout rests on: nested bands never overhang.
     expect(s.widthPct).toBeLessThanOrEqual(w.widthPct);
     expect(w.widthPct).toBeLessThanOrEqual(m.widthPct);
   });
@@ -177,21 +185,34 @@ describe("buildNestedCycle", () => {
     expect([s.ownRemaining, s.ownTotal]).toEqual([3, 3]);
   });
 
-  it("keeps a depleted parent wider than a full child (nesting by TYPE)", () => {
-    // The nesting is structural, not value-based: a 100%-of-itself session must
-    // still sit INSIDE a 10%-of-itself weekly, because session is carved out of
-    // weekly. Scaling by each layer's own share of its parent guarantees it —
-    // scaling by absolute remaining/outerTotal did not (it compared a session
-    // request count against a monthly credit total, which only looked right
-    // while the live numbers happened to line up).
+  it("clamps a child to what its parent has left", () => {
+    // A full 5h session cannot spend more than the 0.6 left in the week.
     const tightWeekly = row("weekly (7d)", { recurring: true, total: 6, remaining: 0.6, remainingNum: 0.6 });
     const fullSession = row("session (5h)", { recurring: true, total: 3, remaining: 3, remainingNum: 3 });
-    const ladder = buildNestedCycle([tightWeekly, fullSession, monthly]);
-    expect(ladder.map((l) => l.row.name)).toEqual(["Monthly Credits", "weekly (7d)", "session (5h)"]);
-    const [, w, s] = ladder;
-    expect(w.widthPct).toBeCloseTo(10, 3);   // 0.6 / 6
-    expect(s.widthPct).toBeCloseTo(10, 3);   // 100% of that weekly span
-    expect(s.widthPct).toBeLessThanOrEqual(w.widthPct);
+    const [, w, s] = buildNestedCycle([tightWeekly, fullSession, monthly]);
+    expect(w.widthPct).toBeCloseTo(6, 3);
+    expect(s.widthPct).toBeCloseTo(6, 3);
+    expect(s.ownRemaining).toBe(3); // the label still reports the window's own number
+  });
+
+  it("an exhausted head empties the whole track (regression: it drew 100%)", () => {
+    const spent = row("Monthly Credits", { recurring: true, total: 10, remaining: 0, remainingNum: 0 });
+    const fullWeekly = row("weekly (7d)", { recurring: true, total: 6, remaining: 6, remainingNum: 6 });
+    const fullSession = row("session (5h)", { recurring: true, total: 3, remaining: 3, remainingNum: 3 });
+    const ladder = buildNestedCycle([fullSession, fullWeekly, spent]);
+    expect(ladder.map((l) => l.widthPct)).toEqual([0, 0, 0]);
+  });
+
+  it("percent-only windows are NOT nested (opencode-go: 100 / 100 / 100)", () => {
+    // Each is a percent of its own undisclosed ceiling, so there is no shared
+    // scale to nest on — they stay flat rows.
+    const pct = (name) => row(name, { recurring: true, total: 100, remainingNum: 70 });
+    expect(buildNestedCycle([pct("Rolling"), pct("Weekly"), pct("Monthly")])).toEqual([]);
+  });
+
+  it("a one-shot credit row never heads the ladder (Purchased Credits)", () => {
+    const purchased = row("Purchased Credits", { recurring: false, total: 50, remainingNum: 50 });
+    expect(buildNestedCycle([purchased, weekly, session])).toEqual([]);
   });
 
   it("a lone weekly is NOT a ladder — it renders as one plain flat bar", () => {
@@ -272,5 +293,150 @@ describe("percentOf", () => {
     expect(percentOf({ totalNum: 10, remainingNum: 0 })).toBe(0);
     expect(percentOf({ totalNum: 0, remainingNum: 0 })).toBe(0);
     expect(percentOf({ total: 4, used: 1 })).toBe(75);
+  });
+});
+
+describe("meterTone — one colour rule for every quota meter", () => {
+  it("resets → reset (sky), one-shot / balance → expire (green)", () => {
+    expect(meterTone(row("weekly (7d)", { recurring: true, total: 6, remainingNum: 5 }))).toBe("reset");
+    expect(meterTone(row("Bonus Pack 3", { recurring: false, total: 100, remainingNum: 80 }))).toBe("expire");
+    expect(meterTone(row("Balance (CNY)", { total: 14.95, remainingNum: 14.95 }))).toBe("expire");
+  });
+
+  it("under 10% left is critical (red) whatever the kind; empty is not", () => {
+    expect(meterTone(row("weekly (7d)", { recurring: true, total: 100, remainingNum: 5 }))).toBe("critical");
+    expect(meterTone(row("Bonus Pack 1", { recurring: false, total: 100, remainingNum: 9 }))).toBe("critical");
+    // 0 left has no fill to colour — it keeps its kind (the empty track says it).
+    expect(meterTone(row("Bonus Pack 1", { recurring: false, total: 100, remainingNum: 0 }))).toBe("expire");
+  });
+
+  it("card and per-pack table agree on a flagless row (regression: Qoder was blue in one, green in the other)", () => {
+    // The table used to default a missing flag to recurring; the card reads the
+    // name. Both now go through isResettingRow.
+    expect(isResettingRow({ name: "Resource Package", total: 900 })).toBe(false);
+    expect(isResettingRow({ name: "Weekly", total: 100 })).toBe(true);
+    // An explicit false always wins over a cycle-looking name.
+    expect(isResettingRow({ name: "Monthly", recurring: false })).toBe(false);
+  });
+});
+
+describe("isSpentPack — what folds into 已用完 / 已过期", () => {
+  const NOW = Date.parse("2026-09-29T12:00:00Z");
+
+  it("a used-up one-shot pack is history", () => {
+    expect(isSpentPack({ name: "Bonus Pack 7", recurring: false, used: 100, total: 100 }, NOW)).toBe(true);
+  });
+
+  it("an expired one-shot pack is history even with credit left", () => {
+    const p = { name: "Bonus Pack 2", recurring: false, used: 10, total: 100, resetAt: "2026-09-20T00:00:00Z" };
+    expect(isExpiredPack(p, NOW)).toBe(true);
+    expect(isSpentPack(p, NOW)).toBe(true);
+  });
+
+  it("a live pack is not", () => {
+    expect(isSpentPack({ name: "Bonus Pack 1", recurring: false, used: 45, total: 100, resetAt: "2026-10-15T00:00:00Z" }, NOW)).toBe(false);
+  });
+
+  it("an exhausted CYCLE window is not history — it refills (每月 0 / 500)", () => {
+    expect(isSpentPack({ name: "Monthly", recurring: true, used: 500, total: 500 }, NOW)).toBe(false);
+    expect(isSpentPack({ name: "weekly (7d)", used: 6, total: 6 }, NOW)).toBe(false);
+  });
+
+  it("unlimited and zero-allowance rows are never folded away", () => {
+    expect(isSpentPack({ name: "Pro", recurring: false, unlimited: true, used: 5, total: 0 }, NOW)).toBe(false);
+    expect(isSpentPack({ name: "Plan Credits", recurring: false, used: 0, total: 0 }, NOW)).toBe(false);
+  });
+});
+
+describe("shortDate", () => {
+  it("formats MM-DD and tolerates junk", () => {
+    expect(shortDate("2026-10-05T12:00:00")).toBe("10-05");
+    expect(shortDate("")).toBe("");
+    expect(shortDate("not a date")).toBe("");
+  });
+});
+
+describe("逐包明细 — only when the card collapsed something", () => {
+  it("drops the summary rows the headline already shows", () => {
+    const total = { name: "Total Points", total: 4182 };
+    const addOn = { name: "Resource Package", total: 900, aggregate: true, summarizesDetail: true };
+    const pack = { name: "Bonus Pack 1", total: 500, detailOnly: true, recurring: false };
+    expect(detailRows([total, addOn, pack])).toEqual([pack]);
+  });
+
+  it("subscription cards (every row already on the card) get no details", () => {
+    const cc = [
+      { name: "session (5h)", recurring: true, total: 3 },
+      { name: "weekly (7d)", recurring: true, total: 6 },
+      { name: "Monthly Credits", recurring: true, total: 10 },
+    ];
+    expect(needsPerPackDetails(cc)).toBe(false);
+    // + one purchased pool: it is the card headline, still nothing new.
+    expect(needsPerPackDetails([...cc, { name: "Purchased Credits", recurring: false, total: 50 }])).toBe(false);
+    expect(needsPerPackDetails([{ name: "Weekly", total: 100 }])).toBe(false); // mimo
+    expect(needsPerPackDetails([{ name: "Resource Package", total: 100, aggregate: true }])).toBe(false); // qoder, no packs
+  });
+
+  it("pack cards keep them", () => {
+    const grant = { name: "Monthly", recurring: true, giftPack: true, total: 500 };
+    const bonus = (n) => ({ name: `Bonus Pack ${n}`, recurring: false, total: 100 });
+    expect(needsPerPackDetails([grant, bonus(1), bonus(2)])).toBe(true); // codebuddy
+    expect(needsPerPackDetails([
+      { name: "Resource Package", total: 900, summarizesDetail: true },
+      { name: "Bonus Pack 1", total: 500, detailOnly: true, recurring: false },
+    ])).toBe(true); // qoder with packs
+    expect(needsPerPackDetails([
+      { name: "Balance (CNY)", total: 14.95 },
+      { name: "Voucher (CNY)", total: 14.95 },
+    ])).toBe(true); // stepfun-cn: 代金券 is not on the card
+  });
+});
+
+describe("antigravity family windows", () => {
+  const g5 = { name: "Gemini Models · 5h Window", percentScale: true, total: 100 };
+  const gw = { name: "Gemini Models · Weekly Window", percentScale: true, total: 100 };
+  const c5 = { name: "Claude and GPT models · 5h Window", percentScale: true, total: 100 };
+  const cw = { name: "Claude and GPT models · Weekly Window", percentScale: true, total: 100 };
+
+  it("splits the upstream '<family> · <window>' name", () => {
+    expect(splitFamilyWindow(g5.name)).toEqual({ family: "Gemini Models", window: "5h Window" });
+    expect(splitFamilyWindow("weekly (7d)")).toBeNull();
+  });
+
+  it("groups consecutive windows under one family caption", () => {
+    const groups = groupRowsByFamily([g5, gw, c5, cw, { name: "Weekly" }]);
+    expect(groups.map((g) => [g.family, g.rows.length])).toEqual([
+      ["Gemini Models", 2],
+      ["Claude and GPT models", 2],
+      [null, 1],
+    ]);
+  });
+
+  it("stays flat and un-nested: percent windows share no scale", () => {
+    expect(buildNestedCycle([g5, gw, c5, cw])).toEqual([]);
+    expect(needsPerPackDetails([g5, gw, c5, cw])).toBe(false);
+  });
+});
+
+describe("healthHue — one friendly gradient for every meter", () => {
+  it("runs red → amber → emerald as more is left", () => {
+    expect(healthHue(0)).toBe(4);      // red
+    expect(healthHue(35)).toBe(40);    // amber
+    expect(healthHue(100)).toBe(158);  // emerald
+  });
+
+  it("is monotonic — a fuller meter is never a warmer colour", () => {
+    let prev = -1;
+    for (let p = 0; p <= 100; p += 1) {
+      const h = healthHue(p);
+      expect(h).toBeGreaterThanOrEqual(prev);
+      prev = h;
+    }
+  });
+
+  it("clamps junk", () => {
+    expect(healthHue(-5)).toBe(4);
+    expect(healthHue(250)).toBe(158);
+    expect(healthHue(undefined)).toBe(4);
   });
 });

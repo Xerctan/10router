@@ -330,16 +330,24 @@ describe("dashboard guard xiaomi-mimo auto-import (credential-bearing, P1)", () 
     expect(response.body.error).toBe("Local only: CLI token required");
   });
 
-  it("rejects loopback with requireLogin=false and no JWT/CLI token (always-protected)", async () => {
-    // The regression this locks: without the ALWAYS_PROTECTED entry the
-    // requireLogin=false catch-all let a local browser pull the full sk- key.
+  it("allows loopback with requireLogin=false (same-machine bypass for desktop detection)", async () => {
     const response = await proxy(localRequest("/api/oauth/xiaomi-mimo/auto-import", {
       host: "localhost:20128",
       origin: "http://localhost:20128",
     }));
 
-    expect(response.status).toBe(401);
-    expect(response.body.error).toBe("Unauthorized");
+    expect(response).toBe(mocks.nextResponse);
+  });
+
+  it("rejects loopback with requireLogin=true and no JWT/CLI token", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: true });
+
+    const response = await proxy(localRequest("/api/oauth/xiaomi-mimo/auto-import", {
+      host: "localhost:20128",
+      origin: "http://localhost:20128",
+    }));
+
+    expect(response.status).toBe(403);
   });
 
   it("allows loopback with a valid JWT cookie", async () => {

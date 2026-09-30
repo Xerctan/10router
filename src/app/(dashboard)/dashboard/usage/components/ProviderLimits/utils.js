@@ -164,9 +164,15 @@ export function getPageSizeLabel(pageSize, isCustomPageSize) {
   return isCustomPageSize ? `Custom: ${pageSize} / page` : `${pageSize} / page`;
 }
 
-export function getConnectionsPaginationSummary(pagination) {
+// English default; the dashboard passes a translated formatter (the strings are
+// built from numbers, so the page's text-node translator cannot match them).
+export function formatShowingRange({ start, end, total }) {
+  return total > 0 ? `Showing ${start}-${end} of ${total}` : "Showing 0 of 0";
+}
+
+export function getConnectionsPaginationSummary(pagination, format = formatShowingRange) {
   const { start, end } = getConnectionsPageRange(pagination);
-  return `Showing ${start}-${end} of ${pagination.total}`;
+  return format({ start, end, total: pagination.total });
 }
 
 /**
@@ -188,13 +194,13 @@ export function getConnectionsPaginationSummary(pagination) {
  * @param {number} pageSize - accounts per backend page
  * @returns {string} e.g. "Showing 1-12 of 12"
  */
-export function getVisiblePageSummary(visibleCount, pageSize) {
+export function getVisiblePageSummary(visibleCount, pageSize, format = formatShowingRange) {
   const count = Math.max(0, Number(visibleCount) || 0);
-  if (count === 0) return "Showing 0 of 0";
+  if (count === 0) return format({ start: 0, end: 0, total: 0 });
   const size = Math.max(1, Number(pageSize) || count);
   const start = 1;
   const end = Math.min(count, size);
-  return `Showing ${start}-${end} of ${count}`;
+  return format({ start, end, total: count });
 }
 
 export function getSafePagination(pagination, fallbackPageSize) {
@@ -564,10 +570,10 @@ export function parseQuotaData(provider, data) {
         // Qoder ships `user`, `addOn` (resource packages) and optionally
         // `organization`, each {total, used, remaining, unit, resetAt}. `addOn`
         // additionally carries `packs[]` — but those packs ARE the addOn
-        // breakdown, already summed into addOn.total (500+400 = 900). Emitting
+        // breakdown, already summed into addOn.total (500+400 = 900). Charting
         // both the aggregate AND its members double-counted the same credits, so
-        // only the aggregates are emitted here and the pack detail stays in the
-        // raw payload for the per-pack table.
+        // the packs are emitted `detailOnly`: the per-pack table (逐包明细) lists
+        // them with their own expiry dates, the card never charts them.
         //
         // Don't forward Qoder's `remaining`: it is an absolute credit count, but
         // getRemainingPercentage / QuotaTable read `remaining` as a 0-100
@@ -606,7 +612,33 @@ export function parseQuotaData(provider, data) {
               unlimited: quota.unlimited === true,
               // One aggregate per bucket — this is the “综合” row the card charts.
               aggregate: true,
+              // addOn with its packs itemised below is only their sum: the
+              // per-pack details list the packs, not this restatement of them.
+              ...(quotaType === "addOn" && Array.isArray(quota.packs) && quota.packs.length > 0
+                ? { summarizesDetail: true }
+                : {}),
             });
+            // Per-campaign breakdown of addOn (soonest-expiring first), mirroring
+            // the web account page's "包含 N 个资源包" list. The last entry may be
+            // an aggregate-only remainder the device-token API cannot itemise —
+            // no campaign, so no expiry, and labelled instead of numbered.
+            if (quotaType === "addOn" && Array.isArray(quota.packs)) {
+              quota.packs.forEach((pack, i) => {
+                normalizedQuotas.push({
+                  name: pack.unitemized ? "Bonus Pack (unitemized)" : `Bonus Pack ${i + 1}`,
+                  used: pack.used || 0,
+                  total: pack.total || 0,
+                  unit: quota.unit,
+                  resetAt:
+                    pack.expiresAt && new Date(pack.expiresAt).getFullYear() <= 2099
+                      ? pack.expiresAt
+                      : null,
+                  unlimited: false,
+                  recurring: false,
+                  detailOnly: true,
+                });
+              });
+            }
           });
         }
         break;

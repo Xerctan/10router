@@ -72,11 +72,24 @@ export function percentOf(row) {
   return Math.min(100, Math.max(0, (remaining / total) * 100));
 }
 
+// No `credit` here: "Monthly Credits" already matches /month/, and a bare
+// credit token pulled one-shot rows ("Purchased Credits") in as the ladder head.
 const CYCLE_LAYER_RE = {
-  monthly: /month|月|credit/i,
+  monthly: /month|月/i,
   weekly: /week|周/i,
   rolling: /rolling|滚动|session|5h/i,
 };
+
+function ownTotalOf(row) {
+  return Number((row?.totalNum ?? row?.total) || 0);
+}
+
+function ownRemainingOf(row) {
+  const total = ownTotalOf(row);
+  return Number.isFinite(row?.remainingNum)
+    ? Number(row.remainingNum)
+    : Math.max(0, total - Number(row?.used || 0));
+}
 
 /**
  * Build the nested cycle ladder — outermost (largest allowance) first.
@@ -93,34 +106,34 @@ const CYCLE_LAYER_RE = {
  *    independent meters that happen to share a name prefix. These must render
  *    as two side-by-side bars, NOT as a ladder.
  *
- * So nesting requires a MONTHLY head. Without one there is no containment chain
- * to draw — only parallel windows — and this returns `[]`, leaving the caller to
- * render each row as its own plain full-width bar (which is exactly the
- * antigravity shape).
+ *  - opencode-go: `Rolling` / `Weekly` / `Monthly` are each a PERCENT of its
+ *    own undisclosed ceiling (all 100). The sizes of the ceilings relative to
+ *    each other are unknown, so there is nothing to nest on — flat rows.
  *
- * When nesting IS in play, each layer's bar is scaled against its PARENT's
- * total, so the ladder narrows monotonically outward→inner:
+ * So nesting requires a MONTHLY head AND real amounts on one scale: every
+ * layer's ceiling must be strictly smaller than its parent's (commandcode
+ * 3 < 6 < 10 USD). Otherwise this returns `[]` and the caller renders each row
+ * as its own plain full-width bar.
  *
- *   月度额度  [████████████████████]  full-width measure
- *     每周    [██████████████      ]  weekly/months
- *       滚动  [██████              ]  session/weekly
+ * When nesting IS in play all layers share the HEAD's ceiling as the measure,
+ * and a child's fill is clamped to its parent's — you cannot spend more of a
+ * week than is left in the month:
  *
- * Why the parent's total and not the outermost: the layers count different
- * things (sessions vs credits), so `remaining / outerTotal` only looks right
- * when the numbers happen to align. Comparing a layer to ITS OWN parent is the
- * relationship the data actually expresses, and it is what guarantees a child
- * never overhangs its parent.
+ *   月度额度 9.69/10  [███████████████████▍]  96.9%
+ *     每周   5.69/6   [███████████▍        ]  56.9%
+ *       滚动 2.73/3   [█████▍              ]  27.3%
  *
- * Each row still reports its OWN `X / Y` in the label — the ladder shares only
- * the measure, not the ceiling.
+ * Each row still reports its OWN `X / Y` in the label.
  */
 export function buildNestedCycle(rows = []) {
   const buckets = { monthly: null, weekly: null, rolling: null };
   for (const row of rows) {
     // A monthly GRANT (CodeBuddy) is a credit pack, not a plan window, so it
     // cannot be the head of a containment chain — it is collapsed to the
-    // per-pack details instead.
-    if (row?.giftPack === true) continue;
+    // per-pack details instead. Only cycle rows are candidates at all: a
+    // one-shot or stored-value row can never contain a window.
+    if (row?.giftPack === true || row?.detailOnly === true) continue;
+    if (!isRecurringQuotaRow(row) || isStoredValueRow(row)) continue;
     const name = String(row?.name || "");
     for (const [layer, re] of Object.entries(CYCLE_LAYER_RE)) {
       if (!buckets[layer] && re.test(name)) {
@@ -143,30 +156,29 @@ export function buildNestedCycle(rows = []) {
   // appearing on the card after being excluded from `cycleRowLines`.
   if (ladder.length < 2) return [];
 
-  /** remaining/total in the row's OWN unit, 0–100 (0 when the unit is unknown). */
-  const shareOfSelf = (row) => {
-    const total = Number((row.totalNum ?? row.total) || 0);
-    if (total <= 0) return 0;
-    const remaining = Number.isFinite(row.remainingNum)
-      ? Number(row.remainingNum)
-      : Math.max(0, total - Number(row.used || 0));
-    return Math.min(100, Math.max(0, (remaining / total) * 100));
-  };
+  // Containment on one scale: each ceiling strictly inside its parent's. Equal
+  // totals (percent-only windows, all 100) or an inverted pair mean the layers
+  // are not measured in a shared unit, so they cannot be drawn nested.
+  for (let i = 1; i < ladder.length; i += 1) {
+    const child = ownTotalOf(ladder[i]);
+    if (!(child > 0 && child < ownTotalOf(ladder[i - 1]))) return [];
+  }
 
+  const scale = ownTotalOf(ladder[0]);
+  let parentValue = scale;
   return ladder.map((row, depth) => {
-    const ownTotal = Number((row.totalNum ?? row.total) || 0);
-    const ownRemaining = Number.isFinite(row.remainingNum)
-      ? Number(row.remainingNum)
-      : Math.max(0, ownTotal - Number(row.used || 0));
-
-    // Depth 0 is the measure bar. Each child occupies `parentPct × own share`
-    // of the full track, nested inside its parent's span — never beside it.
-    let widthPct = 100;
-    for (let i = 1; i <= depth; i += 1) {
-      widthPct = (widthPct * shareOfSelf(ladder[i])) / 100;
-    }
-
-    return { row, depth, widthPct, ownRemaining, ownTotal, ownPct: shareOfSelf(row) };
+    const ownTotal = ownTotalOf(row);
+    const ownRemaining = ownRemainingOf(row);
+    const value = Math.max(0, Math.min(ownRemaining, parentValue));
+    parentValue = value;
+    return {
+      row,
+      depth,
+      widthPct: Math.min(100, (value / scale) * 100),
+      ownRemaining,
+      ownTotal,
+      ownPct: percentOf(row),
+    };
   });
 }
 
@@ -215,4 +227,148 @@ export function cycleRowLines(rows = []) {
   const planMonthly = monthly.filter((r) => r?.giftPack !== true);
   const nonMonthly = windows.filter((r) => !monthly.includes(r));
   return [...planMonthly, ...nonMonthly];
+}
+
+/**
+ * Whether a row RESETS (cycle window) or EXPIRES (one-shot pack / balance).
+ * One rule for every quota surface — the card and the per-pack table used to
+ * disagree (the table defaulted a missing flag to recurring, the card read the
+ * name), so the same Qoder row was blue in one place and green in the other.
+ * An explicit `recurring: false` always wins.
+ */
+export function isResettingRow(row) {
+  if (row?.recurring === false) return false;
+  return isRecurringQuotaRow(row);
+}
+
+/** Below this share of its own ceiling a meter turns red, on every surface. */
+export const CRITICAL_PCT = 10;
+
+/**
+ * The single colour rule for quota meters:
+ *   "reset"    — a cycle window that refills (sky)
+ *   "expire"   — a one-shot pack or balance that is spent down (green)
+ *   "critical" — either kind with < CRITICAL_PCT left (red); an empty meter
+ *                has no fill, so 0 is left to the kind colour's empty track.
+ */
+export function meterTone(row, pct = percentOf(row)) {
+  if (pct > 0 && pct < CRITICAL_PCT) return "critical";
+  return isResettingRow(row) ? "reset" : "expire";
+}
+
+/** ISO → "MM-DD" (local), "" when missing/invalid. The one date format on quota UI. */
+export function shortDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** remaining in the row's own unit, tolerant of the raw (`used`/`total`) shape. */
+function remainingAmountOf(row) {
+  if (Number.isFinite(row?.remainingNum)) return Number(row.remainingNum);
+  return Math.max(0, Number(row?.total || 0) - Number(row?.used || 0));
+}
+
+/** A one-shot pack whose expiry has passed. */
+export function isExpiredPack(row, now = Date.now()) {
+  if (isResettingRow(row) || !row?.resetAt) return false;
+  const t = new Date(row.resetAt).getTime();
+  return Number.isFinite(t) && t <= now;
+}
+
+/**
+ * History in the per-pack details: a ONE-SHOT pack that is used up or expired.
+ * It can never come back, so it is folded away instead of paginated through
+ * (CodeBuddy accounts carry dozens of spent 0/100 bonus packs). A cycle window
+ * at 0 is NOT history — it refills at its reset, so it stays in view.
+ * An unlimited row is never spent.
+ */
+export function isSpentPack(row, now = Date.now()) {
+  if (row?.unlimited === true || isResettingRow(row)) return false;
+  if (isExpiredPack(row, now)) return true;
+  return Number(row?.total || 0) > 0 && remainingAmountOf(row) <= 0;
+}
+
+/**
+ * A row that only restates others: a named total ("Total Points" / 总积分) or a
+ * bucket whose breakdown ships alongside it (Qoder's `addOn` next to its
+ * `detailOnly` packs). The card's big number already IS that total, so the
+ * per-pack details list must not repeat it as its first row.
+ */
+export function isSummaryRow(row) {
+  return isAggregateQuotaRow(row) || row?.summarizesDetail === true;
+}
+
+/** The rows the per-pack details (逐包明细) list — everything but summaries. */
+export function detailRows(rows = []) {
+  return (rows || []).filter((r) => r && typeof r === "object" && !isSummaryRow(r));
+}
+
+/**
+ * Whether 逐包明细 would show anything the card above it does not.
+ *
+ * The card draws every cycle window as its own row (flat or nested) and a lone
+ * pool as its headline, so on a subscription card (commandcode, mimo, opencode,
+ * claude…) the details only re-listed the same rows. They carry information
+ * only when rows were COLLAPSED into a total on the card:
+ *   - an itemised breakdown (`detailOnly`, Qoder's packs)
+ *   - a monthly grant kept off the cycle rows (`giftPack`, CodeBuddy)
+ *   - two or more one-shot / stored-value rows (a pack family summed into the
+ *     headline, or stepfun's 余额 + 代金券 collapsed to one)
+ */
+export function needsPerPackDetails(rows = []) {
+  const list = detailRows(rows);
+  if (list.some((r) => r.detailOnly === true || r.giftPack === true)) return true;
+  return list.filter((r) => !isResettingRow(r)).length >= 2;
+}
+
+// "<family> · <window>" — antigravity names each window by its model family
+// ("Gemini Models · 5h Window"). The separator is the upstream's own.
+const FAMILY_WINDOW_RE = /^(.+?)\s+·\s+(.+)$/;
+
+/** `"Gemini Models · 5h Window"` → `{ family, window }`; null for a plain name. */
+export function splitFamilyWindow(name) {
+  const m = FAMILY_WINDOW_RE.exec(String(name || "").trim());
+  return m ? { family: m[1], window: m[2] } : null;
+}
+
+/**
+ * Consecutive runs of rows sharing a family, in order. A family with windows
+ * renders as ONE caption + its window rows, instead of repeating the family on
+ * every line; plain rows come back as their own family-less group.
+ */
+export function groupRowsByFamily(rows = []) {
+  const groups = [];
+  for (const row of rows) {
+    const split = splitFamilyWindow(row?.name);
+    const family = split?.family || null;
+    const last = groups[groups.length - 1];
+    if (family && last && last.family === family) last.rows.push(row);
+    else groups.push({ family, rows: [row] });
+  }
+  return groups;
+}
+
+// Health hue by remaining share — red → orange → amber → green → emerald.
+// Piecewise-linear between stops so neighbouring percentages never jump colour.
+const HEALTH_STOPS = [
+  [0, 4],
+  [15, 22],
+  [35, 40],
+  [65, 130],
+  [100, 158],
+];
+
+/** HSL hue for a meter with `pct` (0–100) left. */
+export function healthHue(pct) {
+  const p = Math.min(100, Math.max(0, Number(pct) || 0));
+  for (let i = 1; i < HEALTH_STOPS.length; i += 1) {
+    const [p1, h1] = HEALTH_STOPS[i];
+    if (p <= p1) {
+      const [p0, h0] = HEALTH_STOPS[i - 1];
+      return Math.round(h0 + ((h1 - h0) * (p - p0)) / (p1 - p0));
+    }
+  }
+  return HEALTH_STOPS[HEALTH_STOPS.length - 1][1];
 }

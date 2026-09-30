@@ -3,6 +3,18 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import ProviderIcon from "@/shared/components/ProviderIcon";
 import QuotaPackBar from "@/shared/components/QuotaPackBar";
+import QuotaToolbar from "./QuotaToolbar";
+import QuotaWindowTimeline from "@/shared/components/QuotaWindowTimeline";
+import { detailRows, needsPerPackDetails } from "@/shared/utils/quotaRows";
+import {
+  connectionsCacheKey,
+  createLimiter,
+  isQuotaFresh,
+  readConnectionsCache,
+  readQuotaEntries,
+  writeConnectionsCache,
+  writeQuotaEntry,
+} from "./quotaPageCache";
 import QuotaTable, { translateQuotaName } from "./QuotaTable";
 import Toggle from "@/shared/components/Toggle";
 import Tooltip from "@/shared/components/Tooltip";
@@ -16,7 +28,6 @@ import {
   getConnectionLabel,
   getConnectionQuotaRemaining,
   sortVisibleConnections,
-  buildLoadingState,
   filterQuotaStateByConnections,
   getConnectionsEmptyMessage,
   getPageSizeLabel,
@@ -29,7 +40,6 @@ import {
   getProviderOptions,
   reconcileConnectionsPage,
   getQuotaCache,
-  setQuotaCache,
   QUOTA_CACHE_KEY,
   REFRESH_INTERVAL_MS,
   CLAUDE_REFRESH_INTERVAL_MS,
@@ -181,6 +191,11 @@ export default function ProviderLimits() {
     if (typeof window !== "undefined") window.localStorage.setItem("quotaAccountFilter", accountFilter);
   }, [accountFilter]);
   const [quotaSortMode, setQuotaSortMode] = useState("default");
+  // "cards" | "windows" (the 配额窗口 timeline). Session-only on purpose: every
+  // visit opens on the cards, the main view — remembering "windows" across
+  // visits left people staring at the timeline wondering where their cards went.
+  const [trackerView, setTrackerView] = useState("cards");
+  const [windowsRefreshKey, setWindowsRefreshKey] = useState(0);
   const [quotaVisibility, setQuotaVisibility] = useState({});
   const [expiringFirst, setExpiringFirst] = useState(false);
   // "Hide no-quota cards": a view toggle that drops connections with no quota
@@ -200,7 +215,6 @@ export default function ProviderLimits() {
   // filter instead (the "hideDepleted" boolean that used to live here) dropped
   // rows with NO chips to explain them and no way to bring one back — the state
   // and the screen disagreed.
-  const [providerMenuOpen, setProviderMenuOpen] = useState(false);
   const [bulkToggling, setBulkToggling] = useState(false);
   // 逐包明细默认收起（CreditDaddy 语言）：展开才渲染 QuotaTable。
   const [expandedDetails, setExpandedDetails] = useState(() => new Set());
@@ -261,14 +275,24 @@ export default function ProviderLimits() {
         setPagination(nextPagination);
         setTotals(nextTotals);
         setPage(getPaginationPageValue(data.pagination, targetPage));
+        writeConnectionsCache(
+          connectionsCacheKey({ page: targetPage, pageSize, accountFilter, providerFilter }),
+          {
+            connections: connectionList,
+            pagination: nextPagination,
+            totals: nextTotals,
+            providerOptions: data.providerOptions,
+          },
+        );
         return connectionList;
       } catch (error) {
+        // Keep whatever is on screen (the cache-painted page, or the previous
+        // one): a transient /api/providers/client failure must not blank the
+        // wall the stale-while-revalidate flow just painted. Returning null —
+        // not [] — tells callers to skip this round: re-filtering quota state
+        // against an empty list would wipe it too.
         console.error("Error fetching connections:", error);
-        setConnections([]);
-        setProviderOptions([]);
-        setPagination({ page: 1, pageSize, total: 0, totalPages: 1 });
-        setTotals({ eligibleConnections: 0, providerFilteredConnections: 0 });
-        return [];
+        return null;
       }
     },
     [accountFilter, expiringFirst, page, pageSize, providerFilter],
@@ -308,12 +332,13 @@ export default function ProviderLimits() {
           const quotaEntry = {
             quotas: [],
             message: errorMsg,
+            cachedAt: new Date().toISOString(),
           };
           setQuotaData((prev) => ({
             ...prev,
             [connectionId]: quotaEntry,
           }));
-          setQuotaCache(connectionId, quotaEntry);
+          writeQuotaEntry(connectionId, quotaEntry);
           return;
         }
 
@@ -331,13 +356,14 @@ export default function ProviderLimits() {
         plan: data.plan || null,
         message: data.message || null,
         raw: data,
+        cachedAt: new Date().toISOString(),
       };
 
       setQuotaData((prev) => ({
         ...prev,
         [connectionId]: quotaEntry,
       }));
-      setQuotaCache(connectionId, quotaEntry);
+      writeQuotaEntry(connectionId, quotaEntry);
     } catch (error) {
       console.error(
         `[ProviderLimits] Error fetching quota for ${provider} (${connectionId}):`,
@@ -351,6 +377,82 @@ export default function ProviderLimits() {
       setLoading((prev) => ({ ...prev, [connectionId]: false }));
     }
   }, []);
+
+  // ─── Lazy revalidation ────────────────────────────────────────────────
+  // Cards paint from the browser cache (quotaPageCache.js); the network only
+  // revalidates behind them. A card is refetched when it is on screen (or
+  // within 200px of it); an off-screen card is parked in `pendingQuotaRef`
+  // and fetched the moment it scrolls into view. At most
+  // QUOTA_FETCH_CONCURRENCY upstream calls run at once.
+  const [runLimited] = useState(() => createLimiter());
+  const visibleIdsRef = useRef(new Set());
+  const pendingQuotaRef = useRef(new Map()); // connectionId → provider
+  const observerRef = useRef(null);
+  const fetchQuotaRef = useRef(fetchQuota);
+  useEffect(() => {
+    fetchQuotaRef.current = fetchQuota;
+  }, [fetchQuota]);
+
+  const getCardObserver = useCallback(() => {
+    if (observerRef.current || typeof IntersectionObserver === "undefined") return observerRef.current;
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = entry.target.dataset.connId;
+          if (!id) continue;
+          if (!entry.isIntersecting) {
+            visibleIdsRef.current.delete(id);
+            continue;
+          }
+          visibleIdsRef.current.add(id);
+          if (pendingQuotaRef.current.has(id)) {
+            const provider = pendingQuotaRef.current.get(id);
+            pendingQuotaRef.current.delete(id);
+            runLimited(() => fetchQuotaRef.current(id, provider));
+          }
+        }
+      },
+      { rootMargin: "200px 0px" },
+    );
+    return observerRef.current;
+  }, [runLimited]);
+
+  useEffect(() => () => observerRef.current?.disconnect(), []);
+
+  /** Ref callback for a card: observe it, stop observing when it unmounts. */
+  const observeCard = useCallback((el) => {
+    const observer = getCardObserver();
+    if (!el || !observer) return undefined;
+    observer.observe(el);
+    return () => {
+      observer.unobserve(el);
+      visibleIdsRef.current.delete(el.dataset.connId);
+    };
+  }, [getCardObserver]);
+
+  /**
+   * Revalidate these connections' quotas.
+   *  - skipFreshFrom: entries younger than QUOTA_FRESH_MS are left alone
+   *  - lazy: off-screen cards wait until they scroll into view (without an
+   *    IntersectionObserver everything is fetched straight away)
+   */
+  const scheduleQuotaFetches = useCallback(
+    (conns, { lazy = true, skipFreshFrom = null } = {}) => {
+      const canObserve = typeof IntersectionObserver !== "undefined";
+      const tasks = [];
+      for (const conn of conns) {
+        if (skipFreshFrom && isQuotaFresh(skipFreshFrom[conn.id])) continue;
+        if (lazy && canObserve && !visibleIdsRef.current.has(conn.id)) {
+          pendingQuotaRef.current.set(conn.id, conn.provider);
+          continue;
+        }
+        pendingQuotaRef.current.delete(conn.id);
+        tasks.push(runLimited(() => fetchQuotaRef.current(conn.id, conn.provider)));
+      }
+      return Promise.all(tasks);
+    },
+    [runLimited],
+  );
 
   // Refresh quota for a specific provider
   const refreshProvider = useCallback(
@@ -536,8 +638,10 @@ export default function ProviderLimits() {
 
     try {
       const visibleConnections = await fetchConnections(page);
+      if (!visibleConnections) return; // fetch failed — keep the last-known page
 
-      setLoading(buildLoadingState(visibleConnections));
+      // Cards keep their last numbers while they refresh (the header icon
+      // spins) — no more blanking every card back to a spinner each minute.
       setErrors((prev) =>
         filterQuotaStateByConnections(prev, visibleConnections),
       );
@@ -545,11 +649,9 @@ export default function ProviderLimits() {
         filterQuotaStateByConnections(prev, visibleConnections),
       );
 
-      await Promise.all(
-        visibleConnections
-          .filter(shouldFetch)
-          .map((conn) => fetchQuota(conn.id, conn.provider)),
-      );
+      // Auto-refresh only touches cards on screen; the rest refresh when
+      // scrolled to. The toolbar's "refresh all" (force) does every card.
+      await scheduleQuotaFetches(visibleConnections.filter(shouldFetch), { lazy: !force });
 
       setLastUpdated(new Date());
     } catch (error) {
@@ -557,31 +659,53 @@ export default function ProviderLimits() {
     } finally {
       setRefreshingAll(false);
     }
-  }, [refreshingAll, fetchConnections, fetchQuota, page]);
+  }, [refreshingAll, fetchConnections, scheduleQuotaFetches, page]);
 
   useEffect(() => {
-    const initializeData = async () => {
-      setConnectionsLoading(true);
-      const visibleConnections = await fetchConnections(page);
-      setConnectionsLoading(false);
+    let cancelled = false;
 
-      // Always fetch fresh quota on mount, no cache display
-      setLoading(buildLoadingState(visibleConnections));
+    // 1) Paint the last-known page + quotas from the browser cache at once.
+    //    (Read in an effect, not a state initializer, so SSR markup matches.)
+    const cached = readConnectionsCache(
+      connectionsCacheKey({ page, pageSize, accountFilter, providerFilter }),
+    );
+    if (cached) {
+      setConnections(cached.connections);
+      setProviderOptions(getProviderOptions(cached.providerOptions));
+      if (cached.pagination) setPagination(cached.pagination);
+      if (cached.totals) setTotals(cached.totals);
+      setQuotaData((prev) => ({ ...readQuotaEntries(cached.connections), ...prev }));
+      setConnectionsLoading(false);
+    } else {
+      setConnectionsLoading(true);
+    }
+
+    // 2) Revalidate behind it: the real list, then only the quotas that are
+    //    stale — visible cards first, the rest as they scroll into view.
+    const initializeData = async () => {
+      const visibleConnections = await fetchConnections(page);
+      if (cancelled) return;
+      setConnectionsLoading(false);
+      if (!visibleConnections) return; // fetch failed — the painted page stands
+
+      const stored = readQuotaEntries(visibleConnections);
       setErrors((prev) =>
         filterQuotaStateByConnections(prev, visibleConnections),
       );
-      setQuotaData((prev) =>
-        filterQuotaStateByConnections(prev, visibleConnections),
-      );
+      setQuotaData((prev) => ({
+        ...stored,
+        ...filterQuotaStateByConnections(prev, visibleConnections),
+      }));
 
-      await Promise.all(
-        visibleConnections.map((conn) => fetchQuota(conn.id, conn.provider)),
-      );
-      setLastUpdated(new Date());
+      await scheduleQuotaFetches(visibleConnections, { skipFreshFrom: stored });
+      if (!cancelled) setLastUpdated(new Date());
     };
 
     initializeData();
-  }, [fetchConnections, fetchQuota, page]);
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchConnections, scheduleQuotaFetches, page, pageSize, accountFilter, providerFilter]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -707,6 +831,13 @@ export default function ProviderLimits() {
       if (provider === "antigravity") pruneAntigravityGroup(hidden, key);
       return hidden;
     });
+  }, [editQuotaVisibility]);
+
+  // "Show all" on a card's hidden strip: empty that connection's hidden list —
+  // the same list the per-row hide and the bulk "only with balance" filter write.
+  const handleShowAllQuotas = useCallback((connectionId) => {
+    if (!connectionId) return;
+    editQuotaVisibility(connectionId, () => new Set());
   }, [editQuotaVisibility]);
 
   const handleShowQuota = useCallback((connectionId, quota, provider) => {
@@ -932,7 +1063,12 @@ export default function ProviderLimits() {
     providerFilter,
     accountFilter,
   );
-  const connectionsPageSummary = getConnectionsPaginationSummary(pagination);
+  const showingRange = ({ start, end, total }) =>
+    translate("Showing {start}-{end} of {total}")
+      .replace("{start}", String(start))
+      .replace("{end}", String(end))
+      .replace("{total}", String(total));
+  const connectionsPageSummary = getConnectionsPaginationSummary(pagination, showingRange);
   // "Hide no-quota" removes whole cards from this page, and the backend summary
   // ("Showing 1-10 of 46") counts the server's page — it cannot see the filter.
   // Report what is actually rendered instead, so the mismatch reads as "a filter
@@ -942,7 +1078,7 @@ export default function ProviderLimits() {
   // inside the cards and leaves the card count alone, so switching to a
   // row-based number here would only make the summary mean something else.
   const viewFilterActive = renderConnections.length !== sortedConnections.length;
-  const visiblePageSummary = getVisiblePageSummary(renderConnections.length, pageSize);
+  const visiblePageSummary = getVisiblePageSummary(renderConnections.length, pageSize, showingRange);
   const isCustomPageSize = !ACCOUNT_PAGE_SIZE_OPTIONS.includes(pageSize);
   const pageSizeLabel = getPageSizeLabel(pageSize, isCustomPageSize);
 
@@ -979,236 +1115,48 @@ export default function ProviderLimits() {
 
   return (
     <div className="space-y-6">
-      {/* Header Controls */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setProviderMenuOpen((prev) => !prev)}
-              className="flex h-8 items-center justify-between gap-1 rounded-lg border border-black/10 bg-black/[0.02] px-2 text-xs text-text transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/10"
-              aria-haspopup="menu"
-              aria-expanded={providerMenuOpen}
-              title={translate("Filter quota providers")}
-            >
-              <span className="flex min-w-0 items-center gap-1.5">
-                {providerFilter === "all" ? (
-                  <span className="material-symbols-outlined text-[14px] text-text-muted">
-                    apps
-                  </span>
-                ) : (
-                  <ProviderIcon
-                    src={`/providers/${providerFilter}.png`}
-                    alt={providerFilter}
-                    size={18}
-                    className="size-[18px] rounded object-contain"
-                    fallbackText={providerFilter.slice(0, 2).toUpperCase()}
-                  />
-                )}
-                <span className="truncate capitalize hidden lg:inline">
-                  {selectedProviderLabel}
-                </span>
-              </span>
-              <span className="material-symbols-outlined text-[14px] text-text-muted">
-                expand_more
-              </span>
-            </button>
+      <QuotaToolbar
+        view={trackerView}
+        onViewChange={setTrackerView}
+        providerFilter={providerFilter}
+        providerOptions={providerOptions}
+        providerLabel={providerFilter === "all" ? translate("All providers") : selectedProviderLabel}
+        onProviderChange={(provider) => {
+          if (shouldResetPage(providerFilter, provider)) setPage(1);
+          setProviderFilter(provider);
+        }}
+        accountFilter={accountFilter}
+        onAccountChange={(value) => {
+          if (shouldResetPage(accountFilter, value)) setPage(1);
+          setAccountFilter(value);
+        }}
+        showCodexSort={providerFilter === "codex"}
+        quotaSortMode={quotaSortMode}
+        onQuotaSortChange={setQuotaSortMode}
+        expiringFirst={expiringFirst}
+        onToggleExpiringFirst={() => setExpiringFirst((prev) => !prev)}
+        onDisableDepleted={handleDisableDepleted}
+        onEnableAvailable={handleEnableAvailable}
+        bulkToggling={bulkToggling}
+        autoRefresh={autoRefresh}
+        onToggleAutoRefresh={() => setAutoRefresh((prev) => !prev)}
+        countdown={countdown}
+        refreshingAll={refreshingAll}
+        onRefreshAll={() =>
+          trackerView === "windows" ? setWindowsRefreshKey((k) => k + 1) : refreshAll(true)
+        }
+        accountCount={pagination.total}
+      />
 
-            {providerMenuOpen && (
-              <>
-                <button
-                  type="button"
-                  className="fixed inset-0 z-30 bg-transparent"
-                  aria-label="Close provider filter"
-                  onClick={() => setProviderMenuOpen(false)}
-                />
-                <div className="absolute left-0 z-40 mt-2 w-64 overflow-hidden rounded-2xl border border-black/10 bg-surface/95 p-1.5 shadow-xl shadow-black/10 backdrop-blur dark:border-white/10 dark:bg-surface/95 sm:w-72">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (shouldResetPage(providerFilter, "all")) {
-                        setPage(1);
-                      }
-                      setProviderFilter("all");
-                      setProviderMenuOpen(false);
-                    }}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${providerFilter === "all" ? "bg-primary/10 text-primary" : "text-text hover:bg-black/5 dark:hover:bg-white/10"}`}
-                  >
-                    <span className="material-symbols-outlined text-[22px]">
-                      apps
-                    </span>
-                    <span className="font-medium">All providers</span>
-                    {providerFilter === "all" && (
-                      <span className="material-symbols-outlined ml-auto text-[20px]">
-                        check
-                      </span>
-                    )}
-                  </button>
-                  <div className="my-1 h-px bg-black/10 dark:bg-white/10" />
-                  <div className="max-h-72 overflow-y-auto pr-1">
-                    {providerOptions.map((provider) => (
-                      <button
-                        key={provider}
-                        type="button"
-                        onClick={() => {
-                          if (shouldResetPage(providerFilter, provider)) {
-                            setPage(1);
-                          }
-                          setProviderFilter(provider);
-                          setProviderMenuOpen(false);
-                        }}
-                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${providerFilter === provider ? "bg-primary/10 text-primary" : "text-text hover:bg-black/5 dark:hover:bg-white/10"}`}
-                      >
-                        <ProviderIcon
-                          src={`/providers/${provider}.png`}
-                          alt={provider}
-                          size={24}
-                          className="size-6 rounded-md object-contain"
-                          fallbackText={provider.slice(0, 2).toUpperCase()}
-                        />
-                        <span className="font-medium capitalize">
-                          {provider}
-                        </span>
-                        {providerFilter === provider && (
-                          <span className="material-symbols-outlined ml-auto text-[20px]">
-                            check
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-          <select
-            value={accountFilter}
-            onChange={(event) => {
-              const nextValue = event.target.value;
-              if (shouldResetPage(accountFilter, nextValue)) {
-                setPage(1);
-              }
-              setAccountFilter(nextValue);
-            }}
-            className="h-8 rounded-lg border border-black/10 bg-black/[0.02] px-2 text-xs text-text outline-none transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/10"
-            aria-label="Filter accounts by status"
-          >
-            {ACCOUNT_FILTER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-
-          {providerFilter === "codex" && (
-            <select
-              value={quotaSortMode}
-              onChange={(event) => setQuotaSortMode(event.target.value)}
-              className="h-8 rounded-lg border border-black/10 bg-black/[0.02] px-2 text-xs text-text outline-none transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/10"
-              aria-label="Sort Codex quotas by remaining"
-            >
-              {QUOTA_SORT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setExpiringFirst((prev) => !prev)}
-            aria-pressed={expiringFirst}
-            className={`flex h-8 shrink-0 items-center gap-1 rounded-lg border px-2 text-xs transition-colors ${expiringFirst ? "border-amber-500/40 bg-amber-500/10 text-amber-500" : "border-black/10 text-text hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"}`}
-            title={translate("Sort accounts by earliest quota reset time")}
-          >
-            <span className="material-symbols-outlined text-[14px]">
-              hourglass_top
-            </span>
-          </button>
-
-          {/* Bulk: disable depleted */}
-          <button
-            type="button"
-            onClick={handleDisableDepleted}
-            disabled={bulkToggling}
-            className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-red-500/30 px-2 text-xs text-red-500 transition-colors hover:bg-red-500/10 disabled:opacity-50"
-            title={translate("Disable connections with depleted quota on the current page")}
-          >
-            <span className="material-symbols-outlined text-[14px]">block</span>
-            <span className="hidden sm:inline">{translate("Turn off Empty")}</span>
-          </button>
-
-          {/* Bulk: enable available */}
-          <button
-            type="button"
-            onClick={handleEnableAvailable}
-            disabled={bulkToggling}
-            className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-emerald-500/30 px-2 text-xs text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-50"
-            title={translate("Enable connections that still have quota on the current page")}
-          >
-            <span className="material-symbols-outlined text-[14px]">
-              check_circle
-            </span>
-            <span className="hidden sm:inline">{translate("Turn on Available")}</span>
-          </button>
-
-          {/* Auto-refresh toggle */}
-          <button
-            type="button"
-            onClick={() => setAutoRefresh((prev) => !prev)}
-            aria-pressed={autoRefresh}
-            className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-black/10 px-2 text-xs transition-colors hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-            title={translate(autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh")}
-          >
-            <span
-              className={`material-symbols-outlined text-[14px] ${
-                autoRefresh ? "text-primary" : "text-text-muted"
-              }`}
-            >
-              {autoRefresh ? "toggle_on" : "toggle_off"}
-            </span>
-            <span className="hidden sm:inline">{translate("Auto-refresh")}</span>
-            {autoRefresh && (
-              <span className="text-[10px] text-text-muted tabular-nums">
-                ({countdown}s)
-              </span>
-            )}
-          </button>
-
-          {/* Refresh all button */}
-          <button
-            type="button"
-            onClick={() => refreshAll(true)}
-            disabled={refreshingAll}
-            className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-black/10 px-2 text-xs text-text transition-colors hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5 disabled:opacity-50"
-            title={translate("Refresh all")}
-          >
-            <span
-              className={`material-symbols-outlined text-[14px] ${refreshingAll ? "animate-spin" : ""}`}
-            >
-              refresh
-            </span>
-          </button>
-        </div>
-      </div>
-
-      {/* Persisted account filter reminder — the filter choice is stored in
-          localStorage across visits, so show a hint when it's not "All". */}
-      {accountFilter !== "all" && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-          <span className="material-symbols-outlined text-[14px] shrink-0">filter_alt</span>
-          <span>{translate("Account filter is active and persists across visits")}</span>
-        </div>
-      )}
-
-      {/* Provider cards: 2 columns, compact */}
-      {expiringFirst && (
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-          Expiring-first currently reorders accounts inside the current page.
-          Cross-page ordering still follows backend pagination.
-        </div>
-      )}
+      {trackerView === "windows" ? (
+        <QuotaWindowTimeline
+          providerFilter={providerFilter}
+          accountFilter={accountFilter}
+          refreshKey={windowsRefreshKey}
+          showTrackerLink={false}
+        />
+      ) : (
+      <>
 
       {/* Empty state (filters matched nothing) — controls stay visible above */}
       {emptyStateNode && <div className="pt-2">{emptyStateNode}</div>}
@@ -1217,8 +1165,11 @@ export default function ProviderLimits() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {renderConnections.map((conn) => {
           const quota = quotaData[conn.id];
-          const isLoading = loading[conn.id];
+          // Spinner only while a card has NOTHING to show; with cached numbers
+          // it keeps them and only the header refresh icon spins.
+          const isRefreshing = Boolean(loading[conn.id]);
           const error = errors[conn.id];
+          const isLoading = !quota && !error;
 
           // Use table layout for all providers
           const isInactive = conn.isActive === false;
@@ -1232,6 +1183,12 @@ export default function ProviderLimits() {
           // both surface as "Hidden:" chips and both can be restored individually.
           const visibleQuotas = filterQuotasByVisibility(conn.id, rawQuotas, quotaVisibility, conn.provider);
           const hiddenQuotaRows = getHiddenQuotaRows(conn.id, rawQuotas, quotaVisibility, conn.provider);
+          // 逐包明细 lists packs, not the totals the card headline already shows
+          // (总积分, Qoder's 资源包 sum) — see isSummaryRow.
+          const detailQuotas = detailRows(visibleQuotas);
+          // Subscription cards already show every row; the toggle only appears
+          // when the card collapsed something (packs summed into the headline).
+          const showDetails = needsPerPackDetails(visibleQuotas);
           // 逐包明细展开 = 原始数据（用户拍板：不筛选不改序）；顶部块的分段
           // 条/剩余总额由 QuotaPackBar 内部聚合（月度并入，作为以重置日为
           // 到期日的资源包）。
@@ -1239,6 +1196,8 @@ export default function ProviderLimits() {
           return (
             <Card
               key={conn.id}
+              ref={observeCard}
+              data-conn-id={conn.id}
               padding="none"
               className={`min-w-0 ${isInactive ? "opacity-60" : ""}`}
             >
@@ -1328,7 +1287,7 @@ export default function ProviderLimits() {
                           <button
                             type="button"
                             onClick={() => setResetConfirmState({ connection: conn, resetCreditCount })}
-                            disabled={resetCreditCount <= 0 || isLoading || rowBusy}
+                            disabled={resetCreditCount <= 0 || isLoading || isRefreshing || rowBusy}
                             aria-label={
                               resetCreditCount > 0
                                 ? `Use one Codex reset credit. ${resetCreditCount} available.`
@@ -1375,12 +1334,12 @@ export default function ProviderLimits() {
                       <button
                         type="button"
                         onClick={() => refreshProvider(conn.id, conn.provider)}
-                        disabled={isLoading || rowBusy}
+                        disabled={isRefreshing || rowBusy}
                         aria-label="Refresh quota"
                         className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
                       >
                         <span
-                          className={`material-symbols-outlined text-[18px] text-text-muted ${isLoading ? "animate-spin" : ""}`}
+                          className={`material-symbols-outlined text-[18px] text-text-muted ${isRefreshing || isLoading ? "animate-spin" : ""}`}
                         >
                           refresh
                         </span>
@@ -1442,20 +1401,27 @@ export default function ProviderLimits() {
                   segment per quota pack, earliest-expiry first; the meta line
                   carries the earliest live pack's remaining + reset date and
                   the connection-wide used/total sums. */}
-              {!isLoading && !error && visibleQuotas.length > 0 && (
+              {quota && visibleQuotas.length > 0 && (
                 <div className="px-3 pt-2.5">
                   <QuotaPackBar packs={visibleQuotas} />
                 </div>
               )}
 
               <div className="px-2 py-1.5">
+                {/* A failed revalidation keeps the cached numbers and says so,
+                    instead of replacing a working card with an error. */}
+                {error && quota && (
+                  <p className="px-1 pb-1 text-[11px] text-red-500/80">
+                    {translate("Update failed, showing last known")} · {error}
+                  </p>
+                )}
                 {isLoading ? (
                   <div className="text-center py-5 text-text-muted">
                     <span className="material-symbols-outlined text-[28px] animate-spin">
                       progress_activity
                     </span>
                   </div>
-                ) : error ? (
+                ) : error && !quota ? (
                   <div className="text-center py-5">
                     <span className="material-symbols-outlined text-[28px] text-red-500">
                       error
@@ -1487,7 +1453,7 @@ export default function ProviderLimits() {
                     {/* 逐包明细默认收起：展开才渲染 QuotaTable（原始行不筛选
                         不改序）。所有卡都保留该入口——卡片顶部呈现的是聚合与
                         嵌套周期条，原始数据仍可一键查看。 */}
-                    {visibleQuotas.length > 0 && (
+                    {showDetails && (
                       <button
                         type="button"
                         onClick={() => toggleDetails(conn.id)}
@@ -1499,14 +1465,13 @@ export default function ProviderLimits() {
                         </span>
                         {translate("Per-pack details")}
                         <span className="tabular-nums opacity-60">
-                          ({visibleQuotas.length})
+                          ({detailQuotas.length})
                         </span>
                       </button>
                     )}
-                    {expandedDetails.has(conn.id) && (
+                    {showDetails && expandedDetails.has(conn.id) && (
                       <QuotaTable
-                        quotas={visibleQuotas}
-                        compact
+                        quotas={detailQuotas}
                         sortMode="default"
                         showSortLabel={
                           conn.provider === "codex" && quotaSortMode !== "default"
@@ -1517,24 +1482,40 @@ export default function ProviderLimits() {
                   </>
                 )}
                 {hiddenQuotaRows.length > 0 && (
-                  <div className="mt-2 flex min-w-0 items-center gap-1 border-t border-black/5 pt-2 text-[10px] text-text-muted dark:border-white/5">
+                  // Hidden rows are left out of the card's totals too, so they
+                  // stay listed even while the details are collapsed. Same row
+                  // language as the details: 11px muted, chips restore one row,
+                  // "Show all" restores the lot.
+                  <div className="mt-1 flex min-w-0 items-center gap-1.5 border-t border-black/5 pt-1.5 text-[11px] text-text-muted dark:border-white/5">
                     <span className="material-symbols-outlined shrink-0 text-[14px]">
                       visibility_off
                     </span>
-                    <span className="shrink-0">Hidden:</span>
-                    <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap pb-2">
+                    <span className="shrink-0">
+                      {translate("Hidden")}
+                      <span className="tabular-nums opacity-60"> ({hiddenQuotaRows.length})</span>
+                    </span>
+                    <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap">
                       {hiddenQuotaRows.map((quotaRow) => (
                         <button
                           key={getQuotaVisibilityKey(quotaRow)}
                           type="button"
                           onClick={() => handleShowQuota(conn.id, quotaRow, conn.provider)}
-                          className="shrink-0 rounded-md border border-black/10 px-1.5 py-0.5 transition-colors hover:bg-black/5 hover:text-text dark:border-white/10 dark:hover:bg-white/5"
-                          title="Show this quota row"
+                          className="shrink-0 rounded-[3px] bg-black/5 px-1.5 py-px transition-colors hover:bg-black/10 hover:text-text dark:bg-white/5 dark:hover:bg-white/10"
+                          title={translate("Show this quota row")}
                         >
                           {translateQuotaName(quotaRow.name)}
                         </button>
                       ))}
                     </div>
+                    {hiddenQuotaRows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleShowAllQuotas(conn.id)}
+                        className="shrink-0 rounded-md px-1.5 py-px transition-colors hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
+                      >
+                        {translate("Show all")}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1567,7 +1548,7 @@ export default function ProviderLimits() {
               >
                 {ACCOUNT_PAGE_SIZE_OPTIONS.map((option) => (
                   <option key={option} value={String(option)}>
-                    {option} / page
+                    {translate("{count} / page").replace("{count}", String(option))}
                   </option>
                 ))}
                 <option value="custom">Custom</option>
@@ -1606,7 +1587,11 @@ export default function ProviderLimits() {
                 aria-label="Custom accounts per page"
                 placeholder="Custom"
               />
-              <span className="text-xs text-text-muted">Page {pagination.page} / {pagination.totalPages}</span>
+              <span className="text-xs text-text-muted">
+                {translate("Page {page} / {total}")
+                  .replace("{page}", String(pagination.page))
+                  .replace("{total}", String(pagination.totalPages))}
+              </span>
             </div>
             <div className="flex items-center gap-1.5">
               <button
@@ -1668,6 +1653,8 @@ export default function ProviderLimits() {
             </div>
           </div>
         </div>
+      </>
+      )}
 
       <ConfirmModal
         isOpen={Boolean(resetConfirmState)}

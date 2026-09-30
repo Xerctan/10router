@@ -72,13 +72,19 @@ describe("Usage Quota & Provider Limits i18n", () => {
   });
 
   it("QuotaTable defines translateQuotaName with pattern support for Bonus Pack, weekly, and Balance", () => {
-    const src = readFileSync(
+    const quotaNameSrc = readFileSync(
+      resolve(rootDir, "src/shared/utils/quotaName.js"),
+      "utf8",
+    );
+    expect(quotaNameSrc).toContain("export function translateQuotaName(name)");
+    expect(quotaNameSrc).toContain("Bonus Pack");
+    expect(quotaNameSrc).toContain("weekly");
+    expect(quotaNameSrc).toContain("Balance");
+
+    const tableSrc = readFileSync(
       resolve(rootDir, "src/app/(dashboard)/dashboard/usage/components/ProviderLimits/QuotaTable.js"),
       "utf8",
     );
-    expect(src).toContain("export function translateQuotaName(name)");
-    expect(src).toContain("Bonus Pack");
-    expect(src).toContain("weekly");
-    expect(src).toContain("Balance");
+    expect(tableSrc).toContain("export { translateQuotaName }");
   });
 });

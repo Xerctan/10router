@@ -10,6 +10,9 @@ export function translateQuotaName(name) {
   if (!trimmed) return "";
   const direct = translate(trimmed);
   if (direct !== trimmed) return direct;
+  // Antigravity "<family> · <window>": translate each half on its own.
+  const mFamily = /^(.+?)\s+·\s+(.+)$/.exec(trimmed);
+  if (mFamily) return `${translate(mFamily[1])} · ${translate(mFamily[2])}`;
   const mBonus = /^Bonus Pack (\d+)$/.exec(trimmed);
   if (mBonus) return `${translate("Bonus Pack")} ${mBonus[1]}`;
   const mWeekly = /^weekly\s+(.+)\s+\(7d\)$/i.exec(trimmed);
