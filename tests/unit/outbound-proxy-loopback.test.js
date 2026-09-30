@@ -10,6 +10,13 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { applyOutboundProxyEnv } from "../../src/lib/network/outboundProxy.js";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Resolve the mirrored sources from THIS file, not process.cwd(): the suite
+// runs from tests/ (CI) and from the repo root alike, and cwd-based paths
+// break in one of the two — which is what kept this file's mirror test red in
+// the baseline.
+const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const saved = {};
 const KEYS = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "NINE_ROUTER_PROXY_MANAGED", "NINE_ROUTER_PROXY_URL", "NINE_ROUTER_NO_PROXY"];
@@ -48,9 +55,9 @@ describe("applyOutboundProxyEnv: loopback always bypasses the outbound proxy", (
   });
 
   it("the standalone mirror applies the same loopback merge (kept in sync)", () => {
-    const src = readFileSync(path.join(process.cwd(), "src/lib/network/outboundProxyStandalone.js"), "utf8");
+    const src = readFileSync(path.join(repoRoot, "src/lib/network/outboundProxyStandalone.js"), "utf8");
     expect(src).toContain('"127.0.0.1", "localhost", "::1"');
-    const layout = readFileSync(path.join(process.cwd(), "src/lib/network/outboundProxy.js"), "utf8");
+    const layout = readFileSync(path.join(repoRoot, "src/lib/network/outboundProxy.js"), "utf8");
     expect(layout).toContain('"127.0.0.1", "localhost", "::1"');
   });
 });

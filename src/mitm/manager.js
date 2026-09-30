@@ -712,19 +712,28 @@ async function startServer(apiKey, sudoPassword, forceKillPort443 = false) {
   } else if (isSudoAvailable()) {
     // Pass HOME explicitly so os.homedir() resolves to the unprivileged user's home
     // instead of /root when sudo resets the environment.
+    //
+    // ROUTER_API_KEY must NOT ride in argv (#31): `sudo -S -E sh -c <cmd>` puts
+    // the whole command line in /proc/<pid>/cmdline for the server's entire
+    // life, readable by any local user. It is read from stdin instead — the
+    // same channel the sudo password already uses (sudo consumes the first
+    // line, `read` the second) — and exported inside the shell before exec,
+    // so the server's own argv stays clean too. Prefix assignments would only
+    // bind to the FIRST command (`read`), hence explicit exports.
     const inlineCmd = [
-      `HOME=${shellQuoteSingle(os.homedir())}`,
-      `ROUTER_API_KEY=${shellQuoteSingle(apiKey)}`,
-      `MITM_ROUTER_BASE=${shellQuoteSingle(mitmRouterBase)}`,
-      "NODE_ENV=production",
-      shellQuoteSingle(process.execPath),
-      shellQuoteSingle(effectiveServerPath),
-    ].join(" ");
+      `export HOME=${shellQuoteSingle(os.homedir())}`,
+      `export MITM_ROUTER_BASE=${shellQuoteSingle(mitmRouterBase)}`,
+      "export NODE_ENV=production",
+      "IFS= read -r ROUTER_API_KEY",
+      "export ROUTER_API_KEY",
+      `exec ${shellQuoteSingle(process.execPath)} ${shellQuoteSingle(effectiveServerPath)}`,
+    ].join(" && ");
     serverProcess = spawn(
       "sudo", ["-S", "-E", "sh", "-c", inlineCmd],
       { detached: false, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] }
     );
     serverProcess.stdin.write(`${sudoPassword}\n`);
+    serverProcess.stdin.write(`${apiKey}\n`);
     serverProcess.stdin.end();
   } else {
     // Docker/minimal images: no sudo — same as Windows-style direct spawn
