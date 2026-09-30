@@ -2,6 +2,33 @@
 
 这里展示面向用户的关键更新；完整开发明细见 [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md)。
 
+## v1.3.0 (2026-09-30)
+
+### ✨ 新增
+
+- **CLI 工具「模型组合方案」（Claude 卡，#17）**：Claude 工具卡新增 Profiles 栏，支持将 Opus/Sonnet/Haiku 映射、API Key 与上下文窗口保存为多套命名方案；下拉切换即自动写入 `~/.claude/settings.json`，无需再点 Apply，体验无缝对标 CC-Switch。配置由服务端统一持久化，NAS、Tailscale 或隧道访问时共享同一份设置。
+- **配额可视化重构：QuotaToolbar 与配额窗口时间线**：用量页引入响应式配额工具栏与周期窗口时间线（`QuotaWindowTimeline`），直观呈现各供应商周/月周期的额度重置与倒计时；顶部增加「卡片」与「配额窗口」视图切换（会话级内存保持，刷新恒定默认展示卡片，不污染 localStorage）。多包分段进度条全面对齐 CreditDaddy 视觉语义，并支持卡片顶部展示精确最近到期时间。
+- **全新搜索与抓取供应商 TinyFish 与 Keenable（#26）**：
+  - **TinyFish**（免费层）：全自动支持 Web Search 与 Web Fetch，官方任意余额免扣费，免配置开箱即用；
+  - **Keenable**（标准 API Key）：支持实时/专业模式搜索，以及带 `live=true` 的高保真任意网页抓取；
+  - 媒体提供商页面（Web Search / Web Fetch）及 `/v1/search`、`/v1/web/fetch` 接口全线接入。
+- **ZCode 免费体验包供应商接入（`zcode-free`）**：将 Start Plan / Trust Build 免费额度（GLM-5.3-Flash）通过 CreditDaddy 桌面版「额度网关」接入调度；支持在卡片上配置局域网 CreditDaddy 主机地址，并产出详尽的实战接入指南文档。
+- **Qoder 逐包明细优先用 CreditDaddy 网页会话**：通过同步的浏览器会话直读控制台精确逐包用量与到期时间，杜绝近似估算偏差，带账号所有权防串号校验。
+- **LongCat-2.5-Preview 与国际站支持**：接入 LongCat-2.5-Preview（1M 上下文，支持图像与视频多模态输入及思考模式），新增 `longcat.ai` 国际站独立卡片。
+- **桌面壳「容器」密码管理（`639f77a8`）**：桌面版内嵌网页（WorkBuddy、CodeBuddy 等）支持账号密码自动捕获、右键填充与独立密码管理面板，凭据通过系统安全存储（DPAPI / safeStorage）本地加密落盘。
+- **全站深浅色模式系统自适应**：登录页及主界面自动跟随操作系统主题变化，带首屏防白屏闪烁脚本。
+
+### 🐛 修复
+
+- **用量详情输入 Token 不再被缓存值顶替**：彻底修复未折叠 Claude usage 结构导致的高缓存命中请求（如 zcode-free）输入列与缓存列 1:1 显示的视觉失真问题。
+- **全新安装冷启动静态模型暴露**：修复在数据库无任何连接记录的全新安装环境下，`noAuth` 体验供应商（opencode、mimo-free、zcode-free）在 `/v1/models` 中无法展示的问题。
+- **OpenAI Responses 审核中断原因映射**：将 Responses 的 `incomplete_details.reason === "content_filter"` 正确转换为 Chat 补全的 `finish_reason: "content_filter"`，防止 SDK 误判为 length 长度截断。
+- **代理配置容错与安全穿透（#36）**：支持不带 scheme 的代理格式（如 `127.0.0.1:7890`，自动规范为 `http://`）；密文解析失败时维持密文字符串，坚决杜绝意外降级直连泄露真实 IP；保存时严格阻断非法协议。
+- **反重力（Antigravity）稳定性强化**：移除官方已弃用的 `requestType:"agent"` 避免无故触发 429 报错；修复空字符串工具结果导致的 400 异常；长函数名自动映射与还原；大幅强化工具 schema 清洗（支持本地 `$ref` 内联解环，避免丢参数）。
+- **未知裸模型名严禁前缀盲猜（#34）**：未命中的裸模型名直接返回 400 指引，不再随机推断为错误供应商导致 404。
+- **远程虚拟 Key 权限修正（#38）**：恢复持有有效虚拟 Key 远程添加/更新自定义供应商的通道，打通外部工具自动化同步。
+- **MITM 安全加固（#31）**：sudo 启动时 `ROUTER_API_KEY` 彻底移出命令行参数改走安全标准输入，避免从系统进程列表泄漏。
+
 ## v1.2.1 (2026-09-26)
 
 ### 🔒 安全

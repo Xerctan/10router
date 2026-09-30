@@ -24,6 +24,7 @@ Architecture and engineering notes for the 10Router gateway + dashboard. All doc
 - [Usage Import Rows Contract](/docs/zh-CN/usage-import-rows.md) (zh-only) — the `meta.imported` display contract for imported usage rows: usageHistory vs requestDetails, tag-and-backfill, read-side synthesis, and the double-display boundary.
 - [Mirasim Usage Ledger](/docs/zh-CN/mirasim-usage-ledger.md) (zh-only) — the mirasim desktop local usage ledger as a sync data source: full insights field table, anti-double-count rules, and known boundaries.
 - [ZCode × CodeBuddy CN Compatibility &amp; Plugin Design](/docs/zh-CN/zcode-cbcn-compatibility-and-plugin-design.md) (zh-only) — governance of the CodeBuddy CN 11128 channel-scope risk control, session-size control, and the `10router-sync` plugin collaboration design.
+- [ZCode Integration &amp; Proxy Guide](/docs/zh-CN/zcode-integration-and-proxy-guide.md) (zh-only) — comprehensive guide on reverse-proxying ZCode client, consuming free trial packs via CreditDaddy gateway, and official Coding Plan subscriptions.
 - [MITM Proxy Security Hardening](/docs/en/mitm-security-hardening.md) — the four security fixes (TLS verification, 0600 root CA key, no blind port-443 kill, hosts cleanup).
 - [Mirasim-bundled dsh tool_call id/name loss](/docs/en/mirasim-dsh-toolcall-loss.md) — third-party bug causing 11133/`unknown tool ""`; 10Router does not work around it.
 - [Monochrome Tray Icons](/docs/en/tray-icon-monochrome.md) — the alpha-channel trap of macOS template images and Windows' dual theme registries (taskbar ≠ app mode).

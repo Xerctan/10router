@@ -20,15 +20,19 @@
 - **未知裸模型名不再按前缀猜 provider 后静默回落（#34）**：`/v1/chat/completions` 发不带 provider 前缀的裸名（如 `deepseek-v4.1-flash`）此前按名字前缀猜 provider（`deepseek-`→openrouter、`claude-`→anthropic、其余→openai），猜中后直接去撞凭证库，报出与真实原因毫不相干的 `No active credentials for provider: <猜的>` 404。现在 chat 主路径对未命中别名/combo 的裸名直接拒绝：400 `Unknown model: "<name>"…`，指向 `/v1/models` 的带前缀 id。**范围刻意收窄**：仅 chat 主路径关闭推断；`/v1/audio|images|embeddings` 等 OpenAI SDK 惯例发裸名（`tts-1`）的面保留推断；combo 内部条目（作者显式写入）与内置/用户别名不受影响。解析重构为 `resolveModelAliasCore`（纯别名解析）+ 可选推断，测试 `tests/unit/bare-model-resolution.test.js` 8 例。
 - **ZCode 免费体验包供应商（`zcode-free`，体验分类）**：Start Plan / Trust Build 体验包（GLM-5.3-Flash，1M 上下文 + 视觉）经 CreditDaddy 桌面版「额度网关」接入——上游 `POST http://127.0.0.1:47860/gateway/v1/messages`（Anthropic 形态），CreditDaddy 负责账号轮换 + 隐藏窗口静默过阿里云验证码；本条目只做端点映射，noAuth 无需连接行。体验分类与 OpenCode Free 一致（`community` 默认展示在体验簇）。配套：`/v1/models` 对 noAuth 供应商新增注册表模型发射通道（`exposeStaticModels` 显式 opt-in，不影响 opencode / mimo-free 既有行为）；官方 Z 图标 `public/providers/zcode-free.png`。
   - **CreditDaddy 主机可配置**：`zcode-free` 卡片可设置网关主机（留空 = 本机 127.0.0.1，局域网填 CreditDaddy 主机 IP + 端口，默认 47860）——`getProviderCredentials` 对 noAuth 虚拟连接注入覆盖 baseUrl，执行器按注入值拼 `/messages`；建了带 key 的连接时优先走真实连接（key = 对端「10Router 连接设置」的虚拟 key，远程网关鉴权用）。
+  - **接入与反代实战文档**：详尽梳理 ZCode 客户端反向路由至 10Router 网关、免费体验包额度网关消费、以及官方 Coding Plan 正式订阅直连的三重链路与避坑指南，产出 `docs/zh-CN/zcode-integration-and-proxy-guide.md`。
 
-- **ZCode 原生供应商内置（智谱编码套餐，浏览器登录 + CreditDaddy 导入 + 本机导入）**：
-  - **链路与零验证码闭环**：验证了社区 zcode-api 代理机制——OAuth 登录换得 access_token 后，走 bigmodel.cn biz API 找/建名为 `zcode-api-key` 的密钥并获取 secret，换得标准 API 密钥（`id.secret` 格式），请求直打 `open.bigmodel.cn/api/coding/paas/v4`（OpenAI 格式）与 `/api/anthropic`（Claude 格式）标准端点，**补全流量完全不碰 captcha-gated (3007) 的 zcode.z.ai plan 接口**，既定拒绝规避风控的路线得到保持。智谱 upstream 无 token 刷新机制，mint 出的标准 key 长效可用。
-  - **注册表 `open-sse/providers/registry/zcode.js`**：id/alias `zcode`，display ZCode（ZC 紫色），`category:"oauth"`，`authModes:["oauth","apikey"]` 双认证模式（仿 kimi 先例）；transports 双端点直连；models 收录 11 个 GLM 编码模型（glm-5.3/5.3-flash/5.2/5.1/5v-turbo/5-turbo/5/4.7/4.6/4.6v/4.5-air）；`features.usage:true` 挂接 bigmodel 配额查询。三份注册表基线（providers/alias/oauth-urls）已同步重快照。
-  - **浏览器登录全链**：`src/lib/oauth/providers/zcode.js` + `src/lib/oauth/utils/server.js` 实现现行 auth-code 协议（旧 cli/init+poll 已被智谱 404 删除）：本地动态端口回调监听（`/oauth/callback/bigmodel`）+ 浏览器打开 `bigmodel.cn/login?appId=zcode`，回调命中即服务端完成 token 交换与 biz API mint，写入 `zcode` 连接（标记 `authMethod:"oauth"`）。弹窗被拦截时支持手动粘贴重定向 URL 走同一服务端 mint 路径（NAS 等远程场景兜底）。`OAuthModal.js` 接线自动纳入弹窗与轮询。
-  - **CreditDaddy 账号导入（`POST /api/oauth/zcode/import`）**：针对 techysy/CreditDaddy 导出的 `10router-oauth-secure-v1` 信封，适配其 `accessToken` 为 `zcode-creds:<uid>` 占位标记、真实料在 `meta.credentials` 的结构；对未 mint 凭证自动走 biz API 换标准 key；z.ai 侧账号在 v1 阶段显式拒绝并提示（避免打错 bigmodel 端点）。守卫接入 loopback 免登录放行（同通用 transfer/import）。
-  - **本机 ZCode 安装导入（`GET /api/oauth/zcode/auto-import`）**：`src/lib/oauth/zcodeLocalInstall.js` 只读扫描本机的 `~/.zcode/v2/config.json` 与 `credentials.json`。内置 enc:v1 AES-256-GCM 解密算法（按 platform/home/username 派生 fallback key，纯 Node 无依赖），优先提取 ZCode 运行时已缓存的 `account-provider:coding-plan:account:bigmodel-*:api-key`，做到完全离线零网络导入；无缓存 key 时退回 access_token 再 mint。跳过非 bigmodel 侧凭据。dashboardGuard LOCAL_ONLY 锁死。
-  - **仪表盘 UI 与连接名排重**：`OAuthTransferModal.js` 对 zcode 路由重定向到专属导入器；提供商详情页挂出「从本机安装导入」按钮；修复 `POST /api/providers` 同名校验此前裸传字符串导致同名拦截跨 provider 误杀其他同名节点（如自定义节点）的预存 bug（改为 `{ provider }` 对象）。zh-CN/zh-TW 最小补全 4 个新词条。
-  - **单测 29 例**：`zcode-key-mint.test.js`（17 例，mock fetch 验证 token 交换、默认组织/项目提取、find-or-create、secret 降级、z.ai login、回调解析、payload 组装、去重匹配）；`zcode-local-install.test.js`（9 例，fixture 注入验证密钥派生、enc:v1 往返、config.json 提取、缓存 key 提取、access_token 回退、多源去重、跨主机拒解）；`zcode-import.test.js`（3 例，真实 sqlite 落地、同 key 幂等更新、去重、3007 隔离红线断言）。
+- **配额可视化重构：QuotaToolbar 与配额窗口时间线（#26、#28 协同）**：
+  - **响应式工具栏与窗口时间线**：新增 `QuotaToolbar`、`QuotaWindowTimeline` 与 `QuotaMeter`，支持在用量页展示各供应商周/月滚动周期窗口，直观呈现额度到期倒计时与重置进度。
+  - **会话级视图切换（非持久化）**：用量页顶部增加「卡片」与「配额窗口」Tab 切换。刻意设计为仅会话态内存保持，刷新或再次进入恒定默认开启「卡片」视图，绝不落 localStorage，彻底避免用户上次查看时间线后下次打开找不到卡片的迷失感。
+  - **多包分段进度条与明细折叠**：`QuotaPackBar` 忠实对齐 CreditDaddy 视觉语义，支持多资源包（赠送包/套餐包）分段聚合展示，并在卡片顶部显示精确最近到期时间。配套完整单测（`tests/unit/quota-*.test.js`）。
+
+- **Qoder 逐资源包明细优先用 CreditDaddy 同步的网页会话（`648ac994`）**：
+  - openapi 仅有聚合 addOnQuota，逐包（精确 used + 各自到期）只在网页端 `/api/v2/me/usages/big_model_credits` 提供（仅认浏览器 httpOnly Cookie）。
+  - CreditDaddy 登录窗口会捕获该 Cookie 并随账号同步写进 `providerSpecificData.creditDaddyWebSession`。
+  - `getQoderUsage` 优先利用该会话拉取精确 packs 并进行所有者 `userId` 校验防串号；无会话或 401 时平滑降级至既有 campaign 近似。单测 `tests/unit/qoder-web-packs.test.js` 4 例。
+
+- **LongCat-2.5-Preview 与国际站支持**：新增 LongCat-2.5-Preview（1M/128K 上下文，支持图像与视频双模态输入，支持思考模式开关），并补充 `longcat.ai` 国际站独立提供商卡片与 CN 邀请链接。
 
 - **桌面壳「容器」密码管理（浏览器式全自动，`639f77a8`）**：主窗体/壳内弹窗加载的外部网页（「前往→打开网址/最近打开」的 WorkBuddy、CodeBuddy 等）此前零密码能力。三件套：`desktop/passwordStore.js`（纯 Node 密码库，cipher 注入可测；`userData/passwords.json` 只落 Electron safeStorage 密文——Windows 即 DPAPI 绑当前系统用户；同 origin+username 幂等、密码不同即更新、neverAsk 站点黑名单、上限 200 条）+ `desktop/preload-container.js`（sandbox 安全 preload，不向页面暴露任何东西）+ `main.js` 容器登记 / 保存询问窗 / 管理窗 / 右键填充。行为与边界：
   - **捕获双路**：`<form>` submit 直接抓用户名+密码；SPA 无 form 登录靠启发式——密码框输入防抖上报，主进程在 did-navigate 同 origin 换路径时视为登录成功转保存询问（原地提交 / 换站 / 超 10 分钟不算）；多密码框值不同=注册/改密表单，跳过。询问窗可改完用户名密码再存，或「永不保存此站点」。
@@ -39,10 +43,14 @@
 
 ### 🐛 修复
 
-- **代理配置合法性校验与严格代理链路打通（#36）**：
-  - **保存时协议白名单拦截**：在代理池及供应商独立代理的创建/更新路由接入协议校验（`http/https/socks4/5/5h/4a`），精准识别并阻断 `enc://` 不支持协议与误粘贴的 `enc:v1:` 密文（给出直观提示），防止非法协议 URL 进库。
-  - **`strictProxy` 穿透聊天主流程**：打通 `connectionProxy` -> `auth.js` -> `chatCore` -> `proxyFetch` 链路，修正此前代理池「严格模式」在对话主链路丢失生效、发生异常始终回退直连的问题。
-  - **代理失败降级显式化**：在非严格模式发生直连降级时，通过 `onProxyFallback` 回调将代理失败详情记录至服务日志及 `requestDetails` 报错备注，避免用户被无上下文的上游 400 误导。
+- **用量详情输入 Token 不再被缓存值顶替（`5fa83137`）**：请求明细存的是未折叠的 Claude 形态 usage（`prompt_tokens` 不含缓存，`cache_read_input_tokens` 另存）。此前前端在 `prompt < cache` 时直接回退显示 cache，导致高缓存命中供应商（如 `zcode-free` 命中率约 99%）输入与缓存列显示恒为 1:1。抽离 `src/shared/utils/usageDisplay.js` 判别式：无顶层 `cached_tokens` 时自动折叠 `prompt + cacheRead + cacheCreation`，恢复真实输入总量展示。
+- **全新安装冷启动静态模型暴露（`54bb9469`）**：修复在数据库没有任何连接行的新安装环境下，`noAuth` 供应商（如 opencode、mimo-free、zcode-free）在 `/v1/models` 无法列出模型的问题；针对带 `exposeStaticModels: true` 的提供商自动派发静态模型定义。
+- **OpenAI Responses 审核中断原因映射（`96157305`）**：`nonStreamingHandler` 将 Responses 格式中的 `incomplete_details.reason === "content_filter"` 正确转换为 Chat 补全规范的 `finish_reason: "content_filter"`（此前误回落至 `"length"`），避免下游 SDK 误判为 token 上限截断。
+- **代理配置容错与严格代理链路打通（#36、`a382c9c6`）**：
+  - **无 Scheme 主机自动归一**：`proxyFetch` 与 `outboundProxy` 允许填入无 scheme 的代理地址（如 `127.0.0.1:7890`，自动规范为 `http://`），提升配置容错性；
+  - **密文解密失败防直连逃逸**：代理密文解析失败时维持不可读密文字符串，防止触发 `strictProxy` 关闭时的直连降级通道，杜绝代理泄漏风险；
+  - **保存时协议白名单拦截**：在代理池及供应商独立代理的创建/更新路由接入协议校验（`http/https/socks4/5/5h/4a`），精准识别并阻断 `enc://` 等不支持协议。
+- **主题模式系统自适应与防闪烁（`7d827880`、`ff787829`）**：登录页支持主题切换，全局增加跟随系统昼夜变化机制（Win/fnOS/macOS）；在 HTML 根注入 pre-paint 启动脚本，彻底根除深色模式刷新时的白屏闪烁。
   - **已有密文兼容解密**：在解析代理池及连接配置时增加 `unwrapProxyUrl`，透明解密误存或迁移遗留的 `enc:v1:` 格式，防止因协议解析异常中断。
   - 附单测 `issue-36-proxy-strict.test.js` 8 例。
 
