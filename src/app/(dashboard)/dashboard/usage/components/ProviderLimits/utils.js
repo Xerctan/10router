@@ -628,7 +628,9 @@ export function parseQuotaData(provider, data) {
             if (quotaType === "addOn" && Array.isArray(quota.packs)) {
               quota.packs.forEach((pack, i) => {
                 normalizedQuotas.push({
-                  name: pack.unitemized ? "Bonus Pack (unitemized)" : `Bonus Pack ${i + 1}`,
+                  // A pack may carry its own name (Qoder's merged "Plan Credits"
+                  // rows keep it, so the detail table still says 套餐内 Credits).
+                  name: pack.name || (pack.unitemized ? "Bonus Pack (unitemized)" : `Bonus Pack ${i + 1}`),
                   used: pack.used || 0,
                   total: pack.total || 0,
                   unit: quota.unit,

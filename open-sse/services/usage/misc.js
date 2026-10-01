@@ -502,8 +502,11 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
       if (web && (!owner || !web.sourceUserId || owner === web.sourceUserId)) {
         // 套餐内 Credits 本身也是一个资源包（用户定版 2026-10-01）：plan 行并入
         // 包序列按到期日混排，随资源包一起进池、进逐包明细，不再单独成行。
-        addOnPacks = [...web.planRows, ...web.packs]
-          .sort((a, b) => String(a.expiresAt || "9999").localeCompare(String(b.expiresAt || "9999")));
+        // 保留 "Plan Credits" 名称（i18n: 套餐内 Credits），明细里认得出它。
+        addOnPacks = [
+          ...web.planRows.map((p) => ({ ...p, name: "Plan Credits" })),
+          ...web.packs,
+        ].sort((a, b) => String(a.expiresAt || "9999").localeCompare(String(b.expiresAt || "9999")));
         addOnResetAt = addOnPacks[0]?.expiresAt || null;
         webPlan = sumWebRows(web.planRows);
         webOrg = sumWebRows(web.orgRows);

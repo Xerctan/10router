@@ -142,9 +142,11 @@ describe("getQoderUsage — web per-pack breakdown (CreditDaddy synced cookie)",
     // Org packages sum into the organization bucket.
     expect(out.quotas.organization).toMatchObject({ total: 50, used: 10, remaining: 40 });
     // Plan 行并入包序列按到期日混排（套餐内 Credits 本身也是一个资源包）：
-    // 100(10-07) → 200(10-21) → 800(10-25)。
+    // 100(10-07) → 200(10-21) → 800(10-25)，plan 包保留 "Plan Credits" 名称。
     expect(out.quotas.addOn.packs.map((p) => p.total)).toEqual([100, 200, 800]);
     expect(out.quotas.addOn.packs[0].remaining).toBe(0);
+    expect(out.quotas.addOn.packs.filter((p) => p.name === "Plan Credits").map((p) => p.total))
+      .toEqual([100, 200]);
     // 聚合 = 包和（明细替代聚合）：1,100 total / 150 used / 950 remaining。
     expect(out.quotas.addOn).toMatchObject({ total: 1100, used: 150, remaining: 950 });
     expect(out.quotas.addOn.resetAt).toBe(new Date(1790000000000).toISOString());
