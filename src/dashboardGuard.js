@@ -65,6 +65,7 @@ const ALWAYS_PROTECTED = [
   "/api/version/update",
   "/api/oauth/cursor/auto-import",
   "/api/oauth/kiro/auto-import",
+  "/api/oauth/zed/auto-import",
   "/api/oauth/xiaomi-mimo/desktop-status",
   "/api/oauth/xiaomi-mimo/desktop-kill",
   // Reads MiMo Desktop's local auth.json and returns the full sk- key —
@@ -113,6 +114,7 @@ const LOCAL_ONLY_PATHS = [
   "/api/tunnel/disable",
   "/api/oauth/cursor/auto-import",
   "/api/oauth/kiro/auto-import",
+  "/api/oauth/zed/auto-import",
   // Host-secret reader (MiMo Desktop auth.json) — remote/LAN calls must never
   // reach it, matching the cursor/kiro auto-import siblings. desktop-status /
   // desktop-kill join them: process control on the host machine is exactly the

@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { getProviderIconSrc, markProviderIconMissing } from "@/shared/utils/providerIcon";
-import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, XiaomiMimoAuthModal, IFlowCookieModal, GitLabAuthModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal, InviteCodeChip, Tooltip } from "@/shared/components";
+import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, ZedAuthModal, XiaomiMimoAuthModal, IFlowCookieModal, GitLabAuthModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal, InviteCodeChip, Tooltip } from "@/shared/components";
 import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, FREE_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, getProviderAlias, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, AI_PROVIDERS } from "@/shared/constants/providers";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { mergeQoderLivePricing } from "@/shared/utils/qoderLivePricing";
@@ -853,10 +853,13 @@ export default function ProviderDetailPage() {
     }
   };
 
-  const handleAddCustomModel = async (modelId, type = "llm", providerAliasOverride = providerStorageAlias, caps = {}, enabled) => {
+  const handleAddCustomModel = async (modelId, type = "llm", providerAliasOverride = providerStorageAlias, caps = {}, enabled, transport) => {
     try {
       const body = { providerAlias: providerAliasOverride, id: modelId, type };
       if (enabled !== undefined) body.enabled = enabled;
+      // Realtime STT dispatch marker — the API whitelist only honours it on
+      // type "stt" records and silently drops unknown values.
+      if (transport) body.transport = transport;
       if (caps && typeof caps === "object") {
         for (const k of ["vision", "reasoning", "contextWindow", "maxOutput", "thinkingFormat"]) {
           if (caps[k] !== undefined) body[k] = caps[k];
@@ -2385,6 +2388,13 @@ export default function ProviderDetailPage() {
           onSuccess={handleOAuthSuccess}
           onClose={() => setShowOAuthModal(false)}
         />
+      ) : providerId === "zed" ? (
+        <ZedAuthModal
+          isOpen={showOAuthModal}
+          providerInfo={providerInfo}
+          onSuccess={handleOAuthSuccess}
+          onClose={() => setShowOAuthModal(false)}
+        />
       ) : providerId === "gitlab" ? (
         <GitLabAuthModal
           isOpen={showOAuthModal}
@@ -2456,8 +2466,8 @@ export default function ProviderDetailPage() {
           isOpen={showAddCustomModel}
           providerAlias={providerStorageAlias}
           providerDisplayAlias={providerDisplayAlias}
-          onSave={async (modelId, caps) => {
-            await handleAddCustomModel(modelId, "llm", providerStorageAlias, caps || {});
+          onSave={async (modelId, caps, modelType, transport) => {
+            await handleAddCustomModel(modelId, modelType || "llm", providerStorageAlias, caps || {}, undefined, transport);
             setShowAddCustomModel(false);
           }}
           onClose={() => setShowAddCustomModel(false)}
