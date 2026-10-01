@@ -153,6 +153,26 @@ describe("recovery: the reset-password file", () => {
     expect(await applyPasswordResetFile()).toBeNull();
   });
 
+  it("accepts reset-password.txt too (extensionless files are awkward on Windows)", async () => {
+    db.settings = { requireLogin: true };
+    const txt = path.join(tempDir, "reset-password.txt");
+    fs.writeFileSync(txt, "Recovered-Txt-1\n");
+    expect((await tryLogin("Recovered-Txt-1")).status).toBe(200);
+    expect(fs.existsSync(txt)).toBe(false);
+  });
+
+  it("the extensionless name wins when both exist", async () => {
+    db.settings = { requireLogin: true };
+    const txt = path.join(tempDir, "reset-password.txt");
+    fs.writeFileSync(RESET, "Plain-Wins-1\n");
+    fs.writeFileSync(txt, "Txt-Loses-1\n");
+    expect((await tryLogin("Plain-Wins-1")).status).toBe(200);
+    expect(fs.existsSync(RESET)).toBe(false); // winner consumed first…
+    expect(fs.existsSync(txt)).toBe(true);    // …runner-up untouched until next login
+    expect((await tryLogin("Txt-Loses-1")).status).toBe(200);
+    expect(fs.existsSync(txt)).toBe(false);
+  });
+
   it("is applied at start, on log-in, and before the login page reads its status", () => {
     expect(readSource("src/shared/services/initializeApp.js")).toContain("await applyPasswordResetFile()");
     expect(readSource("src/app/api/auth/login/route.js")).toContain("await applyPasswordResetFile()");
@@ -170,7 +190,7 @@ describe("the entries users actually reach", () => {
   it("login page: a 'Forgot your password?' entry with the recovery steps incl. the file format", () => {
     const page = readSource("src/app/login/page.js");
     expect(page).toContain("Forgot your password?");
-    expect(page).toContain("reset-password (exactly, no extension)");
+    expect(page).toContain("reset-password (or reset-password.txt");
     expect(page).toContain("empty file removes the stored password");
     expect(page).toContain('status?.installChannel === "fpk"');
   });

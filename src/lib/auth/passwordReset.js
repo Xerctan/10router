@@ -6,7 +6,9 @@ import { updateSettings } from "@/lib/localDb";
 
 // Recovery entry for a forgotten / unusable dashboard password (issue #33).
 //
-// Put a file named `reset-password` in the data directory:
+// Put a file named `reset-password` (or `reset-password.txt` — Windows Explorer
+// makes extensionless files awkward and hides extensions, so that is what people
+// end up with) in the data directory:
 //   - with a password in it  → that becomes the dashboard password
 //   - empty                  → the stored password is removed and log-in falls back
 //                              to the first-login password (INITIAL_PASSWORD /
@@ -16,17 +18,23 @@ import { updateSettings } from "@/lib/localDb";
 // restart needed) and deleted before anything else, so the plaintext does not
 // linger. Only someone who can write to the data directory can use it — and that
 // person can already read the whole database, so it grants nothing new.
-// fnOS writes it from App Center → 10Router → 应用设置 (cmd/config_callback).
+// fnOS writes the extensionless one from App Center → 10Router → 应用设置
+// (cmd/config_callback). Full spec: docs/zh-CN/dashboard-password-recovery.md.
 export const PASSWORD_RESET_FILE = "reset-password";
+export const PASSWORD_RESET_FILES = [PASSWORD_RESET_FILE, "reset-password.txt"];
 
 export async function applyPasswordResetFile() {
-  const file = path.join(getDataDir(), PASSWORD_RESET_FILE);
-  let content;
-  try {
-    content = fs.readFileSync(file, "utf8");
-  } catch {
-    return null; // no reset requested
+  let file = null;
+  let content = null;
+  for (const name of PASSWORD_RESET_FILES) {
+    const candidate = path.join(getDataDir(), name);
+    try {
+      content = fs.readFileSync(candidate, "utf8");
+      file = candidate;
+      break; // extensionless name wins when both exist
+    } catch { /* try the next name */ }
   }
+  if (!file) return null; // no reset requested
   try {
     fs.rmSync(file, { force: true });
   } catch (e) {
