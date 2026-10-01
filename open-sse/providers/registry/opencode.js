@@ -24,6 +24,11 @@ export default {
     },
     noAuth: true,
     forceStream: true,
+    // Muse Spark 1.3-Free 400s on any tool_choice other than "auto" (named /
+    // required / none). Demote in the executor; extend only with evidence.
+    quirks: {
+      forceAutoToolChoiceModels: ["muse-spark-1.3-contributor-free"],
+    },
   },
   models: [
     // Free catalog mirrors the official "limited-time free" list on
