@@ -152,24 +152,6 @@ export async function POST(request) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
-    // 同名 apikey 连接拒绝创建而不是静默覆盖存储的 key（#4311 / 上游 239bcfc5）：
-    // 脚本复用名字（"Key 1"、"Key 2"…）曾把连接池里已有的条目直接覆盖掉，
-    // 无 409 无警告。仅约束 API 入口——oauth 重连等内部 upsert 流程不受影响。
-    if (name && !isWebCookieProvider) {
-      // Filter arg must be the object form — a bare string is ignored by
-      // getProviderConnections(filter) and the name check went cross-provider
-      // (a "ZCode Coding Plan" node on another provider blocked the same name here).
-      const existing = (await getProviderConnections({ provider })).find(
-        (c) => c.authType === "apikey" && c.name === connectionName
-      );
-      if (existing) {
-        return NextResponse.json(
-          { error: `An apikey connection named "${connectionName}" already exists for this provider. Choose a different name.` },
-          { status: 409 }
-        );
-      }
-    }
-
     let providerSpecificData = normalizeProviderSpecificData(provider, body, body.providerSpecificData);
 
     // Compatible LLM nodes support multiple API-key connections (key pool); runtime
@@ -229,6 +211,11 @@ export async function POST(request) {
       providerSpecificData: mergedProviderSpecificData,
       isActive: true,
       testStatus: testStatus || "unknown",
+      // 同名 apikey 连接拒绝创建而不是静默覆盖存储的 key（#4311 / 上游 239bcfc5）：
+      // 脚本复用名字（"Key 1"、"Key 2"…）曾把连接池里已有的条目直接覆盖掉，
+      // 无 409 无警告。判定与 409 映射在下方 catch；web-cookie 供应商沿用旧的
+      // 同名覆盖语义（cookie 轮换靠同名更新），oauth 重连等内部 upsert 不受影响。
+      allowOverwrite: isWebCookieProvider ? undefined : false,
     });
 
     // Hide sensitive fields
@@ -237,6 +224,12 @@ export async function POST(request) {
 
     return NextResponse.json({ connection: result }, { status: 201 });
   } catch (error) {
+    if (error?.code === "PROVIDER_NAME_CONFLICT") {
+      return NextResponse.json(
+        { error: error.message, code: error.code, existingId: error.existingId, existingName: error.existingName },
+        { status: 409 }
+      );
+    }
     console.log("Error creating provider:", error);
     return NextResponse.json({ error: "Failed to create provider" }, { status: 500 });
   }
