@@ -135,15 +135,19 @@ describe("getQoderUsage — web per-pack breakdown (CreditDaddy synced cookie)",
       userId: "u-1",
       creditDaddyWebSession: { cookie: "plan-session", userId: "u-1" },
     });
-    // Plan rows sum into the user bucket — the openapi userQuota is zeroed on
-    // accounts like this one, which used to hide the 套餐内 Credits row entirely.
+    // Plan rows still sum into the user bucket (API contract), though the
+    // dashboard no longer charts it as a separate "Plan Credits" row.
     expect(out.quotas.user).toMatchObject({ total: 300, used: 150, remaining: 150 });
     expect(out.quotas.user.resetAt).toBe(new Date(1790000000000).toISOString());
     // Org packages sum into the organization bucket.
     expect(out.quotas.organization).toMatchObject({ total: 50, used: 10, remaining: 40 });
-    // Packs still ride addOn with the shared web resetAt (soonest pack expiry).
-    expect(out.quotas.addOn.packs.map((p) => p.total)).toEqual([800]);
-    expect(out.quotas.addOn.resetAt).toBe(new Date(1793000000000).toISOString());
+    // Plan 行并入包序列按到期日混排（套餐内 Credits 本身也是一个资源包）：
+    // 100(10-07) → 200(10-21) → 800(10-25)。
+    expect(out.quotas.addOn.packs.map((p) => p.total)).toEqual([100, 200, 800]);
+    expect(out.quotas.addOn.packs[0].remaining).toBe(0);
+    // 聚合 = 包和（明细替代聚合）：1,100 total / 150 used / 950 remaining。
+    expect(out.quotas.addOn).toMatchObject({ total: 1100, used: 150, remaining: 950 });
+    expect(out.quotas.addOn.resetAt).toBe(new Date(1790000000000).toISOString());
     // Campaign endpoint NOT consulted — the web packs are present.
     expect(calls.some((c) => c.url.includes("/campaigns"))).toBe(false);
   });

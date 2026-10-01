@@ -500,8 +500,11 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
       const web = await fetchQoderWebPacks(webSession.cookie, providerId, proxyOptions);
       const owner = providerSpecificData?.userId || null;
       if (web && (!owner || !web.sourceUserId || owner === web.sourceUserId)) {
-        addOnPacks = web.packs;
-        addOnResetAt = web.resetAt;
+        // 套餐内 Credits 本身也是一个资源包（用户定版 2026-10-01）：plan 行并入
+        // 包序列按到期日混排，随资源包一起进池、进逐包明细，不再单独成行。
+        addOnPacks = [...web.planRows, ...web.packs]
+          .sort((a, b) => String(a.expiresAt || "9999").localeCompare(String(b.expiresAt || "9999")));
+        addOnResetAt = addOnPacks[0]?.expiresAt || null;
         webPlan = sumWebRows(web.planRows);
         webOrg = sumWebRows(web.orgRows);
       }
@@ -552,19 +555,14 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
       used: Number(orgQuota.used) || 0,
       remaining: Number(orgQuota.remaining) || 0,
     };
-    // The openapi addOnQuota zeroes out on those same accounts while the packs
-    // are live (web rows or the campaigns fallback). The packs ARE the
-    // resource-package bucket then — sum them into the aggregate so the card's
-    // "Resource Package" row survives instead of being skipped as an empty
-    // bucket. When the aggregate is live it stays authoritative: the campaigns
-    // list is incomplete (buildQoderAddOnPacks reconciles its packs against it).
-    const addOnAggTotal = Number(addOnQuota.total) || 0;
+    // addOn 聚合以包明细为准（CreditDaddy 模型：明细替代聚合）——web 行已把
+    // 套餐内 plan 行并入包序列，campaigns 路径的包也按 openapi 聚合对账
+    // （buildQoderAddOnPacks 追加 unitemized 余量），两条路的 packSum 都自洽。
+    // openapi addOnQuota 在部分账号整体置零，绝不能在包存在时压过包和。
     const packSum = (k) => addOnPacks.reduce((s, p) => s + (Number(p[k]) || 0), 0);
-    const addOnBucket = addOnAggTotal > 0
-      ? { total: addOnAggTotal, used: Number(addOnQuota.used) || 0, remaining: Number(addOnQuota.remaining) || 0 }
-      : addOnPacks.length > 0
-        ? { total: packSum("total"), used: packSum("used"), remaining: packSum("remaining") }
-        : { total: 0, used: 0, remaining: 0 };
+    const addOnBucket = addOnPacks.length > 0
+      ? { total: packSum("total"), used: packSum("used"), remaining: packSum("remaining") }
+      : { total: Number(addOnQuota.total) || 0, used: Number(addOnQuota.used) || 0, remaining: Number(addOnQuota.remaining) || 0 };
     const quotas = {
       user: {
         total: planBucket.total,

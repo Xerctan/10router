@@ -567,13 +567,18 @@ export function parseQuotaData(provider, data) {
 
       case "qoder":
       case "qoder-cn":
-        // Qoder ships `user`, `addOn` (resource packages) and optionally
+        // Qoder ships `user` (plan), `addOn` (resource packages) and optionally
         // `organization`, each {total, used, remaining, unit, resetAt}. `addOn`
         // additionally carries `packs[]` — but those packs ARE the addOn
         // breakdown, already summed into addOn.total (500+400 = 900). Charting
         // both the aggregate AND its members double-counted the same credits, so
         // the packs are emitted `detailOnly`: the per-pack table (逐包明细) lists
         // them with their own expiry dates, the card never charts them.
+        //
+        // The `user` bucket is NOT charted (用户定版 2026-10-01): Plan Credits
+        // 本身就是一个资源包，misc.js 已把 plan 行并入 addOn.packs 按到期日
+        // 混排进池，单独一行会与包明细重复计读（#187 症状：0/300 的套餐行
+        // 挂在卡上，而它的额度已含在总数里）。
         //
         // Don't forward Qoder's `remaining`: it is an absolute credit count, but
         // getRemainingPercentage / QuotaTable read `remaining` as a 0-100
@@ -582,24 +587,22 @@ export function parseQuotaData(provider, data) {
         if (data.quotas) {
           Object.entries(data.quotas).forEach(([quotaType, quota]) => {
             const total = Number(quota?.total) || 0;
+            if (quotaType === "user") return;
             // A zero-total bucket carries no allowance; showing it as "剩 0 / 0"
-            // is noise (and on Qoder every account has an empty `user` row and an
-            // empty `organization` row).
-            if (quotaType === "organization" || quotaType === "user" || quotaType === "addOn") {
-              if (total === 0) return;
+            // is noise (and on Qoder every account has an empty `organization` row).
+            if ((quotaType === "organization" || quotaType === "addOn") && total === 0) {
+              return;
             }
             const resetAt =
               quota.resetAt && new Date(quota.resetAt).getFullYear() <= 2099
                 ? quota.resetAt
                 : null;
             const displayName =
-              quotaType === "user"
-                ? "Plan Credits"
-                : quotaType === "addOn"
-                  ? "Resource Package"
-                  : quotaType === "organization"
-                    ? "Organization"
-                    : quotaType;
+              quotaType === "addOn"
+                ? "Resource Package"
+                : quotaType === "organization"
+                  ? "Organization"
+                  : quotaType;
             normalizedQuotas.push({
               name: displayName,
               used: quota.used || 0,
