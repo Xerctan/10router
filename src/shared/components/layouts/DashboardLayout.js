@@ -54,6 +54,22 @@ export default function DashboardLayout({ children }) {
   const notifications = useNotificationStore((state) => state.notifications);
   const removeNotification = useNotificationStore((state) => state.removeNotification);
 
+  // Preload the lazy usage charts in the background once the browser is idle,
+  // so opening the usage page doesn't wait on a cold recharts fetch.
+  useEffect(() => {
+    const preload = () => {
+      import("@/shared/components/UsageStats").catch(() => {});
+      import("@/app/(dashboard)/dashboard/usage/components/UsageChart").catch(() => {});
+    };
+    if (typeof window === "undefined") return undefined;
+    if ("requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(preload, { timeout: 4000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const timer = setTimeout(preload, 2500);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-bg">
       <div className="fixed top-[5%] left-1/2 z-[80] flex w-[min(92vw,380px)] -translate-x-1/2 flex-col gap-2">
