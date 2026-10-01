@@ -1036,6 +1036,9 @@ case "llm7": {
       case "sensenova":
       case "longcat":
       case "bai":
+      case "dahl":
+      case "atria":
+      case "tokenharbor":
       case "api-airforce":
       case "bazaarlink":
       case "baidu":

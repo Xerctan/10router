@@ -144,6 +144,9 @@ import p144 from "./keenable.js";
 import p145 from "./tinyfish.js";
 import p146 from "./drex.js";
 import p147 from "./opencode-zen.js";
+import p148 from "./dahl.js";
+import p149 from "./atria.js";
+import p150 from "./tokenharbor.js";
 
 export default [
   p0,
@@ -289,4 +292,7 @@ export default [
   p145,
   p146,
   p147,
+  p148,
+  p149,
+  p150,
 ];

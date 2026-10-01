@@ -257,6 +257,9 @@ const PROVIDER_MODELS_CONFIG = {
   openrouter: createOpenAIModelsConfig("https://openrouter.ai/api/v1/models"),
   "opencode-go": createOpenAIModelsConfig("https://opencode.ai/zen/go/v1/models"),
   bai: createOpenAIModelsConfig("https://api.b.ai/v1/models"),
+  dahl: createOpenAIModelsConfig("https://inference.dahl.global/v1/models"),
+  atria: createOpenAIModelsConfig("https://api.atria-asi.ai/v1/models"),
+  tokenharbor: createOpenAIModelsConfig("https://tokenharbor.ai/v1/models"),
   anthropic: {
     url: "https://api.anthropic.com/v1/models",
     method: "GET",

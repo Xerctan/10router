@@ -337,6 +337,25 @@ export const PROVIDER_CAPABILITIES = {
     "Qwen3.8-Flash-Next":           { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 262144, maxOutput: 32768 },
     "MiniCPM5-2B":                 { reasoning: false, contextWindow: 131072, maxOutput: 32768 },
   },
+  // Dahl Inference（Gonka 节点）按上游原名转发请求 —— 思考线格式跟着各模型自己的
+  // 家族走（GLM→z.ai、DeepSeek→deepseek、MiniMax→pattern 兜底）。原名单独成行：
+  // 它们带厂商前缀且大小写与 canonical 键不一致，generic pattern 只会给出 V3 时代的
+  // 旧窗口。
+  "dahl": {
+    "zai-org/GLM-5.3-Flash":              { vision: true, videoInput: true, pdf: true, reasoning: true, thinkingFormat: "zai", contextWindow: 1000000, maxOutput: 131072 },
+    // V4 Flash 保持纯文本（与全仓 DeepSeek V4 口径一致，见 deepseek-v4-capabilities）。
+    "deepseek-ai/DeepSeek-V4-Flash-0731": { reasoning: true, thinkingFormat: "deepseek", contextWindow: 1000000, maxOutput: 384000 },
+  },
+  // Atria Dawn 研究预览：单一文本模型，上游用 hook 直接拒绝图片/PDF 输入。
+  // 无公开的上下文规格 —— 走显式默认行，避免落进 floor。
+  "atria": {
+    "Atria-Dawn-Preview": { vision: false, reasoning: false },
+  },
+  // Token Harbor 原样转发请求，思考格式由各模型经 capabilities 解析。
+  // 显式行只列 pattern 兜底会明显低报的 id（其余种子 id 命中各自家族 pattern）。
+  "tokenharbor": {
+    "deepseek-v4.1-flash:free": { vision: true, reasoning: true, thinkingFormat: "deepseek", contextWindow: 1000000, maxOutput: 384000 },
+  },
   "codex": {
     "gpt-6-astra":               { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
     "gpt-5.6-sol":               CODEX_GPT_56_SOL_CAPS,
