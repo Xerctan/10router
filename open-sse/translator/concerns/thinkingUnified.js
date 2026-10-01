@@ -102,9 +102,28 @@ export function extractThinking(body) {
   return null;
 }
 
-// Capture thinking intent from a body. Alias of extractThinking, named for clarity
-// at the call-site where intent is snapshotted before format translation.
-export const captureThinking = extractThinking;
+// Capture thinking intent from a body before format translation strips it.
+// Besides the effort, records whether an OpenAI-shaped client wants the thinking
+// text itself: Claude only returns thinking when thinking.display is "summarized",
+// a field OpenAI has no equivalent for, so the ask cannot survive translation.
+export function captureThinking(body) {
+  const cfg = extractThinking(body);
+  if (!cfg || cfg.mode === "none") return cfg;
+  const display = openAIThinkingDisplay(body);
+  return display ? { ...cfg, display } : cfg;
+}
+
+// An OpenAI-shaped client can only *ask* for reasoning text, not set Claude's
+// thinking.display: the Responses API's reasoning.summary is the explicit ask;
+// Chat Completions has no summary knob — setting reasoning_effort is the ask.
+function openAIThinkingDisplay(body) {
+  if (body.reasoning && typeof body.reasoning === "object") {
+    const summary = body.reasoning.summary;
+    return typeof summary === "string" && summary && summary !== "none" ? "summarized" : undefined;
+  }
+  if (typeof body.reasoning_effort === "string") return "summarized";
+  return undefined;
+}
 
 // Resolve thinking format: provider override > capability > derive(targetFormat).
 function resolveFormat(targetFormat, model, provider) {
@@ -223,7 +242,7 @@ function stripAll(body) {
 }
 
 // Apply unified thinking config to body in the resolved provider-native format.
-function applyFormat(fmt, body, cfg, caps, supportedLevels, targetFormat = null, provider = null) {
+function applyFormat(fmt, body, cfg, caps, supportedLevels, targetFormat = null, provider = null, display = null) {
   const none = cfg.mode === "none";
   const canDisable = caps.thinkingCanDisable !== false;
   // Model cannot disable thinking → clamp "none" to minimal effort instead.
@@ -259,7 +278,7 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, targetFormat = null,
       // Sonnet 5. Send both fields — the documented adaptive shape. Permanently
       // adaptive models (thinkingCanDisable:false, e.g. Fable) never get the
       // redundant thinking switch — effort alone drives them.
-      if (canDisable) body.thinking = { type: "adaptive" };
+      if (canDisable) body.thinking = { type: "adaptive", ...(display ? { display } : {}) };
       // "auto" is not a value Anthropic accepts in output_config.effort — map it to high.
       const level = toLevel(eff);
       body.output_config = { effort: level === "xhigh" || level === "auto" ? "high" : level };
@@ -268,7 +287,9 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, targetFormat = null,
     case "claude-budget": {
       if (none && canDisable) { body.thinking = { type: "disabled" }; break; }
       const budget = toBudget(eff, caps.thinkingRange);
-      body.thinking = budget === -1 ? { type: "enabled" } : { type: "enabled", budget_tokens: budget || 8192 };
+      body.thinking = budget === -1
+        ? { type: "enabled", ...(display ? { display } : {}) }
+        : { type: "enabled", budget_tokens: budget || 8192, ...(display ? { display } : {}) };
       break;
     }
     case "gemini-level": {
@@ -365,7 +386,10 @@ export function applyThinking(targetFormat, model, body, provider = null, intent
 
   const fmt = resolveFormat(targetFormat, cleanModel, provider);
   const supportedLevels = getThinkingLevels(provider, cleanModel);
+  // An OpenAI-shaped client's display ask arrives via the captured intent instead;
+  // a Claude-format client's own body.thinking.display (read before stripAll) wins.
+  const display = typeof body.thinking?.display === "string" ? body.thinking.display : intent?.display;
   stripAll(body);
-  applyFormat(fmt, body, cfg, caps, supportedLevels, targetFormat, provider);
+  applyFormat(fmt, body, cfg, caps, supportedLevels, targetFormat, provider, display);
   return body;
 }
