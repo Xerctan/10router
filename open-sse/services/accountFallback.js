@@ -115,17 +115,20 @@ function backoffCooldown(errorText, backoffLevel) {
  * @param {number} status - HTTP status code
  * @param {string} errorText - Error message text
  * @param {number} backoffLevel - Current backoff level for exponential backoff
+ * @param {string|null} provider - 已解析的 provider id；仅用于命中带
+ *   `rule.provider` 限定的规则（缺省时这些规则一律跳过，不全局生效）
  * @returns {{ shouldFallback: boolean, cooldownMs: number, newBackoffLevel?: number, channelScope?: boolean }}
  *   `channelScope: true` means the error describes the CHANNEL, not this account —
  *   the caller must NOT walk to sibling accounts (that burst is itself what the
  *   upstream policy reacts to); it should cool the whole provider down instead.
  */
-export function checkFallbackError(status, errorText, backoffLevel = 0) {
+export function checkFallbackError(status, errorText, backoffLevel = 0, provider = null) {
   const lowerError = errorText
     ? (typeof errorText === "string" ? errorText : JSON.stringify(errorText)).toLowerCase()
     : "";
 
   for (const rule of ERROR_RULES) {
+    if (rule.provider && rule.provider !== provider) continue;
     // Text-based rule: match substring in error message
     if (rule.text && lowerError && lowerError.includes(rule.text)) {
       if (rule.backoff) {

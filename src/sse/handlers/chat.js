@@ -27,6 +27,7 @@ import { detectFormatByEndpoint } from "open-sse/translator/formats.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import { getProjectIdForConnection } from "open-sse/services/projectId.js";
+import { stripModelContextMarker } from "open-sse/utils/modelMarkers.js";
 
 /**
  * Handle chat completion request
@@ -51,7 +52,12 @@ export async function handleChat(request, clientRawRequest = null) {
       headers: Object.fromEntries(request.headers.entries())
     };
   }
-  const modelStr = body.model;
+  // Claude Code 会把 1M 上下文请求标成 `<model>[1m]`；标记匹配不到任何
+  // combo/alias/provider-model 对，必须剥掉再进解析——能力由 anthropic-beta
+  // 请求头原样透传。codex 侧则用 contextMarker 拼回请求侧 id，喂给账号
+  // enabledModels 过滤（上游 v0.5.95, 9f41ee75）。
+  const { model: modelStr, contextMarker } = stripModelContextMarker(body.model);
+  if (contextMarker) body.model = modelStr;
 
   // Request summary is emitted as the unified "▶" line in chatCore (has fmt/thinking/account)
 
@@ -178,7 +184,10 @@ export async function handleChat(request, clientRawRequest = null) {
     });
   }
 
-  return handleSingleModelChat(body, modelStr, clientRawRequest, request, apiKey, { inferFallback: false });
+  return handleSingleModelChat(body, modelStr, clientRawRequest, request, apiKey, {
+    inferFallback: false,
+    requestedModel: contextMarker ? `${modelStr.slice(modelStr.indexOf("/") + 1)}[${contextMarker}]` : null,
+  });
 }
 
 /**
@@ -189,8 +198,11 @@ export async function handleChat(request, clientRawRequest = null) {
  * request: there a bare name that matches no alias/combo is a client error —
  * /v1/models never advertises bare ids (#34), and the old prefix guess
  * produced misleading "No active credentials for provider: <guess>" 404s.
+ *
+ * `requestedModel` 是客户端要求的原始模型 id（可能带 [1m] 标记），与解析后的
+ * 基础 id 分开传递：账号 enabledModels 勾选过滤按它判断（codex [1m]）。
  */
-async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, { inferFallback = true } = {}) {
+async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, { inferFallback = true, requestedModel = null } = {}) {
   const modelInfo = await getModelInfo(modelStr, { inferFallback });
 
   // If provider is null, this might be a combo name - check and handle
@@ -302,7 +314,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   }
 
   while (true) {
-    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
+    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { requestedModel: requestedModel || model });
 
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {

@@ -28,7 +28,10 @@ export async function handleSystemoneCore({
 }) {
   const { provider, model } = modelInfo;
   const cfg = PROVIDER_MEDIA[provider]?.systemoneConfig;
-  if (!cfg?.baseUrl) {
+  // 连接级端点覆盖（providerSpecificData.baseUrl）优先于 registry 默认——
+  // System One lane 协议统一，自建/网关部署只换地址（上游 v0.5.95, 0a879c5c）。
+  const targetUrl = credentials?.providerSpecificData?.baseUrl || cfg?.baseUrl;
+  if (!targetUrl) {
     return createErrorResult(
       HTTP_STATUS.BAD_REQUEST,
       `Provider '${provider}' does not support System One.`,
@@ -58,7 +61,7 @@ export async function handleSystemoneCore({
 
   let providerResponse;
   try {
-    providerResponse = await fetch(cfg.baseUrl, {
+    providerResponse = await fetch(targetUrl, {
       method: "POST",
       headers,
       body: JSON.stringify(requestBody),

@@ -147,6 +147,7 @@ import p147 from "./opencode-zen.js";
 import p148 from "./dahl.js";
 import p149 from "./atria.js";
 import p150 from "./tokenharbor.js";
+import p151 from "./v1m.js";
 
 export default [
   p0,
@@ -295,4 +296,5 @@ export default [
   p148,
   p149,
   p150,
+  p151,
 ];

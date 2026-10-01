@@ -86,9 +86,8 @@ export const IMAGE_NAME = /-image$|imagen|image-generation/i;
 export const ALLOWLIST = {
   // Aggregator / meta-selector ids: the upstream picks the real model per request,
   // so no static capability row can be accurate. Same treatment as before the audit.
-  "qoder/auto": "aggregator",
-  "qoder/efficient": "aggregator",
-  "qoder-cn/auto": "aggregator",
+  // (qoder / qoder-cn 的 auto、efficient 曾在本表；现为它们写了保守超集的 provider
+  // 行——见 capabilities.js 的虚拟档注释——故按「gained a row → 删除条目」规约移除。)
   "cursor/default": "aggregator",
   "bazaarlink/auto:free": "aggregator",
   "kilo-gateway/kilo-auto/free": "aggregator",
@@ -153,6 +152,10 @@ export function audit() {
       if (!id) continue;
       offered.add(id);
       offered.add(id.includes("/") ? id.split("/").pop() : id);
+      // Display-name aliases are legitimate provider-row keys (qoder derives them
+      // via aliased() in capabilities.js), so a row keyed by `name` is not dead.
+      const name = typeof m === "string" ? null : m.name;
+      if (name) offered.add(name);
     }
     const keys = Object.keys(caps).filter((k) => !offered.has(k));
     if (keys.length) dead.push({ provider, keys });

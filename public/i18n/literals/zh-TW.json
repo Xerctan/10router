@@ -565,6 +565,7 @@
   "Web console": "網頁版",
   "Get API Key →": "取得 API 金鑰 →",
   "Use your CommandCode CLI API key (starts with user_...) from ~/.commandcode/auth.json or commandcode.ai/studio.": "使用來自 ~/.commandcode/auth.json 或 commandcode.ai/studio 的 CommandCode CLI API 金鑰（以 user_ 開頭）。",
+  "v1m System One calibrated decision engine. Fast probabilistic evaluations over state and questions.": "v1m System One 校準決策引擎：針對狀態與問題做快速機率評估。",
   "Monthly Credits": "月度額度",
   "Purchased Credits": "加量額度",
   "Earliest Expiry First": "配額包到期優先",

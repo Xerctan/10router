@@ -52,17 +52,27 @@ export default {
   },
   models: [
     { id: "gpt-6-astra", name: "GPT 6.0 Astra" },
+    // [1m] 长上下文变体（上游 v0.5.95, 9f41ee75）：同一上游模型，872k 窗口
+    // （capabilities 的 CODEX_EXTENDED_CAPS），upstreamModelId 指向基础 id——
+    // 请求被剥掉标记后按基础模型发出，变体 id 只用于账号 enabledModels 勾选
+    // 与能力发布。
+    { id: "gpt-6-astra[1m]", name: "GPT 6.0 Astra (extended context)", upstreamModelId: "gpt-6-astra" },
     // 6.0 lite pair: upstream v0.5.91 ships both over the subscription flow.
     { id: "gpt-6-sol", name: "GPT 6.0 Sol" },
+    { id: "gpt-6-sol[1m]", name: "GPT 6.0 Sol (extended context)", upstreamModelId: "gpt-6-sol" },
     { id: "gpt-6-luna", name: "GPT 6.0 Luna" },
+    { id: "gpt-6-luna[1m]", name: "GPT 6.0 Luna (extended context)", upstreamModelId: "gpt-6-luna" },
     // User-observed in the Codex app (2026-09-30); upstream has not picked it
     // up yet. thinkingLevels' *gpt-6* pattern already covers the id.
     { id: "gpt-6.1-sol", name: "GPT 6.1 Sol" },
     { id: "gpt-5.6-sol", name: "GPT 5.6 Sol" },
+    { id: "gpt-5.6-sol[1m]", name: "GPT 5.6 Sol (extended context)", upstreamModelId: "gpt-5.6-sol" },
     { id: "gpt-5.6-sol-review", name: "GPT 5.6 Sol Review", upstreamModelId: "gpt-5.6-sol", quotaFamily: "review" },
     { id: "gpt-5.6-terra", name: "GPT 5.6 Terra" },
+    { id: "gpt-5.6-terra[1m]", name: "GPT 5.6 Terra (extended context)", upstreamModelId: "gpt-5.6-terra" },
     { id: "gpt-5.6-terra-review", name: "GPT 5.6 Terra Review", upstreamModelId: "gpt-5.6-terra", quotaFamily: "review" },
     { id: "gpt-5.6-luna", name: "GPT 5.6 Luna" },
+    { id: "gpt-5.6-luna[1m]", name: "GPT 5.6 Luna (extended context)", upstreamModelId: "gpt-5.6-luna" },
     { id: "gpt-5.6-luna-review", name: "GPT 5.6 Luna Review", upstreamModelId: "gpt-5.6-luna", quotaFamily: "review" },
     { id: "gpt-5.5", name: "GPT 5.5" },
     { id: "gpt-5.5-review", name: "GPT 5.5 Review", upstreamModelId: "gpt-5.5", quotaFamily: "review" },

@@ -74,7 +74,7 @@ export const CHANNEL_BLOCK_ESCALATE_WINDOW_MS = 5 * 60 * 1000;
 /**
  * Unified error classification rules.
  * Checked top-to-bottom: text rules first (by order), then status rules.
- * Each rule: { text?, status?, cooldownMs?, backoff?, channelScope? }
+ * Each rule: { text?, status?, cooldownMs?, backoff?, channelScope?, provider? }
  *   - text: substring match (case-insensitive) on error message
  *   - status: HTTP status code match
  *   - cooldownMs: fixed cooldown duration
@@ -82,9 +82,15 @@ export const CHANNEL_BLOCK_ESCALATE_WINDOW_MS = 5 * 60 * 1000;
  *   - channelScope: true = the failure is a property of the CHANNEL (egress
  *     fingerprint / request shape), not of the account, so the caller must stop
  *     retrying sibling accounts and cool the whole provider down instead.
+ *   - provider: 限定规则只对该 provider（解析后的 id）生效——同一句错误文案
+ *     在别的渠道可能是请求自身的问题，不该把账号拉进长冷却。
  */
 export const ERROR_RULES = [
   // --- Text-based rules (checked first, order = priority) ---
+  // codex：[1m] 长上下文请求打到没勾选该变体的账号时，后端 400 回复这句——
+  // 是账号级能力问题（换号可解），但它以 400 出现会撞进下方「请求自身 4xx
+  // 不冷却」的兜底分支，所以必须显式置顶并按长冷却换下一个账号（上游 9f41ee75）。
+  { provider: "codex", text: "model is not supported when using codex with a chatgpt account", cooldownMs: MAX_RATE_LIMIT_COOLDOWN_MS },
   { text: "no credentials",           cooldownMs: COOLDOWN.long },
   { text: "request not allowed",      cooldownMs: COOLDOWN.short },
   // CodeBuddy 11128 "Illegal API invocation from an unapproved channel" —

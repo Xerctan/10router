@@ -297,11 +297,48 @@ const KIRO_GPT_5_6_CAPABILITIES = { vision: true, reasoning: true, search: true,
 // (lower than OpenAI API's 1.05M). Sol differs from Terra/Luna. #2720
 const CODEX_GPT_56_SOL_CAPS  = { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 372000, maxOutput: 128000 };
 const CODEX_GPT_56_DEFAULT_CAPS = { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 };
+// [1m] 长上下文变体（上游 9f41ee75）：同一上游模型，窗口放宽到 872k。
+const CODEX_EXTENDED_CAPS = { ...CODEX_GPT_56_DEFAULT_CAPS, contextWindow: 872000 };
 
 // Devin CLI 的 registry 给这批 GPT 档位模型标了 200k 窗口（registry/devin-cli.js）。
 // provider 行是短路语义（不与 pattern 合并），所以 GPT 的特性/输出字段要带全，
 // 否则回落到 `*gpt-5*` 通配时 vision/search 字段会丢（上游 89ffac5a）。
 const DEVIN_CLI_GPT_CAPS = { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 200000, maxOutput: 128000 };
+
+// Qoder 的客户端还可以按 registry 的显示名寻址（如 "qoder/Qwen3.8-Max"）。没有
+// 别名时这些名字会绕过 provider 行，落进通用族 pattern（*qwen*max* 等）或地板，
+// 拿到的是「思考可关」的通用语义——与 qoder 执行器丢弃客户端 thinking 意图、
+// 上游 modelConfig 固定的事实冲突。
+//
+// aliased(map, aliasOf)：map 是 literal 单行真源（内部 id → 能力）；aliasOf 是
+// 显示名 → 内部 id。返回真源 + 程序化派生的别名列（别名与真源指向同一对象，改
+// 真源即同步全部别名）。
+function aliased(map, aliasOf) {
+  const out = { ...map };
+  for (const [alias, id] of Object.entries(aliasOf)) out[alias] = map[id];
+  return out;
+}
+
+// Qoder INTL 与 CN 共有的显示名 → 内部 id（以两份 registry 的 `name` 字段为准逐
+// 个核对）。CN 另多 Qwen3.7-Flash / GLM-5.2 两款，见 QODER_CN_NAME_ALIASES。
+const QODER_NAME_ALIASES = {
+  "Qwen3.8-Max": "qmodel_38max",
+  "Qwen3.7-Max": "qmodel_latest",
+  "Qwen3.7-Plus": "qmodel",
+  "Qwen3.8-Flash": "qfmodel",
+  "Kimi-K3": "kmodel_latest",
+  "Kimi-K2.7-Code": "kmodel",
+  "GLM-5.3": "gmodel",
+  "GLM-5.3-Flash": "gfmodel",
+  "DeepSeek-V4-Pro": "dmodel",
+  "DeepSeek-V4-Flash": "dfmodel",
+  "MiniMax-M3": "mmodel",
+};
+const QODER_CN_NAME_ALIASES = {
+  ...QODER_NAME_ALIASES,
+  "Qwen3.7-Flash": "q37fmodel",
+  "GLM-5.2": "gm51model",
+};
 
 /**
  * Provider-specific capability overrides. Keyed by provider alias/id.
@@ -379,6 +416,12 @@ export const PROVIDER_CAPABILITIES = {
     // 后者由 `*gpt-6*` pattern 承担），所以 Sol/Luna 必须显式列出（上游 92c7bdd5）。
     "gpt-6-sol":                 { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
     "gpt-6-luna":                { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
+    "gpt-6-astra[1m]":           CODEX_EXTENDED_CAPS,
+    "gpt-6-sol[1m]":             CODEX_EXTENDED_CAPS,
+    "gpt-6-luna[1m]":            CODEX_EXTENDED_CAPS,
+    "gpt-5.6-sol[1m]":           CODEX_EXTENDED_CAPS,
+    "gpt-5.6-terra[1m]":         CODEX_EXTENDED_CAPS,
+    "gpt-5.6-luna[1m]":          CODEX_EXTENDED_CAPS,
     "gpt-5.6-sol":               CODEX_GPT_56_SOL_CAPS,
     "gpt-5.6-sol-review":        CODEX_GPT_56_SOL_CAPS,
     "gpt-5.6-terra":             CODEX_GPT_56_DEFAULT_CAPS,
@@ -468,10 +511,12 @@ export const PROVIDER_CAPABILITIES = {
     // 因为 CN 网关走 openai 思考格式且允许关闭思考（provider 行优先于 canonical）。
     "deepseek-v4.1-flash": { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 128000 },
   },
-  // Qoder — upstream exposes opaque internal ids (dfmodel, kmodel, …); the
-  // registry `name` is display-only and capability lookup matches on the raw
-  // id, so every qoder model would fall through to DEFAULT_CAPABILITIES
-  // (200K) without this map. contextWindow follows the real model family's
+  // Qoder — upstream exposes opaque internal ids (dfmodel, kmodel, …);
+  // capability lookup matches on the raw id, while clients may also address
+  // models by the registry `name` (display name) — those aliases are derived
+  // programmatically by aliased() so every qoder model stays out of
+  // DEFAULT_CAPABILITIES (200K) and the generic family patterns either way.
+  // contextWindow follows the real model family's
   // spec: the /algo/api/v2/model/list max_input_tokens under-reports some
   // windows (GLM-5.3 / Kimi-K3 / Qwen3.8-Max claim 180K but accept more).
   // max_output_tokens arrives as 0 for every model, so outputs are
@@ -485,9 +530,11 @@ export const PROVIDER_CAPABILITIES = {
   // messages/tools/max_tokens, and thinking is fixed upstream via
   // modelConfig.is_reasoning — client thinking intent is dropped, so "none"
   // must never be offered as an option.
-  "qoder": {
+  "qoder": aliased({
+    "auto":           { vision: true, reasoning: true, thinkingFormat: "claude-adaptive", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 }, // 虚拟档：家族随上游路由漂移，给保守超集
     "ultimate":       { vision: true, reasoning: true, thinkingFormat: "claude-adaptive", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 }, // Claude Opus 5
     "performance":    { vision: true, reasoning: true, thinkingFormat: "claude-adaptive", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 }, // Claude Sonnet 5
+    "efficient":      { vision: true, reasoning: true, thinkingFormat: "claude-adaptive", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 }, // 虚拟档：家族随上游路由漂移，给保守超集
     "dmodel":         { reasoning: true, thinkingFormat: "deepseek", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },  // DeepSeek-V4-Pro
     "dfmodel":        { reasoning: true, thinkingFormat: "deepseek", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },  // DeepSeek-V4-Flash
     "gmodel":         { reasoning: true, thinkingFormat: "zai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 },      // GLM-5.3
@@ -499,8 +546,10 @@ export const PROVIDER_CAPABILITIES = {
     "qmodel":         { vision: true, reasoning: true, thinkingFormat: "qwen", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },  // Qwen3.7-Plus
     "qfmodel":        { vision: true, reasoning: true, thinkingFormat: "qwen", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },  // Qwen3.8-Flash
     "qmodel_38max":   { vision: true, reasoning: true, thinkingFormat: "qwen", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },      // Qwen3.8-Max
-  },
-  "qoder-cn": {
+  }, { ...QODER_NAME_ALIASES, "Auto": "auto", "Ultimate": "ultimate", "Performance": "performance", "Efficient": "efficient" }),
+  "qoder-cn": aliased({
+    // 虚拟档：家族随上游路由漂移，给保守超集（与 INTL 侧的 auto/efficient 同形状）。
+    "auto":           { vision: true, reasoning: true, thinkingFormat: "claude-adaptive", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 }, // 虚拟档：家族随上游路由漂移，给保守超集
     "dmodel":         { reasoning: true, thinkingFormat: "deepseek", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },  // DeepSeek-V4-Pro
     "dfmodel":        { reasoning: true, thinkingFormat: "deepseek", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },  // DeepSeek-V4-Flash
     "gmodel":         { reasoning: true, thinkingFormat: "zai", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 128000 },      // GLM-5.3
@@ -514,7 +563,7 @@ export const PROVIDER_CAPABILITIES = {
     "q37fmodel":      { vision: true, reasoning: true, thinkingFormat: "qwen", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },  // Qwen3.7-Flash
     "qfmodel":        { vision: true, reasoning: true, thinkingFormat: "qwen", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },  // Qwen3.8-Flash
     "qmodel_38max":   { vision: true, reasoning: true, thinkingFormat: "qwen", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 65536 },      // Qwen3.8-Max
-  },
+  }, { ...QODER_CN_NAME_ALIASES, "Auto": "auto" }),
   // Poolside Laguna — OpenAI-compatible, all reasoning-capable (32K max output).
   "poolside": {
     "laguna-s-2.1":  { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000, maxOutput: 32000 },

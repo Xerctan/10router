@@ -206,6 +206,12 @@ export const WINDSURF_CONFIG = {
   oauthTimeoutMs: 600_000,
 };
 
+// Zai GLM Coding OAuth — ZCode CLI 轮询流程（非 PKCE）：init 签发一次性 poll
+// token，浏览器打开服务端生成的 authorize_url，poll/ready 返回 token；随后
+// Z.AI OAuth token 换平台业务 JWT，再换长期 coding-plan API key（无 refresh
+// 授权，到期重新登录）。
+export const GLM_OAUTH_CONFIG = { ...PROVIDER_OAUTH["glm"] };
+
 // Zed hosted LLM aggregator — RSA keypair native-app auth (NOT OAuth).
 // Client generates ephemeral RSA-2048 keypair; user signs in at zed.dev/native_app_signin;
 // Zed redirects to local callback with access_token RSA-encrypted against our public key.
@@ -245,5 +251,6 @@ export const PROVIDERS = {
   GROK_CLI: "grok-cli",
   TRAE: "trae",
   WINDSURF: "windsurf",
+  GLM: "glm",
   ZED: "zed",
 };
