@@ -24,13 +24,16 @@ process.env.DATA_DIR = tempDir;
 process.env.JWT_SECRET = "test-secret-for-issue-33-lockout";
 
 const db = vi.hoisted(() => ({ settings: {} }));
+const cookieJar = vi.hoisted(() => ({ setCalls: [] }));
 vi.mock("@/lib/localDb", () => ({
   getSettings: async () => ({ ...db.settings }),
   updateSettings: async (u) => { db.settings = { ...db.settings, ...u }; return { ...db.settings }; },
 }));
 vi.mock("@/lib/network/outboundProxy", () => ({ applyOutboundProxyEnv: vi.fn() }));
 vi.mock("open-sse/services/combo.js", () => ({ resetComboRotation: vi.fn() }));
-vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined, set: () => {}, delete: () => {} }) }));
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: () => undefined, set: (...args) => cookieJar.setCalls.push(args), delete: () => {} }),
+}));
 
 const { PATCH } = await import("../../src/app/api/settings/route.js");
 const { POST: login } = await import("../../src/app/api/auth/login/route.js");
@@ -48,6 +51,7 @@ const tryLogin = (password) => login(json("http://localhost/api/auth/login", "PO
 
 beforeEach(() => {
   db.settings = {};
+  cookieJar.setCalls.length = 0;
   process.env.INITIAL_PASSWORD = "Hidden-fpk-Generated-9x"; // the fnOS bootstrap nobody saw
   fs.rmSync(RESET, { force: true });
 });
@@ -93,6 +97,30 @@ describe("prevention: settings PATCH", () => {
   it("turning the check off never needs a password", async () => {
     db.settings = { requireLogin: true };
     expect((await patch({ requireLogin: false })).status).toBe(200);
+  });
+
+  // 设置→安全 reported defect: establishing protection kicked the operator to
+  // the login page — they were admitted by loopback trust / open access and
+  // held no auth cookie the moment the guard started demanding one.
+  it("hands the operator a session cookie when protection is established (no kick-out)", async () => {
+    db.settings = { requireLogin: false };
+    expect((await patch({ requireLogin: true, newPassword: "my-own-pass" })).status).toBe(200);
+    expect(cookieJar.setCalls.some(([name]) => name === "auth_token")).toBe(true);
+
+    cookieJar.setCalls.length = 0;
+    db.settings = { requireLogin: false, password: await bcrypt.hash("x", 4) };
+    expect((await patch({ requireLogin: true })).status).toBe(200);
+    expect(cookieJar.setCalls.some(([name]) => name === "auth_token")).toBe(true);
+  });
+
+  it("mints no session for unrelated settings changes or refused requests", async () => {
+    db.settings = { requireLogin: true, password: await bcrypt.hash("x", 4) };
+    expect((await patch({ theme: "dark" })).status).toBe(200);
+    expect(cookieJar.setCalls.length).toBe(0);
+
+    db.settings = { requireLogin: false };
+    expect((await patch({ requireLogin: true })).status).toBe(400); // PASSWORD_REQUIRED
+    expect(cookieJar.setCalls.length).toBe(0);
   });
 
   it("the bootstrap password still opens the dashboard, it just is not the operator's own credential", () => {

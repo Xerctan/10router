@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, Button, Input } from "@/shared/components";
 import ThemeToggle from "@/shared/components/ThemeToggle";
+import { translate } from "@/i18n/runtime";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
@@ -136,7 +137,7 @@ export default function LoginPage() {
                 className="text-xs text-text-muted underline self-center hover:text-text"
                 onClick={() => setShowRecovery((v) => !v)}
               >
-                Forgot your password?
+                {translate("Forgot your password?")}
               </button>
               {showRecovery && (
                 <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-2 p-3 text-xs text-text-muted">

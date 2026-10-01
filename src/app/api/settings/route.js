@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { getSettings, updateSettings } from "@/lib/localDb";
 import { applyOutboundProxyEnv } from "@/lib/network/outboundProxy";
 import { resetComboRotation } from "open-sse/services/combo.js";
 import bcrypt from "bcryptjs";
 import { isAutoUpdateCheckEnabled, syncUpdateCheckMarker } from "@/lib/updateCheck";
-import { hasOwnDashboardCredential } from "@/lib/auth/dashboardSession";
+import { hasOwnDashboardCredential, setDashboardAuthCookie } from "@/lib/auth/dashboardSession";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -173,6 +174,17 @@ export async function PATCH(request) {
 
     const { password, oidcClientSecret, ...safeSettings } = settings;
     safeSettings.oidcConfigured = !!(safeSettings.oidcIssuerUrl && safeSettings.oidcClientId && oidcClientSecret);
+    // Establishing protection used to kick the operator straight to the login
+    // page: they were admitted by loopback trust or open access (no auth
+    // cookie), and the moment a password exists / requireLogin turns on the
+    // guard demands one. The caller already passed every check this route
+    // enforces (authenticated session, current-password verify when a hash
+    // existed), so hand them a session instead of locking them out of the
+    // change they just made (设置→安全 开启「需要登录」被踢出).
+    if (settingPassword || body.requireLogin === true) {
+      const cookieStore = await cookies();
+      await setDashboardAuthCookie(cookieStore, request);
+    }
     return NextResponse.json(safeSettings, { headers: SETTINGS_RESPONSE_HEADERS });
   } catch (error) {
     console.log("Error updating settings:", error);
