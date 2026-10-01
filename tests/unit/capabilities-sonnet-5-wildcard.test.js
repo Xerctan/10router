@@ -7,6 +7,7 @@ import {
   MODEL_CAPABILITIES,
   PATTERN_CAPABILITIES,
 } from "../../open-sse/providers/capabilities.js";
+import REGISTRY from "../../open-sse/providers/registry/index.js";
 
 const sonnet5Expected = {
   thinkingFormat: "claude-adaptive",
@@ -27,6 +28,14 @@ describe("Claude Sonnet 5.x 通配 capabilities", () => {
   it("精确键优先于通配：claude-sonnet-5 仍在 MODEL_CAPABILITIES 显式列出", () => {
     expect(MODEL_CAPABILITIES["claude-sonnet-5"]).toMatchObject(sonnet5Expected);
     expect(getCapabilitiesForModel("claude", "claude-sonnet-5")).toMatchObject(sonnet5Expected);
+  });
+
+  it("claude-sonnet-5-5 注册到 claude registry 且 capabilities 精确键同步", () => {
+    const claude = REGISTRY.find((p) => p.id === "claude");
+    const ids = (claude?.models || []).map((m) => (typeof m === "string" ? m : m.id));
+    expect(ids).toContain("claude-sonnet-5-5");
+    expect(MODEL_CAPABILITIES["claude-sonnet-5-5"]).toMatchObject(sonnet5Expected);
+    expect(getCapabilitiesForModel("claude", "claude-sonnet-5-5")).toMatchObject(sonnet5Expected);
   });
 
   it("pattern 顺序钉形：sonnet-5 通配先于泛化 sonnet 兜底", () => {

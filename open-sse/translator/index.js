@@ -1,6 +1,7 @@
 import { FORMATS } from "./formats.js";
 import { ensureToolCallIds, fixMissingToolResponses } from "./concerns/toolCall.js";
-import { prepareClaudeRequest } from "./formats/claude.js";
+import { prepareClaudeRequest, ensureTrailingUserTurn } from "./formats/claude.js";
+import { ROLE, GEMINI_ROLE } from "./schema/roles.js";
 import { cloakClaudeTools } from "../utils/claudeCloaking.js";
 import { restoreToolNames } from "../utils/opencodeFingerprint.js";
 import { filterToOpenAIFormat } from "./formats/openai.js";
@@ -49,10 +50,25 @@ function stripContentTypes(body, stripList = []) {
   }
 }
 
+// 客户端会话实际结束时的 role，按源格式自身的形状读取——并非所有源都用
+// messages[]（Gemini/Antigravity 用 contents[]，Responses/Codex 用 input[]）。
+// 只有显式以 model/assistant 轮结尾才是有意的 prefill，必须作为 ROLE.ASSISTANT
+// 传给 ensureTrailingUserTurn；其他结尾（包括无 role，如函数输出）保持 undefined，
+// 让「被清空的尾部 user 轮」修复照常生效。（上游 5e9bd464）
+function detectClientLastRole(body) {
+  if (Array.isArray(body?.messages)) return body.messages[body.messages.length - 1]?.role;
+  const items = Array.isArray(body?.contents) ? body.contents : Array.isArray(body?.input) ? body.input : null;
+  if (!items) return undefined;
+  const role = items[items.length - 1]?.role;
+  return role === ROLE.ASSISTANT || role === GEMINI_ROLE.MODEL ? ROLE.ASSISTANT : undefined;
+}
+
 // Translate request: source -> openai -> target
 export function translateRequest(sourceFormat, targetFormat, model, body, stream = true, credentials = null, provider = null, reqLogger = null, stripList = [], connectionId = null, clientTool = null) {
   ensureInitialized();
   let result = body;
+  // 客户端实际结束时的 role，在任何翻译器丢掉被清空的尾轮之前先记下来。
+  const clientLastRole = detectClientLastRole(body);
 
   // Strip explicit content types (opt-in via strip[] in PROVIDER_MODELS entry)
   stripContentTypes(result, stripList);
@@ -132,6 +148,7 @@ export function translateRequest(sourceFormat, targetFormat, model, body, stream
   if (targetFormat === FORMATS.CLAUDE) {
     const apiKey = credentials?.accessToken || credentials?.apiKey || null;
     result = prepareClaudeRequest(result, provider, apiKey, connectionId, credentials?.rawHeaders, clientSessionId);
+    if (Array.isArray(result?.messages)) result.messages = ensureTrailingUserTurn(result.messages, clientLastRole);
   }
 
   // Claude cloaking: rename client tools with _cc suffix (anti-ban)

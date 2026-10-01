@@ -80,6 +80,12 @@ export const MODEL_CAPABILITIES = {
   // opus-5.5 (upstream 2026-09-23): family envelope carried over from opus-5 —
   // the *claude*opus* pattern would under-declare it as 200K/claude-budget.
   "claude-opus-5-5":   { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
+  // opus-5.5 点号 id 变体（Kiro，上游 e78b766a）：`*claude*opus-5*` pattern
+  // 已命中同值，写精确键是为了不依赖 pattern 顺序并标明这些 id 真实存在。
+  "claude-opus-5.5":   { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
+  "claude-opus-5.5-thinking": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
+  "claude-opus-5.5-agentic": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
+  "claude-opus-5.5-thinking-agentic": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
 
   // OpenCode Free Muse Spark — multimodal (text+image per models.dev meta/muse-spark)
   // via OpenAI Responses input_image; reasoning supports up to xhigh.
@@ -112,6 +118,9 @@ export const MODEL_CAPABILITIES = {
   "claude-sonnet-4.6": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-sonnet-4-6": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-sonnet-5": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
+  // sonnet-5-5 注册到 claude registry（翻译器归一化另行处理）；精确键与
+  // `*claude*sonnet-5*` pattern 同值，锁死解析结果不受 pattern 顺序调整影响。
+  "claude-sonnet-5-5": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-sonnet-5-thinking": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-sonnet-5-agentic": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
   "claude-sonnet-5-thinking-agentic": { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 },
@@ -286,6 +295,11 @@ const KIRO_GPT_5_6_CAPABILITIES = { vision: true, reasoning: true, search: true,
 const CODEX_GPT_56_SOL_CAPS  = { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 372000, maxOutput: 128000 };
 const CODEX_GPT_56_DEFAULT_CAPS = { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 };
 
+// Devin CLI 的 registry 给这批 GPT 档位模型标了 200k 窗口（registry/devin-cli.js）。
+// provider 行是短路语义（不与 pattern 合并），所以 GPT 的特性/输出字段要带全，
+// 否则回落到 `*gpt-5*` 通配时 vision/search 字段会丢（上游 89ffac5a）。
+const DEVIN_CLI_GPT_CAPS = { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 200000, maxOutput: 128000 };
+
 /**
  * Provider-specific capability overrides. Keyed by provider alias/id.
  */
@@ -358,6 +372,10 @@ export const PROVIDER_CAPABILITIES = {
   },
   "codex": {
     "gpt-6-astra":               { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
+    // codex OAuth 后端把 gpt-6 家族截到 272k（不同于 OpenAI API 的 1.05M 窗口，
+    // 后者由 `*gpt-6*` pattern 承担），所以 Sol/Luna 必须显式列出（上游 92c7bdd5）。
+    "gpt-6-sol":                 { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
+    "gpt-6-luna":                { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
     "gpt-5.6-sol":               CODEX_GPT_56_SOL_CAPS,
     "gpt-5.6-sol-review":        CODEX_GPT_56_SOL_CAPS,
     "gpt-5.6-terra":             CODEX_GPT_56_DEFAULT_CAPS,
@@ -382,6 +400,18 @@ export const PROVIDER_CAPABILITIES = {
     "gpt-5.6-sol-thinking-agentic": KIRO_GPT_5_6_CAPABILITIES,
     "gpt-5.6-terra-thinking-agentic": KIRO_GPT_5_6_CAPABILITIES,
     "gpt-5.6-luna-thinking-agentic": KIRO_GPT_5_6_CAPABILITIES,
+  },
+  // Devin CLI 把 GPT 5.4/5.5 档位截到 200k（registry/devin-cli.js 的
+  // contextLength=200000，上游 89ffac5a）。provider 行短路优先于 `*gpt-5.4*`
+  // 等新窗口 pattern（1.05M），避免出现「发布窗口比实际大 5 倍」的卡片。
+  "devin-cli": {
+    "gpt-5.4-high": DEVIN_CLI_GPT_CAPS,
+    "gpt-5.4-medium": DEVIN_CLI_GPT_CAPS,
+    "gpt-5.4-low": DEVIN_CLI_GPT_CAPS,
+    "gpt-5.5-xhigh": DEVIN_CLI_GPT_CAPS,
+    "gpt-5.5-high": DEVIN_CLI_GPT_CAPS,
+    "gpt-5.5-medium": DEVIN_CLI_GPT_CAPS,
+    "gpt-5.5-low": DEVIN_CLI_GPT_CAPS,
   },
   // CodeBuddy.cn — authoritative per-model metadata from the gateway's model
   // config (contextWindow=maxInputTokens, maxOutput=maxOutputTokens, vision=
@@ -489,6 +519,13 @@ export const PROVIDER_CAPABILITIES = {
   },
 };
 
+// 传输/UI 别名与 provider id 共享同一张表（上游 89ffac5a）：combo 座位、gpt-6
+// 通道路径等按 alias（cx / dv / devin）查能力时，必须命中与 id 相同的截断行，
+// 否则同一模型换个拼写就回落到 pattern 拿到 5 倍大的窗口。
+PROVIDER_CAPABILITIES.cx = PROVIDER_CAPABILITIES.codex;
+PROVIDER_CAPABILITIES.dv = PROVIDER_CAPABILITIES["devin-cli"];
+PROVIDER_CAPABILITIES.devin = PROVIDER_CAPABILITIES["devin-cli"];
+
 /**
  * Pattern fallback — glob (* = wildcard), matched case-insensitively and
  * anchored (^...$) so a pattern must match the full model id. ORDER MATTERS:
@@ -531,11 +568,22 @@ export const PATTERN_CAPABILITIES = [
   { pattern: "*nanobanana*",    caps: { vision: true, imageOutput: true } },
 
   // ── OpenAI GPT-6.x (vision + thinking + web search) ──────────────
-  { pattern: "*gpt-6*",         caps: { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 } },
+  // 整个 gpt-6 家族（astra/luna/sol 同）的 API 窗口是 1.05M。截得更低的网关
+  // 把自家数字写在 PROVIDER_CAPABILITIES（短路优先）——Kiro 272k、codex OAuth
+  // 272k/372k。此前本 pattern 抄的是 Kiro 的 272k，导致其余 provider 的 gpt-6
+  // 全部按真实窗口的 ~1/3.9 发布；canonical `gpt-6-luna`（1050000）与本行同口径。
+  { pattern: "*gpt-6*",         caps: { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 1050000, maxOutput: 128000 } },
 
   // ── OpenAI GPT-5.x (vision + thinking + web search) ──────────────
   { pattern: "*gpt-5*image*",   caps: { imageOutput: true } },
   { pattern: "*gpt-5*codex*",   caps: { reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 400000, maxOutput: 128000 } },
+  // 1.05M 窗口从 gpt-5.4 起步，但 mini/nano 两档仍停在 400k——first match wins，
+  // 所以这两个例外必须列在档位行之前（上游 89ffac5a）。
+  { pattern: "*gpt-5.4-mini*",  caps: { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 400000, maxOutput: 128000 } },
+  { pattern: "*gpt-5.4-nano*",  caps: { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 400000, maxOutput: 128000 } },
+  { pattern: "*gpt-5.4*",       caps: { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 1050000, maxOutput: 128000 } },
+  { pattern: "*gpt-5.5*",       caps: { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 1050000, maxOutput: 128000 } },
+  { pattern: "*gpt-5.6*",       caps: { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 1050000, maxOutput: 128000 } },
   { pattern: "*gpt-5*",         caps: { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 400000, maxOutput: 128000 } },
   { pattern: "*gpt-4o*",        caps: { vision: true, search: true, contextWindow: 128000, maxOutput: 16384 } },
   { pattern: "*gpt-4.1*",       caps: { vision: true, contextWindow: 1000000, maxOutput: 32768 } },

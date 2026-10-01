@@ -280,8 +280,10 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, targetFormat = null,
       // redundant thinking switch — effort alone drives them.
       if (canDisable) body.thinking = { type: "adaptive", ...(display ? { display } : {}) };
       // "auto" is not a value Anthropic accepts in output_config.effort — map it to high.
+      // xhigh 按模型分档（Opus/Sonnet 4.6 拒绝该值）——模型未声明支持时钳回 high。
       const level = toLevel(eff);
-      body.output_config = { effort: level === "xhigh" || level === "auto" ? "high" : level };
+      body.output_config = { effort: level === "auto" ? "high"
+        : level === "xhigh" && !supportedLevels?.includes("xhigh") ? "high" : level };
       break;
     }
     case "claude-budget": {

@@ -1,8 +1,9 @@
 // 上游 8a81085a 的单对象 content 半（#3795/#3567 交互）：部分客户端把 content 发成
 // 裸块对象而非单元素数组，各读取路径会把它丢掉或清零。预算修剪半未移植——我们的
-// anchorClaudeCache/prepareClaudeRequest 一律剥光客户端标记再打 ≤3 个自有锚点
-// （system 1 + tools 1 + messages 1），按构造恒在 4-marker 预算内，末尾的
-// "markers ≤ 3" 不变量测试就是这一决策的回退网。
+// anchorClaudeCache/prepareClaudeRequest 一律剥光客户端标记再按面重打锚点：system 1 +
+// tools 1 + messages ≤1，工具循环的末轮 tool_result 再补第 4 个 5m 断点（上游 49c761cd），
+// 按构造恒在 4-marker 预算内，末尾的 "markers ≤ 3" 不变量测试（结尾为手打消息的请求
+// 拿不到第 4 断点）就是这一决策的回退网。
 import { describe, it, expect } from "vitest";
 import {
   anchorClaudeCache,

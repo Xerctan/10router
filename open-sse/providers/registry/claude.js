@@ -67,6 +67,9 @@ export default {
     { id: "claude-fable-5", name: "Claude Fable 5" },
     { id: "claude-fable-5-1", name: "Claude Fable 5.1" },
     { id: "claude-sonnet-5", name: "Claude Sonnet 5" },
+    // sonnet-5.5：翻译器归一化由自己的任务负责，此处只登记注册表；
+    // capabilities 精确键 `claude-sonnet-5-5` 已同步（1M + adaptive）。
+    { id: "claude-sonnet-5-5", name: "Claude Sonnet 5.5" },
     { id: "claude-haiku-4-5-20251001", name: "Claude 4.5 Haiku" },
   ],
   oauth: {
