@@ -15,25 +15,25 @@ export default function OverviewCards({ stats }) {
   const locale = getCurrentLocale();
   return (
     <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 sm:gap-4">
-      <Card className="flex min-w-0 flex-col gap-1 px-4 py-3">
-        <span className="text-text-muted text-sm uppercase font-semibold">Total Requests</span>
-        <span className="truncate text-2xl font-bold">{fmtTokens(stats.totalRequests, locale)}</span>
+      <Card className="flex min-w-0 flex-col items-center text-center gap-1 px-3 py-3 sm:px-4">
+        <span className="text-text-muted text-xs uppercase font-semibold sm:text-sm">Total Requests</span>
+        <span className="w-full truncate text-lg font-bold xl:text-xl" title={fmtTokens(stats.totalRequests, locale)}>{fmtTokens(stats.totalRequests, locale)}</span>
       </Card>
-      <Card className="flex min-w-0 flex-col gap-1 px-4 py-3">
-        <span className="text-text-muted text-sm uppercase font-semibold">Total Input Tokens</span>
-        <span className="truncate text-2xl font-bold text-primary">{fmtTokens(stats.totalPromptTokens, locale)}</span>
+      <Card className="flex min-w-0 flex-col items-center text-center gap-1 px-3 py-3 sm:px-4">
+        <span className="text-text-muted text-xs uppercase font-semibold sm:text-sm">Total Input Tokens</span>
+        <span className="w-full truncate text-lg font-bold text-primary xl:text-xl" title={fmtTokens(stats.totalPromptTokens, locale)}>{fmtTokens(stats.totalPromptTokens, locale)}</span>
       </Card>
-      <Card className="flex min-w-0 flex-col gap-1 px-4 py-3">
-        <span className="text-text-muted text-sm uppercase font-semibold">Cached Tokens</span>
-        <span className="truncate text-2xl font-bold text-info">{fmtTokens(stats.totalCachedTokens, locale)}</span>
+      <Card className="flex min-w-0 flex-col items-center text-center gap-1 px-3 py-3 sm:px-4">
+        <span className="text-text-muted text-xs uppercase font-semibold sm:text-sm">Cached Tokens</span>
+        <span className="w-full truncate text-lg font-bold text-info xl:text-xl" title={fmtTokens(stats.totalCachedTokens, locale)}>{fmtTokens(stats.totalCachedTokens, locale)}</span>
       </Card>
-      <Card className="flex min-w-0 flex-col gap-1 px-4 py-3">
-        <span className="text-text-muted text-sm uppercase font-semibold">Output Tokens</span>
-        <span className="truncate text-2xl font-bold text-success">{fmtTokens(stats.totalCompletionTokens, locale)}</span>
+      <Card className="flex min-w-0 flex-col items-center text-center gap-1 px-3 py-3 sm:px-4">
+        <span className="text-text-muted text-xs uppercase font-semibold sm:text-sm">Output Tokens</span>
+        <span className="w-full truncate text-lg font-bold text-success xl:text-xl" title={fmtTokens(stats.totalCompletionTokens, locale)}>{fmtTokens(stats.totalCompletionTokens, locale)}</span>
       </Card>
-      <Card className="flex min-w-0 flex-col gap-1 px-4 py-3">
-        <span className="text-text-muted text-sm uppercase font-semibold">Est. Cost</span>
-        <span className="truncate text-2xl font-bold text-warning">~{fmtCost(stats.totalCost)}</span>
+      <Card className="flex min-w-0 flex-col items-center text-center gap-1 px-3 py-3 sm:px-4">
+        <span className="text-text-muted text-xs uppercase font-semibold sm:text-sm">Est. Cost</span>
+        <span className="w-full truncate text-lg font-bold text-warning xl:text-xl" title={`~${fmtCost(stats.totalCost)}`}>~{fmtCost(stats.totalCost)}</span>
         <span className="text-[10px] text-text-muted">Estimated, not actual billing</span>
       </Card>
     </div>

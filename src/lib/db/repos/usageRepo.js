@@ -362,12 +362,12 @@ export async function getUsageHistory(filter = {}) {
 
 function loadDaysInRange(adapter, maxDays) {
   if (maxDays == null) {
-    return adapter.all(`SELECT dateKey, data FROM usageDaily`);
+    return adapter.all(`SELECT dateKey, data FROM usageDaily ORDER BY dateKey ASC`);
   }
   const today = new Date();
   const cutoff = new Date(today.getFullYear(), today.getMonth(), today.getDate() - maxDays + 1);
   const cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, "0")}-${String(cutoff.getDate()).padStart(2, "0")}`;
-  return adapter.all(`SELECT dateKey, data FROM usageDaily WHERE dateKey >= ?`, [cutoffKey]);
+  return adapter.all(`SELECT dateKey, data FROM usageDaily WHERE dateKey >= ? ORDER BY dateKey ASC`, [cutoffKey]);
 }
 
 export async function getUsageStats(period = "all") {
@@ -850,6 +850,53 @@ export async function getChartData(period = "7d") {
   const bucketCount = period === "7d" ? 7 : period === "30d" ? 30 : 60;
   const today = new Date();
   const labelFn = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  // "all": every recorded day, oldest → newest. dayRows are sorted by
+  // loadDaysInRange, so dayRows[0] is the earliest key on disk.
+  if (period === "all") {
+    const dayRows = loadDaysInRange(db, null);
+    if (!dayRows.length) return [];
+    const allMap = {};
+    for (const r of dayRows) allMap[r.dateKey] = parseJson(r.data, {});
+
+    const earliest = new Date(dayRows[0].dateKey + "T00:00:00");
+    // Midnight-anchored: the outer `today` carries the current wall time, and
+    // rounding it up would append an empty bucket for tomorrow.
+    const today0 = new Date();
+    today0.setHours(0, 0, 0, 0);
+    const diffDays = Math.max(1, Math.round((today0 - earliest) / 86400000) + 1);
+
+    const buckets = Array.from({ length: diffDays }, (_, i) => {
+      const d = new Date(earliest);
+      d.setDate(d.getDate() + i);
+      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const dayData = allMap[dateKey];
+      return {
+        dateKey,
+        label: labelFn(d),
+        tokens: dayData ? (dayData.promptTokens || 0) + (dayData.completionTokens || 0) : 0,
+        cost: dayData ? (dayData.cost || 0) : 0,
+        byModel: {},
+      };
+    });
+
+    // Same model-distribution fill as the windowed branches, but unbounded —
+    // the chart covers the whole table.
+    try {
+      const mrows = db.all(`SELECT timestamp, model, promptTokens, completionTokens FROM usageHistory`);
+      const byKey = {};
+      for (const b of buckets) byKey[b.dateKey] = b;
+      for (const r of mrows) {
+        const b = byKey[getLocalDateKey(r.timestamp)];
+        if (!b) continue;
+        const tokens = (r.promptTokens || 0) + (r.completionTokens || 0);
+        const fam = modelFamilyName(r.model);
+        b.byModel[fam] = (b.byModel[fam] || 0) + tokens;
+      }
+    } catch {}
+
+    return finalizeModelBuckets(buckets.map(({ dateKey, ...rest }) => rest));
+  }
 
   // Build map of dateKey → day data
   const dayRows = loadDaysInRange(db, bucketCount);
