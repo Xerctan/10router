@@ -354,6 +354,22 @@ export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
     }
   }
 
+  // 严格模式即"绝不走直连 IP"。走到这里说明调用方有代理意图但一个代理
+  // 都没解析出来(代理池停用/为空,或 URL 丢失)——静默直连正是 strictProxy
+  // 要防的真实 IP 泄漏,所以拒绝而不是放行。上面两处 catch 只覆盖"真的尝试
+  // 过代理但失败"的情形。
+  //
+  // 以"是否存在代理意图"为门槛:像 Qoder 执行器把 strictProxy 用作"代理失败
+  // 时不要用直连重放本请求"(重放的 COSY 签名会被 403),而非"必须挂代理";
+  // 完全没配置代理的调用必须照常工作。
+  const proxyIntended = proxyOptions?.proxyPoolId
+    || proxyOptions?.enabled === true
+    || proxyOptions?.connectionProxyEnabled === true
+    || !!normalizeString(proxyOptions?.url ?? proxyOptions?.connectionProxyUrl);
+  if (proxyOptions?.strictProxy === true && proxyIntended) {
+    throw new Error("[ProxyFetch] Proxy required but none resolved (strictProxy=true)");
+  }
+
   // got-scraping disabled — use native fetch directly
   // (Re-enable per-host by wrapping with tryGotScrapingFetch when needed)
   return originalFetch(url, options);

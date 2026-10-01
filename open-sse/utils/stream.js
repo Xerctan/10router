@@ -4,6 +4,7 @@ import { trackPendingRequest, appendRequestLog } from "@/lib/usageDb.js";
 import { extractUsage, mergeUsage, hasValidUsage, estimateUsage, logUsage, addBufferToUsage, filterUsageForFormat, COLORS } from "./usageTracking.js";
 import { parseSSELine, hasValuableContent, fixInvalidId, formatSSE } from "./streamHelpers.js";
 import { getOpenAIResponsesEventName, isOpenAIResponsesTerminalEvent, formatIncompleteOpenAIResponsesStreamFailure } from "./responsesStreamHelpers.js";
+import { PENDING_COMPLETION_FLUSH_MS } from "../config/runtimeConfig.js";
 import { dbg, isDebugEnabled } from "./debugLog.js";
 
 import { SSE_DONE, SSE_HEADERS, SSE_HEADERS_NO_BUFFER } from "./sseConstants.js";
@@ -79,6 +80,41 @@ export function createSSEStream(options = {}) {
   let openAIResponsesTerminalSeen = false;
   let openAIResponsesDoneSent = false;
   let streamDoneSent = false;  // track duplicate [DONE] across transform + flush
+
+  // chat→responses 直连路由:finish_reason 后等 usage 尾部 chunk 而延迟的
+  // response.completed(见 state.completionPending),由 watchdog 兜底补发。
+  let completionFlushTimer = null;
+
+  const clearCompletionFlushTimer = () => {
+    if (completionFlushTimer) {
+      clearTimeout(completionFlushTimer);
+      completionFlushTimer = null;
+    }
+  };
+
+  // chat→responses 直连路由(openai:openai-responses)的完成延迟只在
+  // target=OPENAI / source=OPENAI_RESPONSES 时成立。
+  const defersResponsesCompletion = () =>
+    mode === STREAM_MODE.TRANSLATE &&
+    targetFormat === FORMATS.OPENAI &&
+    sourceFormat === FORMATS.OPENAI_RESPONSES &&
+    state?.completionPending === true;
+
+  // 立即补发被延迟的 response.completed 系列事件 —— 在 [DONE] 到达、或
+  // watchdog 放弃等待 usage 尾部 chunk 时调用。sendCompleted 按 completedSent
+  // 去重,先到的路径赢、另一条变为空转,不会双发。
+  const flushDeferredCompletion = (controller) => {
+    clearCompletionFlushTimer();
+    if (!defersResponsesCompletion()) return;
+    const flushed = translateResponse(targetFormat, sourceFormat, null, state);
+    for (const item of flushed || []) {
+      if (item === null || item === undefined) continue;
+      const output = formatSSE(item, sourceFormat);
+      reqLogger?.appendConvertedChunk?.(output);
+      controller.enqueue(sharedEncoder.encode(output));
+      sseEmittedCount++;
+    }
+  };
 
   return new TransformStream({
     transform(chunk, controller) {
@@ -246,6 +282,10 @@ export function createSSEStream(options = {}) {
         // For Ollama: done=true is the final chunk with finish_reason/usage, must translate
         // For other formats: done=true is the [DONE] sentinel, skip
         if (parsed && parsed.done && targetFormat !== FORMATS.OLLAMA) {
+          // chat→responses 直连:[DONE] 到达时不再等尾部 usage chunk,
+          // 立即补发被延迟的 response.completed 并取消 watchdog。
+          flushDeferredCompletion(controller);
+
           // Synthesize response.failed if the Responses stream never sent a terminal event
           if (keepsOpenAIResponsesFormat && !openAIResponsesTerminalSeen) {
             const failedOutput = formatIncompleteOpenAIResponsesStreamFailure();
@@ -356,9 +396,29 @@ export function createSSEStream(options = {}) {
           }
         }
       }
+
+      // 兜底 watchdog:上游可能在 finish_reason 后 stall(无尾部 usage chunk、
+      // 无 [DONE]、连接不断开),被延迟的 response.completed 会无限挂起。
+      if (completionFlushTimer && !defersResponsesCompletion()) {
+        // 正常路径(带 usage 的 finish/尾部 usage chunk)已即时补发,取消 watchdog。
+        clearCompletionFlushTimer();
+      } else if (!completionFlushTimer && defersResponsesCompletion()) {
+        completionFlushTimer = setTimeout(() => {
+          completionFlushTimer = null;
+          if (!defersResponsesCompletion()) return;
+          try {
+            flushDeferredCompletion(controller);
+          } catch {
+            // 控制器可能已被关闭/取消(客户端断开),补发失败无需处理。
+          }
+        }, PENDING_COMPLETION_FLUSH_MS);
+        // 兜底定时器不该拖住 Node 进程退出。
+        completionFlushTimer.unref?.();
+      }
     },
 
     flush(controller) {
+      clearCompletionFlushTimer();
       const evtSummary = Object.entries(eventTypeCounts).map(([k, v]) => `${k}=${v}`).join(",") || "none";
       dbg("SSE", `flush | provider=${provider} | model=${model} | recvLines=${sseLineCount} | emitted=${sseEmittedCount} | events=[${evtSummary}]`);
       trackPendingRequest(model, provider, connectionId, false);

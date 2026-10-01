@@ -279,7 +279,8 @@ export function initState(sourceFormat) {
       funcArgsDone: {},
       funcItemDone: {},
       customToolNames: new Set(),
-      completedSent: false
+      completedSent: false,
+      completionPending: false
     };
   }
 

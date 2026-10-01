@@ -21,6 +21,11 @@ const PROVIDER_ORDER = [
 // Providers that need no auth — always show in model selector
 const NO_AUTH_PROVIDER_IDS = Object.keys(FREE_PROVIDERS).filter(id => FREE_PROVIDERS[id].noAuth);
 
+// 需要按账号拉取 live 目录的供应商（Cursor 的可选模型随账号订阅浮动；Zed 的
+// 静态 registry 目录是空的、靠 passthrough 透传，由 modelsUrl 实时下发）。静态
+// 目录只作拉取失败/为空时的兜底 —— 不同账号可能拿到不同的模型清单。
+const LIVE_CATALOG_PROVIDERS = ["cursor", "zed"];
+
 export default function ModelSelectModal({
   isOpen,
   onClose,
@@ -50,48 +55,53 @@ export default function ModelSelectModal({
   const [providerNodes, setProviderNodes] = useState([]);
   const [customModels, setCustomModels] = useState([]);
   const [disabledModels, setDisabledModels] = useState({});
-  const [cursorModels, setCursorModels] = useState([]);
+  // live 目录按供应商分组缓存：{ [providerId]: models }
+  const [liveCatalogModels, setLiveCatalogModels] = useState({});
 
-  // Cursor exposes the usable catalog per account. Keep the static catalog only
-  // as a fallback, since it quickly becomes stale and different accounts can
-  // have different model entitlements.
-  const cursorConnectionIds = useMemo(
-    () => activeProviders
-      .filter((provider) => provider.provider === "cursor" && provider.id)
-      .map((provider) => provider.id),
-    [activeProviders],
-  );
+  // 每个 live 供应商取它所有已连接账号的 connection id。
+  const liveConnectionIdsByProvider = useMemo(() => {
+    const map = Object.fromEntries(LIVE_CATALOG_PROVIDERS.map((providerId) => [providerId, []]));
+    for (const provider of activeProviders) {
+      if (Object.hasOwn(map, provider.provider) && provider.id) map[provider.provider].push(provider.id);
+    }
+    return map;
+  }, [activeProviders]);
 
   useEffect(() => {
-    if (!isOpen || cursorConnectionIds.length === 0) {
-      setCursorModels([]);
+    if (!isOpen) {
+      setLiveCatalogModels({});
       return undefined;
     }
 
     let cancelled = false;
-    Promise.all(cursorConnectionIds.map(async (connectionId) => {
-      const response = await fetch(`/api/providers/${connectionId}/models`, { cache: "no-store" });
-      if (!response.ok) return [];
-      const data = await response.json();
-      return Array.isArray(data.models) ? data.models : [];
+    // 逐供应商聚合其全部账号的目录；同 id 跨账号去重（provider:model 对唯一）。
+    Promise.all(LIVE_CATALOG_PROVIDERS.map(async (providerId) => {
+      const connectionIds = liveConnectionIdsByProvider[providerId];
+      if (connectionIds.length === 0) return [providerId, []];
+      const modelLists = await Promise.all(connectionIds.map(async (connectionId) => {
+        const response = await fetch(`/api/providers/${connectionId}/models`, { cache: "no-store" });
+        if (!response.ok) return [];
+        const data = await response.json();
+        return Array.isArray(data.models) ? data.models : [];
+      }));
+      const seen = new Set();
+      return [providerId, modelLists.flat().filter((model) => {
+        if (!model?.id || seen.has(model.id)) return false;
+        seen.add(model.id);
+        return true;
+      })];
     }))
-      .then((modelLists) => {
-        if (cancelled) return;
-        const seen = new Set();
-        setCursorModels(modelLists.flat().filter((model) => {
-          if (!model?.id || seen.has(model.id)) return false;
-          seen.add(model.id);
-          return true;
-        }));
+      .then((entries) => {
+        if (!cancelled) setLiveCatalogModels(Object.fromEntries(entries));
       })
       .catch((error) => {
         // Do not hide the static fallback when the account catalog is unavailable.
-        console.warn("Unable to load Cursor models for selector:", error);
-        if (!cancelled) setCursorModels([]);
+        console.warn("Unable to load live catalog models for selector:", error);
+        if (!cancelled) setLiveCatalogModels({});
       });
 
     return () => { cancelled = true; };
-  }, [isOpen, cursorConnectionIds]);
+  }, [isOpen, liveConnectionIdsByProvider]);
 
   const fetchCombos = async () => {
     try {
@@ -324,8 +334,9 @@ export default function ModelSelectModal({
           hasModels: mergedModels.length > 0,
         };
       } else {
-        const hardcodedModels = providerId === "cursor" && cursorModels.length > 0
-          ? cursorModels
+        const providerLiveModels = liveCatalogModels[providerId] || [];
+        const hardcodedModels = providerLiveModels.length > 0
+          ? providerLiveModels
           : getModelsByProviderId(providerId);
         const hardcodedIds = new Set(hardcodedModels.map((m) => m.id));
 
@@ -395,7 +406,7 @@ export default function ModelSelectModal({
     });
 
     return groups;
-  }, [filteredActiveProviders, modelAliases, allProviders, providerNodes, customModels, disabledModels, kindFilter, activeProviders, cursorModels]);
+  }, [filteredActiveProviders, modelAliases, allProviders, providerNodes, customModels, disabledModels, kindFilter, activeProviders, liveCatalogModels]);
 
   // Filter combos by search query (and hide combos when kindFilter is set — combos are LLM-only by design)
   const filteredCombos = useMemo(() => {

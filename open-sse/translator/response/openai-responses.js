@@ -58,7 +58,20 @@ export function openaiToOpenAIResponsesResponse(chunk, state) {
     state.responsesUsage = toResponsesUsage(chunk.usage);
   }
 
-  if (!chunk.choices?.length) return [];
+  if (!chunk.choices?.length) {
+    // 尾部 usage chunk(choices 为空的常见形状):延迟中的 response.completed
+    // 此刻已经拿到真实 usage,立即定稿补发,而不是拖到流末 flush —— 这也让
+    // stream.js 的兜底 watchdog 在补发完成后被正确取消。
+    if (state.completionPending && state.responsesUsage) {
+      const events = [];
+      sendCompleted(state, (eventType, data) => {
+        data.sequence_number = ++state.seq;
+        events.push({ event: eventType, data });
+      });
+      return events;
+    }
+    return [];
+  }
   
   const events = [];
   const nextSeq = () => ++state.seq;
@@ -162,7 +175,13 @@ export function openaiToOpenAIResponsesResponse(chunk, state) {
     // （Claude/Gemini/Kiro 上游）时 translateResponse() 在终态 null chunk 前
     // 就返回了——flushEvents 不会被调用，延迟会吞掉终态事件，保持原行为。
     const flushReachesUs = state.targetFormat === FORMATS.OPENAI;
-    if (state.responsesUsage || !flushReachesUs) sendCompleted(state, emit);
+    if (state.responsesUsage || !flushReachesUs) {
+      sendCompleted(state, emit);
+    } else {
+      // 挂上"完成待定"标记:后续尾部 usage chunk 会立即补发;若上游 stall
+      // (无尾部 chunk、无 [DONE]、连接不断),stream.js 的 watchdog 据此兜底。
+      state.completionPending = true;
+    }
   }
 
   return events;
@@ -424,6 +443,7 @@ function closeToolCall(state, emit, idx) {
 function sendCompleted(state, emit) {
   if (!state.completedSent) {
     state.completedSent = true;
+    state.completionPending = false;
     const output = [];
     if (state.completedOutputItems?.size) {
       const maxIdx = Math.max(...state.completedOutputItems.keys());

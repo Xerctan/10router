@@ -12,6 +12,7 @@ import { resolveMimoModels } from "open-sse/services/mimoModels.js";
 import { resolveGrokCliModels } from "open-sse/services/grokCliModels.js";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { resolveCursorModels } from "open-sse/services/cursorModels.js";
+import { resolveZedModels } from "open-sse/shared/zedAuth.js";
 
 const GEMINI_CLI_MODELS_URL = "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels";
 
@@ -346,6 +347,27 @@ const PROVIDER_MODELS_CONFIG = {
       return {
         models: getStaticProviderModels("cursor"),
         warning: "Cursor returned no live models; falling back to static catalog.",
+      };
+    },
+  },
+  zed: {
+    customResolver: async (connection) => {
+      const result = await resolveZedModels({
+        accessToken: connection.accessToken,
+        providerSpecificData: connection.providerSpecificData || {},
+      }, { forceRefresh: true });
+      // Mirrors the /api/v1/models zed resolver: hosted-disabled rows stay out.
+      const models = (result?.models || [])
+        .filter((m) => !m.isDisabled)
+        .map((m) => ({
+          id: m.id,
+          name: m.name,
+          capabilities: m.supportsTools ? { tools: true } : undefined,
+        }));
+      if (models.length) return { models };
+      return {
+        models: getStaticProviderModels("zed"),
+        warning: "Zed returned no live models; falling back to static catalog.",
       };
     },
   },

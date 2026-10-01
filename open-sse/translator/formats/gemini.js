@@ -38,11 +38,17 @@ export const UNSUPPORTED_SCHEMA_CONSTRAINTS = [
   "anyOf", "oneOf", "allOf", "not",
   // Dependency keywords (not supported)
   "dependencies", "dependentSchemas", "dependentRequired",
-  // Other unsupported keywords
-  "title", "optional", "deprecated", "if", "then", "else", "contentMediaType", "contentEncoding",
+  // Other unsupported keywords ("deprecated" already listed under annotation keywords)
+  "title", "optional", "if", "then", "else", "contentMediaType", "contentEncoding",
   // UI/Styling properties (from Cursor tools - NOT JSON Schema standard)
   "cornerRadius", "fillColor", "fontFamily", "fontSize", "fontWeight",
-  "gap", "padding", "strokeColor", "strokeThickness", "textColor"
+  "gap", "padding", "strokeColor", "strokeThickness", "textColor",
+  // 部分 MCP 工具 schema 携带的非标准注解/报错关键字。Gemini 的 schema proto
+  // 没有对应字段,任一嵌套节点出现即以 "Unknown name X: Cannot find field"
+  // 整体 400,必须整树剥离(markdownDescription 已在上方 VS Code 扩展段收录)。
+  "errorMessage", "errorMessages", "x-errorMessage", "x-errorMessages",
+  "x-intellij-html-description", "x-taplo-info", "x-taplo",
+  "doNotSuggest", "suggestSortText", "minProperties", "maxProperties"
 ];
 
 // Default safety settings

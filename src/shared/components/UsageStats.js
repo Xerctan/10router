@@ -292,6 +292,9 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
           if (c.isActive === false) return false;
           if (!isLLMProvider(c.provider)) return false;
           if (isCommunityHidden(c.provider)) return false;
+          // hidden 供应商（如 zed，registry 里 hidden: true）即便已连账号也
+          // 不进 provider 列表，与下方 noAuth 分支的 !p.hidden 对齐。
+          if (AI_PROVIDERS[c.provider]?.hidden) return false;
           if (seen.has(c.provider)) return false;
           seen.add(c.provider);
           return true;

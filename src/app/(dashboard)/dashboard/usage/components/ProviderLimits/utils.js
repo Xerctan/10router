@@ -23,6 +23,25 @@ export const QUOTA_SORT_OPTIONS = [
 ];
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
+// provider 过滤器的初始值：URL ?provider= 深链优先（可书签化分享），无参时
+// 回落 localStorage 里持久化的上次选择，再兜底 "all"。
+export function getInitialProviderFilter(urlProvider, storedProvider) {
+  return urlProvider || storedProvider || "all";
+}
+
+// 切换过滤器时回写的 URL：选中具体 provider 写 ?provider=xxx；回到 "all" 时
+// 移除该参数保持地址栏干净；其余 query 参数原样保留。
+export function buildProviderFilterUrl(pathname, searchString, provider) {
+  const params = new URLSearchParams(searchString || "");
+  if (provider && provider !== "all") {
+    params.set("provider", provider);
+  } else {
+    params.delete("provider");
+  }
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
 export function getConnectionLabel(connection) {
   // Qoder Intl stores the login email as the connection name (CN stores the
   // username). Users don't want the email surfaced on the dashboard, so for

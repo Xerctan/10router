@@ -102,6 +102,11 @@ export async function resolveConnectionProxyConfig(
 
     const legacy = normalizeLegacyProxy(providerSpecificData);
 
+    // 代理池自身的 strictProxy 承诺必须独立于池可用性成立:池停用或 URL
+    // 为空时下面的返回都不带池信息,若丢掉 strict 标记,proxyFetch 会在
+    // "解析不到任何代理"时静默直连,泄漏真实 IP ——这正是 strict 模式要防的。
+    let poolStrictProxy = false;
+
     /**
      * -----------------------------
      * Proxy Pool Resolution
@@ -109,6 +114,8 @@ export async function resolveConnectionProxyConfig(
      */
     if (proxyPoolId) {
       const proxyPool = await getProxyPoolById(proxyPoolId);
+
+      poolStrictProxy = proxyPool?.strictProxy === true;
 
       const proxyUrl = unwrapProxyUrl(proxyPool?.proxyUrl);
       const noProxy = normalizeString(proxyPool?.noProxy);
@@ -174,6 +181,8 @@ export async function resolveConnectionProxyConfig(
         proxyPool: null,
 
         ...legacy,
+        // 池不可用也要保住池的 strict 承诺;未指定池时回落 legacy 自身的标记。
+        strictProxy: poolStrictProxy || legacy.strictProxy,
       };
     }
 
@@ -189,6 +198,8 @@ export async function resolveConnectionProxyConfig(
       proxyPool: null,
 
       ...legacy,
+      // 同上:池失效(停用/URL 空)时 strict 标记不能随池信息一起消失。
+      strictProxy: poolStrictProxy || legacy.strictProxy,
     };
   } catch (error) {
     console.error(

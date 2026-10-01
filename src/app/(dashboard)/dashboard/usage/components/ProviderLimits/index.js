@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import ProviderIcon from "@/shared/components/ProviderIcon";
 import QuotaPackBar from "@/shared/components/QuotaPackBar";
 import QuotaToolbar from "./QuotaToolbar";
@@ -39,6 +40,8 @@ import {
   getPaginationPageValue,
   getProviderOptions,
   reconcileConnectionsPage,
+  getInitialProviderFilter,
+  buildProviderFilterUrl,
   getQuotaCache,
   QUOTA_CACHE_KEY,
   REFRESH_INTERVAL_MS,
@@ -197,10 +200,21 @@ export default function ProviderLimits() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState(null);
   const [proxyPools, setProxyPools] = useState([]);
-  const [providerFilter, setProviderFilter] = useState(() => {
-    if (typeof window === "undefined") return "all";
-    return window.localStorage.getItem("quotaProviderFilter") || "all";
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  // 初值优先取 URL ?provider=，让过滤后的视图可以被书签化/分享；无参时保持
+  // 原语义，回落 localStorage 里持久化的上次选择。
+  const [providerFilter, setProviderFilterState] = useState(() => {
+    const stored = typeof window === "undefined" ? null : window.localStorage.getItem("quotaProviderFilter");
+    return getInitialProviderFilter(searchParams?.get("provider"), stored);
   });
+  // 切换过滤器时回写 URL：replace 不产生历史记录、scroll:false 不打断滚动位置；
+  // 下面的 localStorage 持久化 effect 保持不变，继续充当无 URL 参时的兜底初值。
+  const setProviderFilter = useCallback((value) => {
+    setProviderFilterState(value);
+    router.replace(buildProviderFilterUrl(pathname, searchParams?.toString() || "", value), { scroll: false });
+  }, [router, pathname, searchParams]);
   const [providerOptions, setProviderOptions] = useState([]);
   const [accountFilter, setAccountFilter] = useState(() => {
     if (typeof window === "undefined") return "all";
