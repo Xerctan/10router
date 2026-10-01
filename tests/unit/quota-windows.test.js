@@ -76,15 +76,28 @@ describe("window geometry", () => {
     expect(wins.every((w) => w.end > start && w.start < end)).toBe(true);
   });
 
-  it("week view is two weeks from Monday; hours view is today", () => {
+  it("week view is two weeks from Monday; hours view is the 24h around now", () => {
     const wk = viewRange("week", NOW);
     expect(new Date(wk.start).getDay()).toBe(1);
     expect(wk.start).toBe(startOfWeek(NOW));
     expect(wk.end - wk.start).toBe(14 * DAY_MS);
     expect(viewRange("week", NOW, 1).start - wk.start).toBe(7 * DAY_MS);
+    // NOW is 12:00, so the hours axis is [00:00, 24:00) — now sits mid-track.
     const hr = viewRange("hours", NOW);
-    expect(new Date(hr.start).getHours()).toBe(0);
     expect(hr.end - hr.start).toBe(DAY_MS);
+    expect(hr.start).toBe(NOW - 12 * HOUR_MS);
+    expect(hr.end).toBe(NOW + 12 * HOUR_MS);
+    expect(viewRange("hours", NOW, 1).start - hr.start).toBe(DAY_MS);
+  });
+
+  it("hours view stays hour-aligned when now has minutes", () => {
+    const t = new Date(2026, 9, 1, 22, 44).getTime(); // 22:44
+    const hr = viewRange("hours", t);
+    expect(new Date(hr.start).getMinutes()).toBe(0);
+    expect(new Date(hr.start).getHours()).toBe(10); // 10:00, 12h back floored
+    expect(hr.end - hr.start).toBe(DAY_MS);
+    expect(t - hr.start).toBeGreaterThanOrEqual(12 * HOUR_MS);
+    expect(t - hr.start).toBeLessThan(13 * HOUR_MS); // flooring keeps now at mid-track ±1h
   });
 });
 

@@ -27,6 +27,7 @@ import {
   isResettingRow,
   isSpentPack,
   shortDate,
+  shortDuration,
   isStoredValueRow,
   detailRows,
   groupRowsByFamily,
@@ -353,6 +354,20 @@ describe("shortDate", () => {
     expect(shortDate("2026-10-05T12:00:00")).toBe("10-05");
     expect(shortDate("")).toBe("");
     expect(shortDate("not a date")).toBe("");
+  });
+});
+
+describe("shortDuration", () => {
+  const NOW = new Date("2026-10-01T12:00:00").getTime();
+  it("scales precision with magnitude: d+h, h+m, m+s", () => {
+    expect(shortDuration(new Date(NOW + 2 * 86400e3 + 3 * 3600e3 + 30 * 60e3).toISOString(), NOW)).toBe("2d 3h");
+    expect(shortDuration(new Date(NOW + 5 * 3600e3 + 20 * 60e3 + 40e3).toISOString(), NOW)).toBe("5h 20m");
+    expect(shortDuration(new Date(NOW + 45 * 60e3 + 30e3).toISOString(), NOW)).toBe("45m 30s");
+  });
+  it("clamps the past to zero and tolerates junk", () => {
+    expect(shortDuration(new Date(NOW - 60e3).toISOString(), NOW)).toBe("0m 0s");
+    expect(shortDuration("", NOW)).toBe("");
+    expect(shortDuration("not a date", NOW)).toBe("");
   });
 });
 

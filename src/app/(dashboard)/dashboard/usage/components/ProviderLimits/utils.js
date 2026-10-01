@@ -1,4 +1,5 @@
 import { getModelsByProviderId } from "open-sse/config/providerModels.js";
+import { shortDuration } from "@/shared/utils/quotaRows";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 export const QUOTA_CACHE_KEY = "quotaCacheData";
@@ -265,39 +266,20 @@ export function setQuotaCache(connectionId, quotaEntry) {
 }
 
 /**
- * Format ISO date string to countdown format (inspired by vscode-antigravity-cockpit)
+ * Format ISO date string to countdown format (inspired by vscode-antigravity-cockpit).
+ * Two units, precision following magnitude ("2d 5h", "4h 40m", "15m 30s") — the
+ * same rule as every other quota surface (shortDuration in shared/quotaRows).
  * @param {string|Date} date - ISO date string or Date object
- * @returns {string} Formatted countdown (e.g., "2d 5h 30m", "4h 40m", "15m") or "-"
+ * @returns {string} Formatted countdown or "-"
  */
 export function formatResetTime(date) {
   if (!date) return "-";
 
   try {
     const resetDate = typeof date === "string" ? new Date(date) : date;
-    const now = new Date();
-    const diffMs = resetDate - now;
-
-    if (diffMs <= 0 || resetDate.getFullYear() > 2099) return "-";
-
-    const totalMinutes = Math.ceil(diffMs / (1000 * 60));
-    
-    // < 60 minutes: show only minutes
-    if (totalMinutes < 60) {
-      return `${totalMinutes}m`;
-    }
-    
-    const totalHours = Math.floor(totalMinutes / 60);
-    const remainingMinutes = totalMinutes % 60;
-    
-    // < 24 hours: show hours and minutes
-    if (totalHours < 24) {
-      return `${totalHours}h ${remainingMinutes}m`;
-    }
-    
-    // >= 24 hours: show days, hours, and minutes
-    const days = Math.floor(totalHours / 24);
-    const remainingHours = totalHours % 24;
-    return `${days}d ${remainingHours}h ${remainingMinutes}m`;
+    if (Number.isNaN(resetDate?.getTime?.()) || resetDate.getFullYear() > 2099) return "-";
+    if (resetDate - new Date() <= 0) return "-";
+    return shortDuration(resetDate) || "-";
   } catch (error) {
     return "-";
   }

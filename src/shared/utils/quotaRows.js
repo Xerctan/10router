@@ -264,6 +264,21 @@ export function shortDate(iso) {
   return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/**
+ * ISO → relative countdown, two units with precision following magnitude:
+ * "2d 3h" at day scale, "5h 20m" under a day, "45m 30s" under an hour — a bare
+ * date says nothing about a 5h rolling reset. "" when missing/invalid.
+ */
+export function shortDuration(iso, now = Date.now()) {
+  if (!iso) return "";
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "";
+  const s = Math.max(0, Math.round((t - now) / 1000));
+  if (s >= 86400) return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
+  if (s >= 3600) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+  return `${Math.floor(s / 60)}m ${s % 60}s`;
+}
+
 /** remaining in the row's own unit, tolerant of the raw (`used`/`total`) shape. */
 function remainingAmountOf(row) {
   if (Number.isFinite(row?.remainingNum)) return Number(row.remainingNum);

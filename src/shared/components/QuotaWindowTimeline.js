@@ -22,7 +22,7 @@ import { cn } from "@/shared/utils/cn";
  * The current window is a meter (fill = what is left, the same health gradient
  * as every quota bar); the windows after it are dashed outlines starting at the
  * next reset. Two views: 按周 (two weeks — daily/weekly/monthly windows) and
- * 5 小时 (one day — the 5h windows).
+ * 5 小时 (the 24h around now — the 5h windows).
  *
  * Data is /api/usage/quotas (server-cached per connection), painted first from
  * the browser's copy so the page never waits on upstream quota APIs.
@@ -230,7 +230,7 @@ export default function QuotaWindowTimeline({
 
   const subtitle = range
     ? view === "hours"
-      ? `${mmdd(range.start)} · ${translate("24 hours")}`
+      ? `${mmdd(range.start)} ${hhmm(range.start)} – ${mmdd(range.end)} ${hhmm(range.end)}`
       : `${mmdd(range.start)} – ${mmdd(range.end - DAY_MS)} · ${translate("two weeks")}`
     : "";
 
@@ -262,7 +262,7 @@ export default function QuotaWindowTimeline({
             disabled={offset === 0}
             className="h-full border-x border-black/10 px-2.5 text-xs text-text disabled:text-text-muted dark:border-white/10"
           >
-            {translate("Today")}
+            {translate(view === "hours" ? "current" : "Today")}
           </button>
           <button type="button" onClick={() => setOffset((o) => o + 1)} className="flex h-full w-8 items-center justify-center text-text-muted hover:text-text" aria-label={translate("Next")}>
             <span className="material-symbols-outlined text-[16px]">chevron_right</span>

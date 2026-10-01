@@ -1891,6 +1891,8 @@
   "{used} of {total} used across {count} packs": "{count} 个配额包：已用 {used} / 共 {total}",
   "resets": "重置于",
   "resets {date}": "{date} 重置",
+  "resets in {duration}": "{duration}后重置",
+  "expires in {duration}": "{duration}后到期",
   "Cards": "卡片",
   "View": "视图",
   "Quota windows": "配额窗口",

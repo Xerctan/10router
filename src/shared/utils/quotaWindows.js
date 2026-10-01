@@ -79,16 +79,21 @@ export function startOfWeek(t) {
   return d.getTime();
 }
 
-export function startOfDay(t) {
+export function startOfHour(t) {
   const d = new Date(t);
-  d.setHours(0, 0, 0, 0);
+  d.setMinutes(0, 0, 0);
   return d.getTime();
 }
 
-/** [start, end) of a view, `offset` steps away from the one containing `now`. */
+/**
+ * [start, end) of a view, `offset` steps away from the one containing `now`.
+ * The hours view is the 24h AROUND now ([now−12h, now+12h), floored to the
+ * hour) — a calendar day buries "now" at the right edge by evening, which is
+ * exactly when the 5h window matters.
+ */
 export function viewRange(view, now, offset = 0) {
   const v = VIEWS[view] || VIEWS.week;
-  const base = view === "hours" ? startOfDay(now) : startOfWeek(now);
+  const base = view === "hours" ? startOfHour(now - 12 * HOUR_MS) : startOfWeek(now);
   const start = base + offset * v.stepMs;
   return { start, end: start + v.spanMs };
 }

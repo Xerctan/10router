@@ -3,7 +3,7 @@
 import PropTypes from "prop-types";
 import { cn } from "@/shared/utils/cn";
 import { translate } from "@/i18n/runtime";
-import { healthHue, shortDate } from "@/shared/utils/quotaRows";
+import { healthHue, shortDate, shortDuration } from "@/shared/utils/quotaRows";
 
 /**
  * The one visual language for every quota meter (card rows, pool bar, nested
@@ -40,13 +40,17 @@ export const TONE_TEXT = {
 };
 
 /**
- * The one date phrase on quota UI: "10-29 重置" / "10-15 到期" / "09-20 已过期".
- * The date slot lives in the translation (word order differs by language);
- * locales without the key fall back to English, so the date never drops out.
+ * The one date phrase on quota UI. A FUTURE reset/expiry is a countdown whose
+ * precision follows magnitude — "5h 20m 后重置" says what "10-01 重置" cannot
+ * for a rolling window; a past expiry stays an absolute "09-20 已过期". The
+ * slot lives in the translation (word order differs by language); locales
+ * without the key fall back to English, so the phrase never drops out.
  */
 export function quotaDateWord(resets, iso, { expired = false } = {}) {
-  const key = expired ? "expired {date}" : resets ? "resets {date}" : "expires {date}";
-  return translate(key).replace("{date}", shortDate(iso));
+  if (expired) return translate("expired {date}").replace("{date}", shortDate(iso));
+  const duration = shortDuration(iso);
+  if (duration) return translate(resets ? "resets in {duration}" : "expires in {duration}").replace("{duration}", duration);
+  return translate(resets ? "resets {date}" : "expires {date}").replace("{date}", shortDate(iso));
 }
 
 /** Bare track. Children are the fills (a plain bar, segments, nested bands). */

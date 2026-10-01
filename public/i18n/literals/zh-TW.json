@@ -727,6 +727,8 @@
   "{used} of {total} used across {count} packs": "{count} 個配額包：已用 {used} / 共 {total}",
   "resets": "重置於",
   "resets {date}": "{date} 重置",
+  "resets in {duration}": "{duration}後重置",
+  "expires in {duration}": "{duration}後到期",
   "Cards": "卡片",
   "Quota windows": "配額窗口",
   "24 hours": "24 小時",

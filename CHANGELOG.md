@@ -26,7 +26,6 @@
 - **上游 v0.5.91 余量移植批次（一批七笔）**：新增聚合器供应商 Token Harbor / Dahl Inference / Atria Dawn（`737b1f4d`+`06112c13` 思路，OpenAI 兼容直连 + live 模型拉取 + capabilities 显式防低报）；opencode 指纹工具四件套抽成公共模块、tool rename 在三条非流式 JSON 路径与同格式直通路径双向闭环（`93837af0`/`822aa958` 系）；POST /api/providers 同名校验下沉 repo 事务层、批量导入 key 降 O(1)（`239bcfc5`）；Tailscale enable 健康等待收敛 20s（`e7c269b8`）；opencode-go 的 glm-5.3-flash 改走 reasoning_effort、mimo-v2.5-pro 档位收敛（`477b2aed`/`1b72f02e`）；qoder 计费阻断补 code 110（`2daf25ff` 部分）；OAuth 弹窗粘贴 token 入口按配置门控（`7a436d20` 同主题）；ollama 免费计划月度窗口按注册日推导重置（`73e0218b`）。用例 tokenharbor-provider / opencode-fingerprint / provider-priority-insert-cost / ollama-usage 扩充全绿。
 
 ### 🐛 修复
-### 🐛 修复
 
 - **虚拟 key 可远程写自定义 provider（#38）**：`POST /api/providers` 与 `/api/provider-nodes` 的虚拟 key 例外此前嵌在 `ALWAYS_PROTECTED` 分支内，而这两个路径不在该列表里，例外永不匹配，远程带有效虚拟 key 一律 401（CreditDaddy 同步账号通道）。例外提到该判断之外；`[id]` 上的 list/update/delete 仍受保护。`tests/unit/dashboard-guard-provider-write.test.js` 覆盖远程放行与 `[id]` 仍 401。
 - **MITM sudo 启动不再把 ROUTER_API_KEY 写进 argv（#31）**：`sudo -S -E sh -c <cmd>` 的整条命令行在 /proc/<pid>/cmdline 里常驻、本机任意用户可读。key 改走 stdin 第二行（sudo 吃第一行密码、`IFS= read -r` 吃第二行），shell 内 `export` 后 `exec` 起服务，服务自身 argv 也干净。守卫用例 `tests/unit/mitm-sudo-apikey-argv.test.js` 4 例（源码级钉形状）；顺带修掉 `outbound-proxy-loopback.test.js` 的 cwd 陷阱（源码路径改从测试文件自身解析，tests/ 与仓库根两种跑法都绿——该用例此前在基线里常红）。
@@ -56,6 +55,8 @@
 
 ### 🐛 修复
 
+- **配额重置时间改为自适应倒计时**：卡片/资源包上的重置与到期时间不再是只有日期的"10-01 重置"——未来时间统一显示倒计时，精度随量级自适应（≥1 天显示「天+小时」、不足一天「时+分」、不足一小时「分+秒」，如 `6d 3h` / `4h 44m` / `38m 12s`），悬停仍可见完整绝对时间；`shortDuration` 收编为全局面额（QuotaTable / QuotaPackBar / QuotaProgressBar 同一规则），i18n 新增 `resets in {duration}` / `expires in {duration}`。
+- **配额窗口「5 小时」视图以现在为中心**：时间轴从自然日 00–24 点改为此时此刻前后 12 小时（起点取整到整点），"现在"永远在轨道中段——此前傍晚查看时当前时刻被顶到最右缘、整屏都是已过去的窗口；副标题同步显示起止时刻。
 - **用量详情输入 Token 不再被缓存值顶替（`5fa83137`）**：请求明细存的是未折叠的 Claude 形态 usage（`prompt_tokens` 不含缓存，`cache_read_input_tokens` 另存）。此前前端在 `prompt < cache` 时直接回退显示 cache，导致高缓存命中供应商（如 `zcode-free` 命中率约 99%）输入与缓存列显示恒为 1:1。抽离 `src/shared/utils/usageDisplay.js` 判别式：无顶层 `cached_tokens` 时自动折叠 `prompt + cacheRead + cacheCreation`，恢复真实输入总量展示。
 - **全新安装冷启动静态模型暴露（`54bb9469`）**：修复在数据库没有任何连接行的新安装环境下，`noAuth` 供应商（如 opencode、mimo-free、zcode-free）在 `/v1/models` 无法列出模型的问题；针对带 `exposeStaticModels: true` 的提供商自动派发静态模型定义。
 - **OpenAI Responses 审核中断原因映射（`96157305`）**：`nonStreamingHandler` 将 Responses 格式中的 `incomplete_details.reason === "content_filter"` 正确转换为 Chat 补全规范的 `finish_reason: "content_filter"`（此前误回落至 `"length"`），避免下游 SDK 误判为 token 上限截断。
