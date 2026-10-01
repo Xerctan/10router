@@ -41,6 +41,10 @@ const PATTERN_THINKING = [
   { provider: "codex", pattern: "*gpt-5.6-luna*", levels: CODEX_GPT_5_6_LEVELS },
   { pattern: "*codex*", levels: ["low", "medium", "high", "xhigh"] }, // codex cannot disable thinking
   { pattern: "*mimo*preview*", levels: ["none", "low", "medium", "high", "xhigh"] },
+  // opencode-go 的 mimo-v2.5-pro 实测拒绝 reasoning_effort "max"（v2.5 接受）。
+  // 本仓库的 deepseek 线上格式本就把 max 请求改写成 xhigh 发出，因此只需把
+  // 选择器收敛到该模型真正接受的档位。
+  { pattern: "*mimo*v2.5-pro*", levels: ["none", "low", "medium", "high", "xhigh"] },
   // AMD Token Factory per-model effort sets (AMD probed every value on the live
   // endpoint; its 2026-09-09 doc revision supersedes the earlier low/medium-only
   // reading). Both DeepSeek ids take all seven efforts and think only when asked;
