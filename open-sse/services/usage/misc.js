@@ -472,7 +472,7 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
         webOrg = sumWebRows(web.orgRows);
       }
     }
-
+    const hasWebPacks = addOnPacks.length > 0;
     if (!hasWebPacks) try {
       const campBase = providerId === "qoder-cn" ? QODER_CN_OPENAPI_BASE : QODER_OPENAPI_BASE;
       const campUrl = `${campBase}/sash/api/v1/me/campaigns?clientType=10`;
@@ -504,6 +504,20 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
       // Best-effort breakdown fetch
     }
 
+    // Web rows win over the openapi aggregates: they are the exact per-row
+    // source (CreditDaddy's model — detail replaces the aggregate), and the
+    // openapi userQuota zeroes out on accounts whose plan credits only surface
+    // via the web console.
+    const planBucket = webPlan || {
+      total: Number(userQuota.total) || 0,
+      used: Number(userQuota.used) || 0,
+      remaining: Number(userQuota.remaining) || 0,
+    };
+    const orgBucket = webOrg || {
+      total: Number(orgQuota.total) || 0,
+      used: Number(orgQuota.used) || 0,
+      remaining: Number(orgQuota.remaining) || 0,
+    };
     const quotas = {
       user: {
         total: planBucket.total,
