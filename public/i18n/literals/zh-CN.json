@@ -1845,7 +1845,7 @@
   "Check for updates automatically": "自动检查更新",
   "Forgot your password?": "忘记密码？",
   "Recovery file format:": "找回文件格式：",
-  "Name: reset-password (or reset-password.txt — extensionless files are awkward to create on Windows). Content: plain UTF-8 text holding only the new password — a single line, no quotes, nothing else (leading/trailing whitespace is ignored).": "文件名：reset-password（或 reset-password.txt——Windows 上创建无扩展名文件不便）。内容：UTF-8 纯文本，只写新密码本身——单独一行，不带引号、不带其他文字（首尾空白与换行会被忽略）。",
+  "Name: reset-password — any extension works too (.txt, .md, …), since Windows makes extensionless files awkward. Content: plain UTF-8 text holding only the new password — a single line, no quotes, nothing else (leading/trailing whitespace is ignored).": "文件名：reset-password——带任意扩展名也可以（.txt、.md 等，Windows 上创建无扩展名文件不便）。内容：UTF-8 纯文本，只写新密码本身——单独一行，不带引号、不带其他文字（首尾空白与换行会被忽略）。",
   "Full format reference (docs)": "完整格式说明（文档）",
   "An empty file removes the stored password and falls back to the first-login password (INITIAL_PASSWORD / fnOS initial-password).": "留空文件：删除已存密码，回到首次登录密码（INITIAL_PASSWORD / fnOS 初始密码）。",
   "Put it in the data folder — Windows: %APPDATA%\\10router · macOS / Linux: ~/.10router · Docker: the mounted DATA_DIR · fnOS: @appdata/10router on the app's volume. It applies on your next sign-in attempt (no restart) and is deleted the moment it is read.": "放入数据目录——Windows：%APPDATA%\\10router · macOS / Linux：~/.10router · Docker：挂载的 DATA_DIR · fnOS：应用卷上的 @appdata/10router。下次登录尝试时生效（无需重启），读取后立即删除。",

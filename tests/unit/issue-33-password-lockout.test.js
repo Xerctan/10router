@@ -53,7 +53,9 @@ beforeEach(() => {
   db.settings = {};
   cookieJar.setCalls.length = 0;
   process.env.INITIAL_PASSWORD = "Hidden-fpk-Generated-9x"; // the fnOS bootstrap nobody saw
-  fs.rmSync(RESET, { force: true });
+  for (const f of fs.readdirSync(tempDir).filter((n) => n.startsWith("reset-password"))) {
+    fs.rmSync(path.join(tempDir, f), { force: true });
+  }
 });
 afterAll(() => {
   for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
@@ -173,6 +175,18 @@ describe("recovery: the reset-password file", () => {
     expect(fs.existsSync(txt)).toBe(false);
   });
 
+  it("any trailing extension works (.md too), but reset-password-old is NOT a reset file", async () => {
+    db.settings = { requireLogin: true };
+    const md = path.join(tempDir, "reset-password.md");
+    const lookalike = path.join(tempDir, "reset-password-old");
+    fs.writeFileSync(md, "Md-Pass-1\n");
+    fs.writeFileSync(lookalike, "Not-A-Reset-1\n");
+    expect((await tryLogin("Md-Pass-1")).status).toBe(200);
+    expect(fs.existsSync(md)).toBe(false);
+    expect(fs.existsSync(lookalike)).toBe(true);       // never matched, never consumed
+    expect((await tryLogin("Not-A-Reset-1")).status).toBe(401);
+  });
+
   it("is applied at start, on log-in, and before the login page reads its status", () => {
     expect(readSource("src/shared/services/initializeApp.js")).toContain("await applyPasswordResetFile()");
     expect(readSource("src/app/api/auth/login/route.js")).toContain("await applyPasswordResetFile()");
@@ -190,7 +204,7 @@ describe("the entries users actually reach", () => {
   it("login page: a 'Forgot your password?' entry with the recovery steps incl. the file format", () => {
     const page = readSource("src/app/login/page.js");
     expect(page).toContain("Forgot your password?");
-    expect(page).toContain("reset-password (or reset-password.txt");
+    expect(page).toContain("reset-password — any extension works too");
     expect(page).toContain("empty file removes the stored password");
     expect(page).toContain('status?.installChannel === "fpk"');
   });

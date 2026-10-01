@@ -145,7 +145,7 @@ export default function LoginPage() {
                     <p>{translate("fnOS: open App Center → 10Router → Settings, enter a new dashboard password and save. Sign in with it right away.")}</p>
                   )}
                   <p className="font-medium text-text">{translate("Recovery file format:")}</p>
-                  <p>{translate("Name: reset-password (or reset-password.txt — extensionless files are awkward to create on Windows). Content: plain UTF-8 text holding only the new password — a single line, no quotes, nothing else (leading/trailing whitespace is ignored).")}</p>
+                  <p>{translate("Name: reset-password — any extension works too (.txt, .md, …), since Windows makes extensionless files awkward. Content: plain UTF-8 text holding only the new password — a single line, no quotes, nothing else (leading/trailing whitespace is ignored).")}</p>
                   <p>{translate("An empty file removes the stored password and falls back to the first-login password (INITIAL_PASSWORD / fnOS initial-password).")}</p>
                   <p>{translate("Put it in the data folder — Windows: %APPDATA%\\10router · macOS / Linux: ~/.10router · Docker: the mounted DATA_DIR · fnOS: @appdata/10router on the app's volume. It applies on your next sign-in attempt (no restart) and is deleted the moment it is read.")}</p>
                   {status?.installChannel === "fpk" && status?.hasPassword === false && (

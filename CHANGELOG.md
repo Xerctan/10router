@@ -6,7 +6,7 @@
 
 ### 🐛 修复
 
-- **设置→安全 开启「需要登录」不再把自己踢出**：建立防护（设置密码 / 开启登录校验）的 PATCH 此前不签发会话——靠本机信任或免密访问进来的操作者在校验生效瞬间手里没有任何凭据，立刻被弹到登录页（远程 Tailscale/隧道场景尤为突兀）。`PATCH /api/settings` 成功设置密码或开启校验时，为已通过全部守卫的当前会话签发 auth cookie；拒绝请求与无关设置变更不签发。登录页「忘记密码？」入口补中文，找回面板重写为明确的 reset-password 文件格式说明并链接完整文档 `docs/zh-CN/dashboard-password-recovery.md`，全面板简/繁本地化。找回文件同时接受 **`reset-password.txt`**（Windows 资源管理器建无扩展名文件不便且默认隐藏扩展名；两者并存时无扩展名版本优先）。用例 `tests/unit/issue-33-password-lockout.test.js` 扩至 19 例（签发时机/拒发分支/.txt 别名与优先级）。
+- **设置→安全 开启「需要登录」不再把自己踢出**：建立防护（设置密码 / 开启登录校验）的 PATCH 此前不签发会话——靠本机信任或免密访问进来的操作者在校验生效瞬间手里没有任何凭据，立刻被弹到登录页（远程 Tailscale/隧道场景尤为突兀）。`PATCH /api/settings` 成功设置密码或开启校验时，为已通过全部守卫的当前会话签发 auth cookie；拒绝请求与无关设置变更不签发。登录页「忘记密码？」入口补中文，找回面板重写为明确的 reset-password 文件格式说明并链接完整文档 `docs/zh-CN/dashboard-password-recovery.md`，全面板简/繁本地化。找回文件接受 **`reset-password.*` 任意扩展名**（Windows 资源管理器建无扩展名文件不便且默认隐藏扩展名，`reset-password.txt/.md` 均有效；并存时无扩展名版本优先、其余按字典序消费，`reset-password-old` 这类不带点的名字不匹配）。用例 `tests/unit/issue-33-password-lockout.test.js` 扩至 20 例（签发时机/拒发分支/扩展名通配与优先级）。
 - **Drex「获取 API 密钥」改指邀请链接**：Nace 当前为邀请制注册，`dashboard/api-keys` 对未注册用户是一条死路；取 key 链接改为 `https://drex.nace.ai/invite/tnzgt5vr`。
 - **README 版式**：交流群二维码再缩 20%（280 → 224px）并改为左对齐；贡献者致谢头像固定每行 10 个排布。
 

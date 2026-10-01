@@ -6,9 +6,11 @@ import { updateSettings } from "@/lib/localDb";
 
 // Recovery entry for a forgotten / unusable dashboard password (issue #33).
 //
-// Put a file named `reset-password` (or `reset-password.txt` — Windows Explorer
-// makes extensionless files awkward and hides extensions, so that is what people
-// end up with) in the data directory:
+// Put a file named `reset-password` in the data directory — any trailing
+// extension is accepted too (`reset-password.txt`, `.md`, …): Windows Explorer
+// makes extensionless files awkward to create and hides extensions by default,
+// so the file people end up with almost always has one. The extensionless name
+// wins when several exist; the rest are tried in alphabetical order.
 //   - with a password in it  → that becomes the dashboard password
 //   - empty                  → the stored password is removed and log-in falls back
 //                              to the first-login password (INITIAL_PASSWORD /
@@ -21,17 +23,31 @@ import { updateSettings } from "@/lib/localDb";
 // fnOS writes the extensionless one from App Center → 10Router → 应用设置
 // (cmd/config_callback). Full spec: docs/zh-CN/dashboard-password-recovery.md.
 export const PASSWORD_RESET_FILE = "reset-password";
-export const PASSWORD_RESET_FILES = [PASSWORD_RESET_FILE, "reset-password.txt"];
+
+// Reset-file candidates, best first: exact name, then every `reset-password.*`
+// alphabetically (deterministic when several linger). `reset-password-old`
+// style names do NOT match — the dot is required.
+function findResetFile(dataDir) {
+  let names;
+  try {
+    names = fs
+      .readdirSync(dataDir)
+      .filter((n) => n === PASSWORD_RESET_FILE || n.startsWith(`${PASSWORD_RESET_FILE}.`))
+      .sort((a, b) => (a === PASSWORD_RESET_FILE ? -1 : b === PASSWORD_RESET_FILE ? 1 : a.localeCompare(b)));
+  } catch {
+    return [];
+  }
+  return names.map((n) => path.join(dataDir, n));
+}
 
 export async function applyPasswordResetFile() {
   let file = null;
   let content = null;
-  for (const name of PASSWORD_RESET_FILES) {
-    const candidate = path.join(getDataDir(), name);
+  for (const candidate of findResetFile(getDataDir())) {
     try {
-      content = fs.readFileSync(candidate, "utf8");
+      content = fs.readFileSync(candidate, "utf8"); // skips directories, unreadables
       file = candidate;
-      break; // extensionless name wins when both exist
+      break;
     } catch { /* try the next name */ }
   }
   if (!file) return null; // no reset requested
