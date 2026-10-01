@@ -10,11 +10,11 @@ import { PROVIDER_MEDIA } from "open-sse/providers/index.js";
 import { PROVIDER_MODELS } from "open-sse/config/providerModels.js";
 
 describe("registry contract: drex", () => {
-  it("is an apikey, systemone-only provider with a key dashboard link", () => {
+  it("is an apikey, systemone-only provider with an invite key link", () => {
     expect(drex.category).toBe("apikey");
     expect(drex.serviceKinds).toEqual(["systemone"]);
     expect(drex.transport).toBeUndefined();
-    expect(drex.display.notice.apiKeyUrl).toBe("https://drex.nace.ai/dashboard/api-keys");
+    expect(drex.display.notice.apiKeyUrl).toBe("https://drex.nace.ai/invite/tnzgt5vr");
   });
 
   it("advertises the live decision-model catalog, all on the systemone kind", () => {

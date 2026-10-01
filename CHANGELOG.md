@@ -2,6 +2,13 @@
 
 > 面向用户的精简更新见 [`public/i18n/changelog/`](https://github.com/techysy/10router/tree/main/public/i18n/changelog)（`en.md` / `zh-CN.md` / `zh-TW.md`，仪表盘「Change Log」按界面语言加载对应文件）。本文件为完整开发日志，按版本从上往下排列。
 
+## v1.3.1 (未发布)
+
+### 🐛 修复
+
+- **Drex「获取 API 密钥」改指邀请链接**：Nace 当前为邀请制注册，`dashboard/api-keys` 对未注册用户是一条死路；取 key 链接改为 `https://drex.nace.ai/invite/tnzgt5vr`。
+- **README 版式**：交流群二维码再缩 20%（280 → 224px）并改为左对齐；贡献者致谢头像固定每行 12 个排布。
+
 ## v1.3.0 (2026-10-01)
 
 ### ✨ 新功能

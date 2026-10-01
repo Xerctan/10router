@@ -17,7 +17,7 @@ export default {
     textIcon: "DX",
     website: "https://drex.nace.ai",
     notice: {
-      apiKeyUrl: "https://drex.nace.ai/dashboard/api-keys",
+      apiKeyUrl: "https://drex.nace.ai/invite/tnzgt5vr",
     },
   },
   models: [

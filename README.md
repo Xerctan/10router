@@ -268,9 +268,7 @@ node scripts/verify-usage-db.mjs
 
 欢迎加入 **9+1 Router 交流群** 交流使用体验与反馈 issue：
 
-<div align="center">
-<img src="assets/feishu-qr.png" width="280" alt="交流群二维码">
-</div>
+<img src="assets/feishu-qr.png" width="224" alt="交流群二维码">
 
 ### 贡献者致谢
 
@@ -287,6 +285,8 @@ node scripts/verify-usage-db.mjs
   <a href="https://github.com/nansheng365" title="nansheng365 — issue 反馈"><img src="https://github.com/nansheng365.png?size=80" width="48" height="48" alt="nansheng365" /></a>
   <a href="https://github.com/TIANXT97" title="TIANXT97 — issue 反馈"><img src="https://github.com/TIANXT97.png?size=80" width="48" height="48" alt="TIANXT97" /></a>
   <a href="https://github.com/weltyang1216" title="weltyang1216 — issue 反馈"><img src="https://github.com/weltyang1216.png?size=80" width="48" height="48" alt="weltyang1216" /></a>
+</p>
+<p>
   <a href="https://github.com/anupamme" title="anupamme — PR 贡献"><img src="https://github.com/anupamme.png?size=80" width="48" height="48" alt="anupamme" /></a>
   <a href="https://github.com/yet791080885-jpg" title="yet791080885-jpg — PR 贡献"><img src="https://github.com/yet791080885-jpg.png?size=80" width="48" height="48" alt="yet791080885-jpg" /></a>
   <a href="https://github.com/fenixggg" title="fenixggg — issue 反馈"><img src="https://github.com/fenixggg.png?size=80" width="48" height="48" alt="fenixggg" /></a>
