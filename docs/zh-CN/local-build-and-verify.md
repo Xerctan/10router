@@ -2,7 +2,11 @@
 
 > 适用范围：把**未发布的改动**装进一台真机上手动测试。两条通道共用同一套方法：
 > **Windows 桌面版**（Electron 托盘壳）与 **fnOS/NAS 的 fpk**。
-> 正式发布（打 tag → CI 构建 → Release 资产 → npm publish）见 `docs/zh-CN/archive/reviews/release-review-v1.0.7.md` 与 `CLAUDE.md`。
+> 正式发布（打 tag → CI 构建 → Release 资产 → npm publish）见 `docs/zh-CN/release-prep/release-checklist.md`。
+>
+> ⚠️ **已知环境坑（2026-10-01 确认）**：本机 Windows + Node 24.20.0 下 `next build --webpack`
+> 编译期堆内存失控直至 OOM（24GB 堆也不够，v1.2.1 同样复现；CI 同版本 2 分 49 秒通过）。
+> 本地打包若挂在编译步，先 `nvm use 22.23.2` 再跑（仅本地测试构建，仓库 `.nvmrc` 仍按 24 对齐 CI）。
 
 ## 0. 为什么不是「重新构建一下现在版本号」
 
