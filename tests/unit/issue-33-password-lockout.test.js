@@ -167,10 +167,11 @@ describe("the entries users actually reach", () => {
     expect(profile).toContain("JSON.stringify({ newPassword: value, requireLogin: true })");
   });
 
-  it("login page: a 'Forgot your password?' entry with the recovery steps", () => {
+  it("login page: a 'Forgot your password?' entry with the recovery steps incl. the file format", () => {
     const page = readSource("src/app/login/page.js");
     expect(page).toContain("Forgot your password?");
-    expect(page).toContain("create a file named reset-password in the 10Router data folder");
+    expect(page).toContain("reset-password (exactly, no extension)");
+    expect(page).toContain("empty file removes the stored password");
     expect(page).toContain('status?.installChannel === "fpk"');
   });
 

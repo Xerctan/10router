@@ -142,13 +142,14 @@ export default function LoginPage() {
               {showRecovery && (
                 <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-2 p-3 text-xs text-text-muted">
                   {status?.installChannel === "fpk" && (
-                    <p>fnOS: open App Center → 10Router → Settings, enter a new dashboard password and save. Sign in with it right away.</p>
+                    <p>{translate("fnOS: open App Center → 10Router → Settings, enter a new dashboard password and save. Sign in with it right away.")}</p>
                   )}
-                  <p>Any install: create a file named reset-password in the 10Router data folder with the new password inside, then sign in with it. The file is read once and deleted.</p>
-                  <p>Leave that file empty to remove the password and go back to the first-login password.</p>
-                  <p>Data folder — Windows: %APPDATA%\10router · macOS / Linux: ~/.10router · Docker: the mounted DATA_DIR · fnOS: @appdata/10router on the app&apos;s volume.</p>
+                  <p className="font-medium text-text">{translate("Recovery file format:")}</p>
+                  <p>{translate("Name: reset-password (exactly, no extension). Content: plain UTF-8 text holding only the new password — a single line, no quotes, nothing else (leading/trailing whitespace is ignored).")}</p>
+                  <p>{translate("An empty file removes the stored password and falls back to the first-login password (INITIAL_PASSWORD / fnOS initial-password).")}</p>
+                  <p>{translate("Put it in the data folder — Windows: %APPDATA%\\10router · macOS / Linux: ~/.10router · Docker: the mounted DATA_DIR · fnOS: @appdata/10router on the app's volume. It applies on your next sign-in attempt (no restart) and is deleted the moment it is read.")}</p>
                   {status?.installChannel === "fpk" && status?.hasPassword === false && (
-                    <p>First sign-in on fnOS: the generated password is in the initial-password file in that folder.</p>
+                    <p>{translate("First sign-in on fnOS: the generated password is in the initial-password file in that folder.")}</p>
                   )}
                 </div>
               )}
