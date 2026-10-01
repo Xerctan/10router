@@ -1202,5 +1202,47 @@
       "429": 2
     },
     "format": "openai"
+  },
+  "muse": {
+    "baseUrl": "https://api.meta.ai/v1/chat/completions",
+    "validateUrl": "https://api.meta.ai/v1/models",
+    "modelsUrl": "https://api.meta.ai/v1/models",
+    "auth": {
+      "combined": true,
+      "header": "Authorization",
+      "scheme": "bearer",
+      "hooks": [
+        "museHeaders"
+      ]
+    },
+    "format": "openai",
+    "clientId": "1031625952748946",
+    "tokenUrl": "https://auth.meta.com/oidc/device/token/",
+    "transports": [
+      {
+        "format": "openai",
+        "baseUrl": "https://api.meta.ai/v1/chat/completions",
+        "auth": {
+          "combined": true,
+          "header": "Authorization",
+          "scheme": "bearer",
+          "hooks": [
+            "museHeaders"
+          ]
+        }
+      },
+      {
+        "format": "openai-responses",
+        "baseUrl": "https://api.meta.ai/v1/responses",
+        "auth": {
+          "combined": true,
+          "header": "Authorization",
+          "scheme": "bearer",
+          "hooks": [
+            "museHeaders"
+          ]
+        }
+      }
+    ]
   }
 }

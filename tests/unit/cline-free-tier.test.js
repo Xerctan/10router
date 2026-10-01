@@ -33,7 +33,13 @@ describe("cline-free namespace pricing", () => {
   it("still bills the paid twin at its published rate", async () => {
     const { getPricingForModel } = await import("../../open-sse/providers/pricing.js");
     expect(getPricingForModel("cline", "deepseek/deepseek-v4.1-flash").input).toBe(0.14);
-    expect(getPricingForModel("cline", "meta/muse-spark-1.3-contributor")).toBeNull();
+    // Muse 供应商移植（上游 28809807）补齐了 Meta 官方价目：vendor 前缀
+    // 双生（meta/muse-spark-…）按去前缀命中同一官方 contributor 档价格，
+    // 不再返回 null；cline-free/* 命名空间在查找链上更靠前，仍恒为 0。
+    expect(getPricingForModel("cline", "meta/muse-spark-1.3-contributor")).toMatchObject({
+      input: 0.1,
+      output: 0.2,
+    });
   });
 
   it("zero price survives cost calculation over a large usage", async () => {

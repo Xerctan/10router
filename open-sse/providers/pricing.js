@@ -179,6 +179,15 @@ export const MODEL_PRICING = {
   // === Grok ===
   "grok-code-fast-1":             { input: 0.50,  output: 2.00,  cached: 0.25,  reasoning: 3.00,   cache_creation: 0.50  },
 
+  // === Muse (Meta Model API) ===
+  // 价格取自 https://dev.meta.ai/docs/pricing-rate-limits（contributor 档更
+  // 便宜，代价是 Meta 可用数据训练）；数值录入自上游 decolua/9router 28809807。
+  "muse-spark-1.3":                { input: 1.25, output: 4.25, cached: 0.15,  reasoning: 4.25,   cache_creation: 0 },
+  "muse-spark-1.2":                { input: 1.25, output: 4.25, cached: 0.15,  reasoning: 4.25,   cache_creation: 0 },
+  "muse-spark-1.1":                { input: 1.25, output: 4.25, cached: 0.15,  reasoning: 4.25,   cache_creation: 0 },
+  "muse-spark-1.3-contributor":    { input: 0.10, output: 0.20, cached: 0.002, reasoning: 0.20,   cache_creation: 0 },
+  "muse-spark-1.2-contributor":    { input: 0.10, output: 0.20, cached: 0.002, reasoning: 0.20,   cache_creation: 0 },
+
   // === Xiaomi MiMo ===
   // Official price page (mimo.mi.com/static/docs/price/pay-as-you-go.md, fetched
   // 2026-09-22), overseas table — this file is $/1M tokens, and the page's

@@ -8,6 +8,7 @@
 
 - **GLM Coding 支持 Z.ai OAuth 登录（dual-auth，#上游 068ce87d）**：API key 粘贴之外新增 OAuth 设备流程（ZCode CLI 轮询协议：init → 浏览器授权 → poll → 业务 JWT → coding-plan key），凭据存 accessToken、无 refresh grant（到期重新登录，与官方 CLI 一致）；配额读取 OAuth/apikey 双通道 `Session (Nh)`/`Weekly (7d)` 动态键解析。glm-cn 保持 apikey-only（bigmodel.cn 与该流程不同源）。用例 `glm-oauth` 15 例。
 - **新增 System One 决策供应商 v1m（v1m.ir，#上游 0a879c5c）**：与 Drex 同 Jev lane 的第二家后端（rev-latest / v1m-decision-engine，aliases systemone|jev），`systemoneCore` 支持 `providerSpecificData.baseUrl` 覆盖。用例 `v1m-systemone-provider` 8 例。
+- **新增 Meta Muse 供应商（OAuth + 模型目录，#上游 28809807）**：Meta 官方 Muse Code 通道，双认证（OAuth 设备流程：device code → poll → 铸造订阅 key，429 退避重试、Meta 错误信封 action_url 透出；也支持粘贴 key）。五个 Muse Spark 模型全部钉 `openai-responses` 目标格式（reasoning/encrypted_content 只有 Responses 能往返），官方定价 1.25/4.25 与 contributor 档 0.10/0.20 录入；OAuth key 带 `x-api-version`，models 端点固定该头。用例 `muse-oauth` 26 例。
 - **codex 暴露 GPT-6 / GPT-5.6 的 `[1m]` 长上下文变体（#上游 9f41ee75）**：六变体（astra/sol/luna + 5.6 三款）872k 窗口，`[1m]` 标记在请求入口剥离、仅用于账号 enabledModels 过滤，专属 400 走 codex 限定规则换号；models 发现的 client_version 收编 registry 单源（删除散落的 0.144.6 硬编码）。用例 `codex-extended-context` 16 例。
 
 ### 🐛 修复

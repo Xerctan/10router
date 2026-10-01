@@ -172,6 +172,16 @@ const resolveQoderCatalog = async (connection) => {
 
 // Provider models endpoints configuration
 const PROVIDER_MODELS_CONFIG = {
+  // Muse (Meta Model API) —— OAuth 铸造 key 与粘贴的 API key 通用；x-api-version
+  // 按官方文档要求固定带上。
+  "muse": {
+    url: "https://api.meta.ai/v1/models",
+    method: "GET",
+    headers: { "Content-Type": "application/json", "x-api-version": "1.0.0" },
+    authHeader: "Authorization",
+    authPrefix: "Bearer ",
+    parseResponse: (data) => data.data || [],
+  },
   cline: {
     url: "https://api.cline.bot/api/v1/models",
     method: "GET",

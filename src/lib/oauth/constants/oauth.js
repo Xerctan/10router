@@ -212,6 +212,10 @@ export const WINDSURF_CONFIG = {
 // 授权，到期重新登录）。
 export const GLM_OAUTH_CONFIG = { ...PROVIDER_OAUTH["glm"] };
 
+// Muse —— 订阅型 device code 流程打到 auth.meta.com，无 refresh（Meta 拒绝
+// refresh_token 授权；铸造的 Model API key 不过期，401 只能重新登录）。
+export const MUSE_CONFIG = { ...PROVIDER_OAUTH["muse"] };
+
 // Zed hosted LLM aggregator — RSA keypair native-app auth (NOT OAuth).
 // Client generates ephemeral RSA-2048 keypair; user signs in at zed.dev/native_app_signin;
 // Zed redirects to local callback with access_token RSA-encrypted against our public key.
@@ -252,5 +256,6 @@ export const PROVIDERS = {
   TRAE: "trae",
   WINDSURF: "windsurf",
   GLM: "glm",
+  MUSE: "muse",
   ZED: "zed",
 };

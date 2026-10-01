@@ -274,6 +274,7 @@ export async function GET(request, { params }) {
         "qoder-cn",
         "grok-cli",
         "glm",
+        "muse",
       ];
       let deviceData;
       if (noPkceDeviceProviders.includes(provider)) {
@@ -597,7 +598,7 @@ export async function POST(request, { params }) {
       }
 
       // Providers that don't use PKCE for device code
-      const noPkceProviders = ["github", "kimi", "kimi-coding", "kilocode", "codebuddy-cn", "codebuddy-intl", "glm"];
+      const noPkceProviders = ["github", "kimi", "kimi-coding", "kilocode", "codebuddy-cn", "codebuddy-intl", "glm", "muse"];
       let result;
       if (noPkceProviders.includes(provider)) {
         // kimi needs extraData._kimiDeviceId for stable X-Msh-Device-Id (CLIProxyAPI parity);
@@ -652,6 +653,8 @@ export async function POST(request, { params }) {
         error: result.error,
         errorDescription: result.errorDescription,
         pending: isPending,
+        // fatal：不可恢复（如登录后交换失败）——客户端必须停止轮询并展示错误
+        ...(result.fatal ? { fatal: true } : {}),
       });
     }
 

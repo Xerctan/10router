@@ -28,6 +28,7 @@ import trae from "./trae.js";
 import windsurf from "./windsurf.js";
 import zed from "./zed.js";
 import glm from "./glm.js";
+import muse from "./muse.js";
 
 // Provider configurations
 const PROVIDERS = {
@@ -55,6 +56,7 @@ const PROVIDERS = {
   windsurf,
   zed,
   glm,
+  muse,
 };
 
 export { PROVIDERS };
@@ -171,7 +173,15 @@ export async function pollForToken(providerName, deviceCode, codeVerifier, extra
       // Call postExchange to get additional data (copilotToken, userInfo, etc.)
       let extra = null;
       if (provider.postExchange) {
-        extra = await provider.postExchange(result.data);
+        try {
+          extra = await provider.postExchange(result.data);
+        } catch (err) {
+          // 授权换 token 已成功但登录后交换失败（如 Muse 铸造 key 失败）。
+          // device code 是一次性的，重新轮询不可能恢复——按 fatal 上抛，
+          // 客户端停止轮询并展示错误。
+          console.warn(`[oauth] ${providerName} postExchange failed:`, err?.message || err);
+          return { success: false, error: "exchange_failed", errorDescription: err.message, fatal: true };
+        }
       }
       const tokens = provider.mapTokens(result.data, extra);
       // Kiro IDC/Builder-ID tokens lack profileArn; resolve it to avoid 403

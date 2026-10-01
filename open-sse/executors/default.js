@@ -41,6 +41,9 @@ function applyAuth(headers, desc, credentials) {
 const HEADER_HOOKS = {
   // Stable device_id from OAuth connection (CLIProxyAPI KimiTokenStorage.DeviceID)
   kimiHeaders: (h, c) => Object.assign(h, buildKimiHeaders(c?.providerSpecificData?.deviceId)),
+  // Muse: x-api-version 只加在订阅（铸造 key）请求上——纯 Model API key 不带即可用。
+  // OAuth 连接的凭证存 accessToken（不设 apiKey），据此区分两种认证态。
+  museHeaders: (h, c) => { if (c?.accessToken && !c?.apiKey) h["x-api-version"] = "1.0.0"; },
   clineHeaders: (h, c) => Object.assign(h, buildClineHeaders(c.apiKey || c.accessToken)),
   kilocodeOrg: (h, c) => { if (c.providerSpecificData?.orgId) h["X-Kilocode-OrganizationID"] = c.providerSpecificData.orgId; },
 };

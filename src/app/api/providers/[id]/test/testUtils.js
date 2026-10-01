@@ -131,6 +131,15 @@ const OAUTH_TEST_CONFIG = {
       402: "Connected, but Grok Build credits are exhausted (spending limit). Add credits or upgrade SuperGrok.",
     },
   },
+  // Muse Code 订阅 —— 用铸造的 LLM|… key 探 /v1/models（无 refresh，401 即重新登录）
+  "muse": {
+    url: "https://api.meta.ai/v1/models",
+    method: "GET",
+    authHeader: "Authorization",
+    authPrefix: "Bearer ",
+    extraHeaders: { "x-api-version": "1.0.0" },
+    refreshable: false,
+  },
 };
 
 /**
