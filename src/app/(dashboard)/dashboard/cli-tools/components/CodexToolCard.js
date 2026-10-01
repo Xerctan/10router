@@ -6,6 +6,7 @@ import Image from "next/image";
 import BaseUrlSelect from "./BaseUrlSelect";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
+import { getCurrentCodexProviderSettings } from "./codexConfig";
 
 export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, apiKeys, activeProviders, cloudEnabled, initialStatus, tunnelEnabled, tunnelPublicUrl, tailscaleEnabled, tailscaleUrl }) {
   const [codexStatus, setCodexStatus] = useState(initialStatus || null);
@@ -24,10 +25,10 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   const [customBaseUrl, setCustomBaseUrl] = useState("");
 
   useEffect(() => {
-    if (apiKeys?.length > 0 && !selectedApiKey) {
+    if (apiKeys?.length > 0 && !selectedApiKey && !codexStatus?.config) {
       setSelectedApiKey(apiKeys[0].key);
     }
-  }, [apiKeys, selectedApiKey]);
+  }, [apiKeys, selectedApiKey, codexStatus?.config]);
 
   useEffect(() => {
     if (initialStatus) setCodexStatus(initialStatus);
@@ -50,30 +51,34 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
     }
   };
 
-  // Parse model and subagent settings from config content
+  // Sync only when config content changes so local form edits are retained.
   useEffect(() => {
-    if (codexStatus?.config) {
-      const modelMatch = codexStatus.config.match(/^model\s*=\s*"([^"]+)"/m);
+    const config = codexStatus?.config;
+    if (config) {
+      const { baseUrl: configBaseUrl, apiKey } = getCurrentCodexProviderSettings(config);
+      setCustomBaseUrl(configBaseUrl);
+      setSelectedApiKey(apiKey);
+
+      const modelMatch = config.match(/^model\s*=\s*"([^"]+)"/m);
       if (modelMatch) setSelectedModel(modelMatch[1]);
 
       // Parse subagent settings
-      const subagentModelMatch = codexStatus.config.match(/\[agents\.subagent\]\s*\n\s*model\s*=\s*"([^"]+)"/m);
+      const subagentModelMatch = config.match(/\[agents\.subagent\]\s*\n\s*model\s*=\s*"([^"]+)"/m);
       if (subagentModelMatch) setSubagentModel(subagentModelMatch[1]);
     }
-  }, [codexStatus]);
+  }, [codexStatus?.config]);
 
   const getConfigStatus = () => {
     if (!codexStatus?.installed) return null;
     if (!codexStatus.config) return "not_configured";
-    const parsed = codexStatus.config.match(/base_url\s*=\s*"([^"]+)"/);
-    const currentUrl = parsed ? parsed[1] : "";
+    const currentUrl = getCurrentCodexProviderSettings(codexStatus.config).baseUrl;
     return matchKnownEndpoint(currentUrl, { tunnelPublicUrl, tailscaleUrl }) ? "configured" : "other";
   };
 
   const configStatus = getConfigStatus();
 
   const getEffectiveBaseUrl = () => {
-    const url = customBaseUrl || `${baseUrl}/v1`;
+    const url = (customBaseUrl || `${baseUrl}/v1`).replace(/\/+$/, "");
     // Ensure URL ends with /v1
     return url.endsWith("/v1") ? url : `${url}/v1`;
   };
@@ -83,7 +88,7 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   const checkCodexStatus = async () => {
     setCheckingCodex(true);
     try {
-      const res = await fetch("/api/cli-tools/codex-settings");
+      const res = await fetch("/api/cli-tools/codex-settings", { cache: "no-store" });
       const data = await res.json();
       setCodexStatus(data);
     } catch (error) {
@@ -284,8 +289,7 @@ model = "${effectiveSubagentModel}"
 
                 {/* Current configured */}
                 {codexStatus?.config && (() => {
-                  const parsed = codexStatus.config.match(/base_url\s*=\s*"([^"]+)"/);
-                  const currentBaseUrl = parsed ? parsed[1] : null;
+                  const currentBaseUrl = getCurrentCodexProviderSettings(codexStatus.config).baseUrl || null;
                   return currentBaseUrl ? (
                     <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
                       <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Current</span>

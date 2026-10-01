@@ -1,5 +1,3 @@
-"use server";
-
 import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -7,6 +5,11 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { parseTOML, stringifyTOML } from "confbox";
+
+// Route Handlers already run on the server; a Server Action directive would
+// reject this export. force-dynamic so the status read reflects the on-disk
+// config instead of a cached render.
+export const dynamic = "force-dynamic";
 
 const execAsync = promisify(exec);
 
