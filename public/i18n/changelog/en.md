@@ -2,6 +2,23 @@
 
 User-facing highlights per release. See [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md) for the full developer log.
 
+## v1.3.1 (2026-10-02)
+
+### ✨ New
+
+- **GLM Coding: Z.ai OAuth sign-in (dual-auth)**: browser authorization alongside pasting an API key; quota cards work with either.
+- **New Meta Muse provider (OAuth + model catalog)**: Meta's official Muse Code channel with device-flow sign-in; five Muse Spark models at official pricing.
+- **New System One decision provider v1m (v1m.ir)**: a second Jev-compatible decision backend alongside Drex.
+- **Codex exposes GPT-6 / GPT-5.6 `[1m]` long-context variants**: 872K window — just suffix the model name with `[1m]`.
+- **Experimental "nested cycle quota bars"**: a toggle on the Experimental page restores the concentric nested track for rolling ⊂ weekly ⊂ monthly chains.
+
+### 🐛 Fixes
+
+- **Four upstream 9router v0.5.95 port batches (20+ items)**: codex CLI identity bumped to 0.159 plus a fix for accounts being logged out by auto-ping (refresh-token reuse); grok-cli bumped to 1.0.44 (upstream 426 wall); codebuddy 6004 rate-limit → precise cooldown; Claude trailing-turn retention and thinking-format adaptation plus tool-loop cache breakpoint; new Claude Sonnet 5.5 / Kiro Opus 5.5 models; official GPT-6 pricing and real context windows; same-name tool dedupe for DeepSeek; broader Gemini tool-schema cleaning; strict proxy no longer falls back to direct connections on resolution failure; Responses completion watchdog.
+- **Quota fix pack**: reset dates become adaptive countdowns (day+hour / hour+minute / minute+second); the 5-hour timeline centers on now (±12h); the monthly window anchors the bottom of the card; qoder / qoder-cn Auto & Efficient tiers and display-name aliases no longer fall to default capabilities.
+- **Sign-in & security**: enabling "Require login" no longer kicks you to the login page; the "Forgot your password?" entry is localized and documents the reset-password file format (any extension works — .txt, .md, …); hidden providers are excluded from usage stats.
+- **Drex key link now points at the official invite registration** (Nace is invite-only).
+
 ## v1.3.0 (2026-10-01)
 
 ### ✨ New

@@ -2,6 +2,23 @@
 
 这里展示面向用户的关键更新；完整开发明细见 [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md)。
 
+## v1.3.1 (2026-10-02)
+
+### ✨ 新增
+
+- **GLM Coding 支持 Z.ai OAuth 登录（双认证）**：除粘贴 API key 外新增浏览器授权登录，额度卡片两种登录方式通用。
+- **新增 Meta Muse 供应商（OAuth + 模型目录）**：Meta 官方 Muse Code 通道，设备流程一键登录，五个 Muse Spark 模型与官方定价齐备。
+- **新增 System One 决策供应商 v1m（v1m.ir）**：与 Drex 同协议的第二家决策模型后端。
+- **codex 暴露 GPT-6 / GPT-5.6「[1m]」超长上下文变体**：872K 窗口，模型名后缀加 `[1m]` 即用。
+- **配额卡片实验性「嵌套周期配额条」**：实验页开关开启后，滚动 ⊂ 每周 ⊂ 月度 的包含链恢复为一条同心嵌套进度条。
+
+### 🐛 修复
+
+- **同步上游 9router v0.5.95 四大批次（20+ 项）**：codex CLI 身份升 0.159 并修复 auto-ping 反复掉授权；grok-cli 升 1.0.44 恢复可用；codebuddy 6004 限流转精确冷却；Claude 尾部轮保留与思考格式适配、工具循环缓存优化；Claude Sonnet 5.5 / Kiro Opus 5.5 新模型；GPT-6 系列官方定价与真实上下文窗口；DeepSeek 同名工具去重；Gemini 工具 schema 兼容增强；严格代理解析失败时不再静默直连；Responses 流补发 watchdog。
+- **配额修复打包**：重置时间改自适应倒计时（天+时 / 时+分 / 分+秒）；「5 小时」时间轴以现在为中心前后各 12 小时；月度窗口固定显示在卡片底部；qoder / qoder-cn 的 Auto/Efficient 档位与显示名别名不再落到默认能力值。
+- **登录与安全**：开启「需要登录」不再把自己踢出登录页；登录页「忘记密码？」补中文并写明 reset-password 文件格式（reset-password.txt / .md 等任意扩展名均可）；用量统计排除隐藏供应商。
+- **Drex 取 key 链接改为官方邀请注册**（Nace 现为邀请制）。
+
 ## v1.3.0 (2026-10-01)
 
 ### ✨ 新增
