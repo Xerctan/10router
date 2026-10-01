@@ -17,6 +17,7 @@ import { getExecutor } from "../executors/index.js";
 import { supportsGrokCliReasoningEffort } from "../config/grokCli.js";
 import { buildRequestDetail, extractRequestConfig } from "./chatCore/requestDetail.js";
 import { handleForcedSSEToJson } from "./chatCore/sseToJsonHandler.js";
+import { takeRenamedToolNames } from "../utils/opencodeFingerprint.js";
 import { handleNonStreamingResponse, translateNonStreamingResponse } from "./chatCore/nonStreamingHandler.js";
 import { handleStreamingResponse, buildOnStreamComplete } from "./chatCore/streamingHandler.js";
 import { applyStopSequenceGuard, collectStopSequences, StopSequenceGuard } from "../utils/stopSequenceGuard.js";
@@ -407,6 +408,13 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     providerHeaders = result.headers;
     finalBody = result.transformedBody;
     providerResponseFormat = result.responseFormat || targetFormat;
+    // OpenCode free-tier fingerprinting may rename the client's own bash/glob/
+    // grep/read case variants to the canonical lowercase spelling. Those renames
+    // must decloak on the way back, exactly like the Claude cloak map.
+    const renamedToolNames = takeRenamedToolNames(translatedBody);
+    if (renamedToolNames?.size) {
+      toolNameMap = new Map([...(toolNameMap || []), ...renamedToolNames]);
+    }
     reqLogger.logTargetRequest(providerUrl, providerHeaders, finalBody);
   } catch (error) {
     trackPendingRequest(model, provider, connectionId, false, true);
@@ -550,7 +558,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   // Provider forced streaming but client wants JSON
   if (!clientRequestedStreaming && providerRequiresStreaming) {
-    const result = await handleForcedSSEToJson({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, customToolNames, translateToClientFormat, trackDone, appendLog });
+    const result = await handleForcedSSEToJson({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, customToolNames, toolNameMap, translateToClientFormat, trackDone, appendLog });
     if (result) { streamController.handleComplete(); return result; }
   }
 

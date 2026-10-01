@@ -2,6 +2,7 @@ import { FORMATS } from "./formats.js";
 import { ensureToolCallIds, fixMissingToolResponses } from "./concerns/toolCall.js";
 import { prepareClaudeRequest } from "./formats/claude.js";
 import { cloakClaudeTools } from "../utils/claudeCloaking.js";
+import { restoreToolNames } from "../utils/opencodeFingerprint.js";
 import { filterToOpenAIFormat } from "./formats/openai.js";
 import { normalizeThinkingConfig } from "../services/provider.js";
 import { applyThinking, captureThinking } from "./concerns/thinkingUnified.js";
@@ -161,9 +162,10 @@ export function translateRequest(sourceFormat, targetFormat, model, body, stream
 // Translate response chunk: target -> openai -> source
 export function translateResponse(targetFormat, sourceFormat, chunk, state) {
   ensureInitialized();
-  // If same format, return as-is
+  // If same format, return as-is (undoing OpenCode fingerprint renames — the
+  // client's own bash/glob/grep/read spelling must come back untouched)
   if (sourceFormat === targetFormat) {
-    return [chunk];
+    return [restoreToolNames(chunk, state?.toolNameMap)];
   }
 
   let results = [chunk];
