@@ -20,6 +20,8 @@ User-facing highlights per release. See [CHANGELOG.md](https://github.com/techys
 
 ### 🐛 Fixes
 
+- **Adaptive reset countdowns**: quota cards and pack bars no longer show a bare reset date — future resets now read as a countdown whose precision follows magnitude (day+hour / hour+minute / minute+second), with the full absolute time still on hover.
+- **5-hour quota view centered on now**: the timeline axis is now the 12 hours around the current moment instead of the calendar day, so "now" always sits mid-track instead of clamped to the right edge by evening.
 - **Usage Input Tokens Normalization**: Fixed an issue where prompt tokens on unfolded Claude usage shapes were overridden by cached token counts, resolving the 1:1 display skew for high-cache providers like `zcode-free`.
 - **Fresh Install Static Model Exposure**: Ensures `noAuth` providers (opencode, mimo-free, zcode-free) expose models in `/v1/models` on brand-new installs with empty connection tables.
 - **OpenAI Responses Content Filter Mapping**: Correctly maps Responses `incomplete_details.reason === "content_filter"` to Chat completion `finish_reason: "content_filter"` instead of `"length"`, preventing client SDKs from assuming context cutoffs.
