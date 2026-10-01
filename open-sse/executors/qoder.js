@@ -280,13 +280,14 @@ async function buildQoderRequestBody({ model, body, credentials, log, proxyOptio
 
 /**
  * Check if a qoder error message indicates a billing/quota block.
- * Signatures: code 112 (quota exhausted), code 10605 (queue throttle), pricingUrl field.
+ * Signatures: code 110 (billing daily count exceeded), code 112 (quota
+ * exhausted), code 10605 (queue throttle), pricingUrl field.
  */
 // The signature code is often nested one JSON level deep inside a generic
 // envelope, so its quotes arrive escaped — NAS 2026-09-26:
 //   {"code":"403","message":"{\"code\":\"10605\",\"message\":\"{\\\"isQueued\\\":true,…
 // `\\*` before each quote accepts any escaping depth.
-const QODER_BLOCK_CODE_RE = /\\*"code\\*"\s*:\s*\\*"(112|10605)\\*"/;
+const QODER_BLOCK_CODE_RE = /\\*"code\\*"\s*:\s*\\*"(110|112|10605)\\*"/;
 const QODER_RETRY_AFTER_RE = /\\*"retryAfterSeconds\\*"\s*:\s*(\d+)/;
 
 function billingBlockCode(inner) {
