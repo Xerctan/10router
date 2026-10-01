@@ -33,7 +33,7 @@ export async function getCustomModels() {
 // UPDATE merges: callers may pass only `enabled` (toggle) — an earlier version
 // overwrote the whole row, silently resetting `name` to the id and dropping
 // capability fields (vision/contextWindow/…) on every toggle.
-export async function addCustomModel({ providerAlias, id, type = "llm", name, vision, reasoning, contextWindow, maxOutput, thinkingFormat, enabled }) {
+export async function addCustomModel({ providerAlias, id, type = "llm", name, vision, reasoning, contextWindow, maxOutput, thinkingFormat, enabled, transport }) {
   const k = customKey(providerAlias, id, type);
   const db = await getAdapter();
   let added = false;
@@ -45,6 +45,7 @@ export async function addCustomModel({ providerAlias, id, type = "llm", name, vi
     ...(contextWindow === undefined ? {} : { contextWindow }),
     ...(maxOutput === undefined ? {} : { maxOutput }),
     ...(thinkingFormat === undefined ? {} : { thinkingFormat }),
+    ...(transport === undefined ? {} : { transport }),
   };
   db.transaction(() => {
     const row = db.get(`SELECT 1 FROM kv WHERE scope = 'customModels' AND key = ?`, [k]);

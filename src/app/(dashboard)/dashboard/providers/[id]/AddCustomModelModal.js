@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { Button, Modal } from "@/shared/components";
+import { STT_TRANSPORT_META, STT_TRANSPORTS } from "@/shared/constants/models";
 
 export default function AddCustomModelModal({ isOpen, providerAlias, providerDisplayAlias, onSave, onClose }) {
   const [modelId, setModelId] = useState("");
@@ -14,10 +15,14 @@ export default function AddCustomModelModal({ isOpen, providerAlias, providerDis
   // without these fields every custom model shipped the generic 200k guess.
   const [contextWindow, setContextWindow] = useState("");
   const [maxOutput, setMaxOutput] = useState("");
+  // Model type: "llm" (default) or "stt" (/v1/audio/transcriptions). STT rows
+  // may pin a realtime transport marker; "" keeps the provider's REST format.
+  const [modelType, setModelType] = useState("llm");
+  const [transport, setTransport] = useState("");
 
   // Reset state when modal opens
   useEffect(() => {
-    if (isOpen) { setModelId(""); setTestStatus(null); setTestError(""); setContextWindow(""); setMaxOutput(""); }
+    if (isOpen) { setModelId(""); setTestStatus(null); setTestError(""); setContextWindow(""); setMaxOutput(""); setModelType("llm"); setTransport(""); }
   }, [isOpen]);
 
   // Strip provider's own alias prefix (e.g. "cc/model" -> "model" for cc provider)
@@ -56,7 +61,7 @@ export default function AddCustomModelModal({ isOpen, providerAlias, providerDis
     };
     const caps = { contextWindow: posInt(contextWindow), maxOutput: posInt(maxOutput) };
     try {
-      await onSave(cleanId, caps);
+      await onSave(cleanId, caps, modelType, modelType === "stt" ? transport : null);
     } finally {
       setSaving(false);
     }
@@ -94,6 +99,36 @@ export default function AddCustomModelModal({ isOpen, providerAlias, providerDis
           <p className="text-xs text-text-muted mt-1">
             Sent to provider as: <code className="font-mono bg-sidebar px-1 rounded">{stripAlias(modelId.trim()) || "model-id"}</code>
           </p>
+        </div>
+
+        {/* Model type — STT rows serve /v1/audio/transcriptions and may pin a
+            realtime transport marker (shared STT_TRANSPORT_META whitelist). */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Model type</label>
+            <select
+              value={modelType}
+              onChange={(e) => { setModelType(e.target.value); if (e.target.value !== "stt") setTransport(""); }}
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:border-primary"
+            >
+              <option value="llm">LLM (chat)</option>
+              <option value="stt">STT (speech to text)</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Transport {modelType === "stt" ? "" : "(STT only)"}</label>
+            <select
+              value={transport}
+              onChange={(e) => setTransport(e.target.value)}
+              disabled={modelType !== "stt"}
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:border-primary disabled:opacity-50"
+            >
+              <option value="">Provider default (REST)</option>
+              {STT_TRANSPORTS.map((t) => (
+                <option key={t} value={t}>{STT_TRANSPORT_META[t].label}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Test result */}
