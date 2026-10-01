@@ -552,6 +552,19 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
       used: Number(orgQuota.used) || 0,
       remaining: Number(orgQuota.remaining) || 0,
     };
+    // The openapi addOnQuota zeroes out on those same accounts while the packs
+    // are live (web rows or the campaigns fallback). The packs ARE the
+    // resource-package bucket then — sum them into the aggregate so the card's
+    // "Resource Package" row survives instead of being skipped as an empty
+    // bucket. When the aggregate is live it stays authoritative: the campaigns
+    // list is incomplete (buildQoderAddOnPacks reconciles its packs against it).
+    const addOnAggTotal = Number(addOnQuota.total) || 0;
+    const packSum = (k) => addOnPacks.reduce((s, p) => s + (Number(p[k]) || 0), 0);
+    const addOnBucket = addOnAggTotal > 0
+      ? { total: addOnAggTotal, used: Number(addOnQuota.used) || 0, remaining: Number(addOnQuota.remaining) || 0 }
+      : addOnPacks.length > 0
+        ? { total: packSum("total"), used: packSum("used"), remaining: packSum("remaining") }
+        : { total: 0, used: 0, remaining: 0 };
     const quotas = {
       user: {
         total: planBucket.total,
@@ -562,9 +575,9 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
         unlimited: false,
       },
       addOn: {
-        total: Number(addOnQuota.total) || 0,
-        used: Number(addOnQuota.used) || 0,
-        remaining: Number(addOnQuota.remaining) || 0,
+        total: addOnBucket.total,
+        used: addOnBucket.used,
+        remaining: addOnBucket.remaining,
         unit: addOnQuota.unit || "credits",
         resetAt: addOnResetAt,
         unlimited: false,

@@ -13,6 +13,15 @@ const calls = [];
 const proxyAwareFetch = vi.fn(async (url, opts = {}) => {
   calls.push({ url, headers: opts.headers || {} });
   if (url.includes("/api/v2/quota/usage")) {
+    if (opts.headers?.Authorization === "Bearer dt-zeroed") {
+      // The documented zeroing bug: openapi answers all-zero buckets while the
+      // credits are still live on the web console.
+      return { ok: true, status: 200, json: async () => ({
+        userId: "u-1", userQuota: { total: 0, used: 0, remaining: 0, unit: "credits" },
+        addOnQuota: { total: 0, used: 0, remaining: 0, unit: "credits" },
+        totalUsagePercentage: 0, isQuotaExceeded: false, expiresAt: 253402214400000,
+      }) };
+    }
     return { ok: true, status: 200, json: async () => ({
       userId: "u-1", userQuota: { total: 0, used: 0, remaining: 0, unit: "credits" },
       addOnQuota: { total: 900, used: 876, remaining: 24, unit: "credits" },
@@ -137,5 +146,31 @@ describe("getQoderUsage — web per-pack breakdown (CreditDaddy synced cookie)",
     expect(out.quotas.addOn.resetAt).toBe(new Date(1793000000000).toISOString());
     // Campaign endpoint NOT consulted — the web packs are present.
     expect(calls.some((c) => c.url.includes("/campaigns"))).toBe(false);
+  });
+
+  it("sums live web packs into the addOn aggregate when openapi zeroes it", async () => {
+    const getQoderUsage = await load();
+    const out = await getQoderUsage("dt-zeroed", null, "qoder", {
+      userId: "u-1",
+      creditDaddyWebSession: { cookie: "session=abc", userId: "u-1" },
+    });
+    // openapi addOnQuota is all-zero here; the packs (100 + 500) ARE the
+    // resource-package bucket. Without the pack-sum fallback the dashboard
+    // skips the "Resource Package" row as an empty bucket (账号 #131 症状).
+    expect(out.quotas.addOn).toMatchObject({ total: 600, used: 576, remaining: 24 });
+    expect(out.quotas.addOn.packs.map((p) => p.total)).toEqual([500, 100]);
+    // Web packs present → campaigns untouched.
+    expect(calls.some((c) => c.url.includes("/campaigns"))).toBe(false);
+  });
+
+  it("campaign packs also fill the addOn aggregate when openapi zeroes it", async () => {
+    const getQoderUsage = await load();
+    const out = await getQoderUsage("dt-zeroed", null, "qoder", null);
+    // No session → campaigns path; the derived pack (100 credits, RELATIVE_DAYS)
+    // must lift the zeroed aggregate so the row renders.
+    expect(out.quotas.addOn.total).toBeGreaterThan(0);
+    expect(out.quotas.addOn.total).toBe(
+      out.quotas.addOn.packs.reduce((s, p) => s + p.total, 0),
+    );
   });
 });
