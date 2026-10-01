@@ -1,4 +1,5 @@
 import { DefaultExecutor } from "./default.js";
+import { parseCodeBuddyFrequencyLimit } from "./codebuddy-cn.js";
 
 /**
  * CodeBuddyIntlExecutor — talks to https://www.codebuddy.ai/v2/chat/completions
@@ -74,6 +75,14 @@ export class CodeBuddyIntlExecutor extends DefaultExecutor {
     }
 
     return transformed;
+  }
+
+  // 与 codebuddy-cn 同一套 6004 频率限制解析（两站错误体同构）：提取精确重置
+  // 时间 resetsAtMs 走精确冷却通道；其他错误回退默认解析。
+  parseError(response, bodyText) {
+    const frequencyLimit = parseCodeBuddyFrequencyLimit(bodyText);
+    if (frequencyLimit) return frequencyLimit;
+    return super.parseError(response, bodyText);
   }
 }
 

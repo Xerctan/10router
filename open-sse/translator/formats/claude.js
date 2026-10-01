@@ -7,6 +7,7 @@ import { resolveSessionId } from "../../utils/sessionManager.js";
 import { isValidClaudeSignature } from "../../utils/claudeSignature.js";
 import { PROVIDERS } from "../../providers/index.js";
 import { getCapabilitiesForModel } from "../../providers/capabilities.js";
+import { isDeepSeekModel } from "../../providers/models/helpers.js";
 import { DEFAULT_MAX_TOKENS } from "../../config/runtimeConfig.js";
 
 const CACHE_CONTROL_5M = { type: "ephemeral" };
@@ -114,7 +115,7 @@ function handlesThinkingBlocks(provider) {
   return provider === "claude" || provider?.startsWith("anthropic-compatible") || provider === "deepseek";
 }
 
-function buildThinkingPlaceholder(provider) {
+function buildThinkingPlaceholder(provider, unsigned = false) {
   const block = {
     type: CLAUDE_BLOCK.THINKING,
     thinking: ".",
@@ -122,7 +123,9 @@ function buildThinkingPlaceholder(provider) {
 
   // DeepSeek's Anthropic-compatible endpoint requires a thinking block in
   // thinking mode, but it does not need Anthropic's signed-thinking fallback.
-  if (provider !== "deepseek") {
+  // The same applies to DeepSeek models served through other providers'
+  // Claude transports (opencode-go /messages).
+  if (provider !== "deepseek" && !unsigned) {
     block.signature = DEFAULT_THINKING_CLAUDE_SIGNATURE;
   }
 
@@ -427,6 +430,14 @@ export function prepareClaudeRequest(body, provider = null, apiKey = null, conne
     const lastMessageIsUser = lastMessage?.role === "user";
     const thinkingEnabled = body.thinking?.type === "enabled" && lastMessageIsUser;
 
+    // opencode-go 的 /messages 通道也托管 DeepSeek 模型，与官方 deepseek 供应商
+    // 一样要求 thinking 块回传（否则上游 400 "thinking must be passed back"），
+    // 走下方同一套「保留原样 / 补无签名占位」语义。门控按模型精确判定，避免误伤
+    // opencode-go 同样走 /messages 的 minimax/qwen 等其他模型族。
+    const deepSeekServed =
+      provider === "deepseek" ||
+      (provider === "opencode-go" && isDeepSeekModel(body?.model));
+
     // Pass 2 (reverse): add cache_control to last assistant + handle thinking for Anthropic
     let lastAssistantProcessed = false;
     for (let i = filtered.length - 1; i >= 0; i--) {
@@ -447,15 +458,15 @@ export function prepareClaudeRequest(body, provider = null, apiKey = null, conne
         }
 
         // Handle thinking blocks for Anthropic-compatible endpoints.
-        if (handlesThinkingBlocks(provider)) {
+        if (handlesThinkingBlocks(provider) || deepSeekServed) {
           let hasToolUse = false;
           let hasKeptThinking = false;
 
           // Claude native: preserve valid signatures, drop invalid blocks.
           // anthropic-compatible: replace with default (safe fallback for lenient upstreams).
-          // DeepSeek: keep existing thinking as-is; add an unsigned placeholder only if missing.
+          // DeepSeek (官方 + opencode-go 托管): keep existing thinking as-is;
+          // add an unsigned placeholder only if missing.
           const isClaudeNative = provider === "claude";
-          const isDeepSeek = provider === "deepseek";
           const kept = [];
           for (const block of msg.content) {
             const isThinking = block.type === CLAUDE_BLOCK.THINKING || block.type === CLAUDE_BLOCK.REDACTED_THINKING;
@@ -465,7 +476,7 @@ export function prepareClaudeRequest(body, provider = null, apiKey = null, conne
                   hasKeptThinking = true;
                   kept.push(block);
                 }
-              } else if (isDeepSeek) {
+              } else if (deepSeekServed) {
                 hasKeptThinking = true;
                 kept.push(block);
               } else {
@@ -482,7 +493,7 @@ export function prepareClaudeRequest(body, provider = null, apiKey = null, conne
 
           // Add thinking block if thinking enabled + has tool_use but no thinking
           if (thinkingEnabled && !hasKeptThinking && hasToolUse) {
-            msg.content.unshift(buildThinkingPlaceholder(provider));
+            msg.content.unshift(buildThinkingPlaceholder(provider, deepSeekServed));
           }
         }
       }

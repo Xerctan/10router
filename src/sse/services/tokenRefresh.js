@@ -1,6 +1,6 @@
 // Re-export from open-sse with local logger
 import * as log from "../utils/logger.js";
-import { updateProviderConnection } from "../../lib/localDb.js";
+import { getProviderConnectionById, updateProviderConnection } from "../../lib/localDb.js";
 import {
   getProjectIdForConnection,
   invalidateProjectId,
@@ -220,6 +220,26 @@ export async function checkAndRefreshToken(provider, credentials, options = {}) 
   let creds = { ...credentials };
   if (!creds.connectionId && creds.id) {
     creds.connectionId = creds.id;
+  }
+
+  // 采纳 DB 里更新的凭据：OpenAI 每次刷新都会轮换 refresh token，另一进程（usage
+  // 轮询、auto-ping、后台刷新器）可能刚刷过。拿内存里的旧快照再刷属于"复用"，会
+  // 吊销整个 session（账号被登出——上游 0bc7f86e）。DB 较新时直接采纳，不再刷新。
+  if (creds.connectionId) {
+    const latest = await getProviderConnectionById(creds.connectionId).catch(() => null);
+    const latestRefreshMs = Date.parse(latest?.lastRefreshAt || "");
+    const credsRefreshMs = Date.parse(creds.lastRefreshAt || "");
+    const dbIsNewer = Number.isFinite(latestRefreshMs)
+      && (!Number.isFinite(credsRefreshMs) || latestRefreshMs > credsRefreshMs);
+    if (dbIsNewer && latest.refreshToken && latest.refreshToken !== creds.refreshToken) {
+      creds = {
+        ...creds,
+        refreshToken: latest.refreshToken,
+        accessToken: latest.accessToken || creds.accessToken,
+        expiresAt: latest.expiresAt || latest.tokenExpiresAt || creds.expiresAt,
+        lastRefreshAt: latest.lastRefreshAt || creds.lastRefreshAt,
+      };
+    }
   }
 
   const force = options?.force === true;

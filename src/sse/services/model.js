@@ -1,6 +1,6 @@
 // Re-export from open-sse with localDb integration
 import { getModelAliases, getComboByName, getProviderNodes } from "@/lib/localDb";
-import { parseModel as parseModelCore, resolveModelAliasFromMap, resolveModelAliasCore, getModelInfoCore } from "open-sse/services/model.js";
+import { parseModel as parseModelCore, resolveModelAliasFromMap, resolveModelAliasCore, getModelInfoCore, isCodexBareSlug } from "open-sse/services/model.js";
 import REGISTRY from "open-sse/providers/registry/index.js";
 
 // Local provider alias overrides (HMR-friendly, applied on top of open-sse map)
@@ -84,6 +84,13 @@ export async function getModelInfo(modelStr, { inferFallback = true } = {}) {
   const resolved = await resolveModelAliasCore(modelStr, getModelAliases);
   if (resolved) {
     return resolved;
+  }
+
+  // Codex CLI 会发裸的 codex 专属 slug（/model 选择器，如 gpt-5.6-terra）——这些 id
+  // 只在 codex 后端存在。放在 #34 的 400 判定之前接管（combo/用户别名命中优先），
+  // 只覆盖 Codex CLI 真实会发的 gpt-* slug，未知裸名依旧返回 provider: null。
+  if (isCodexBareSlug(parsed.model)) {
+    return { provider: "codex", model: parsed.model };
   }
 
   if (!inferFallback) {

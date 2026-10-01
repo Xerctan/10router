@@ -89,6 +89,67 @@ export class CodeBuddyExecutor extends DefaultExecutor {
     // filter and return an error (#2071).
     return transformed;
   }
+
+  // CodeBuddy 6004 频率限制（错误体里 code=6004，HTTP 状态可能仍是 200/400）：
+  // 解析消息里的精确重置时间为 resetsAtMs，走 markAccountUnavailable 的精确冷却通道
+  // （参照 codex.js usage_limit_reached 同款实现）；其他错误回退默认解析。
+  parseError(response, bodyText) {
+    const frequencyLimit = parseCodeBuddyFrequencyLimit(bodyText);
+    if (frequencyLimit) return frequencyLimit;
+    return super.parseError(response, bodyText);
+  }
+}
+
+// CodeBuddy 限流返回的业务错误码与消息特征（中英双语兜底，防上游改文案）
+const CODEBUDDY_FREQUENCY_LIMIT_CODE = 6004;
+const CODEBUDDY_FREQUENCY_LIMIT_PATTERN = /超出频率限制|frequency limit|限额/i;
+// 消息里的重置时间形如 "2026-09-28 14:30:00" 或 "... 2026-09-28 12:00:00 UTC+0"
+const CODEBUDDY_RESET_TIME_PATTERN = /(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})(?:\s*UTC\+?([0-9:]+))?/i;
+// CodeBuddy 服务在中国，消息未声明时区时按 UTC+8 解析
+const CODEBUDDY_RESET_DEFAULT_TZ = "+08:00";
+
+function normalizeCodeBuddyTzOffset(raw) {
+  const body = raw.startsWith("+") ? raw.slice(1) : raw;
+  const [hours, minutes] = body.split(":");
+  return `+${hours.padStart(2, "0")}:${minutes || "00"}`;
+}
+
+/**
+ * 解析 CodeBuddy 6004 频率限制错误，提取精确重置时间。
+ * 错误体形状：{ code: 6004, msg|message|error.message: "当前模型超出频率限制，请于 2026-09-28 14:30:00 后重试" }
+ * 命中返回 { status: 429, message, resetsAtMs: number|null }；未命中或非法 JSON 返回 null。
+ * codebuddy-cn 与 codebuddy-intl 共用一个实现（两站错误体同构）。
+ */
+export function parseCodeBuddyFrequencyLimit(bodyText) {
+  if (!bodyText) return null;
+  let data;
+  try {
+    data = JSON.parse(bodyText);
+  } catch {
+    return null;
+  }
+  const message = data?.msg || data?.message || data?.error?.message || "";
+  if (data?.code !== CODEBUDDY_FREQUENCY_LIMIT_CODE && !CODEBUDDY_FREQUENCY_LIMIT_PATTERN.test(message)) {
+    return null;
+  }
+
+  let resetsAtMs = null;
+  const match = message.match(CODEBUDDY_RESET_TIME_PATTERN);
+  if (match) {
+    // 时区归一化为 ±HH:00："8"→"+08:00"、"8:00"→"+08:00"、"+0"→"+00:00"
+    // （不补零的 "+8:00" 不是合法 ISO 偏移，Date 会解析成 NaN）
+    const tz = match[3]
+      ? normalizeCodeBuddyTzOffset(match[3])
+      : CODEBUDDY_RESET_DEFAULT_TZ;
+    const resetAt = new Date(`${match[1]}T${match[2]}${tz}`);
+    if (!Number.isNaN(resetAt.getTime())) resetsAtMs = resetAt.getTime();
+  }
+
+  return {
+    status: 429,
+    message: message || "CodeBuddy frequency limit (6004)",
+    resetsAtMs,
+  };
 }
 
 /**

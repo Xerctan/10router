@@ -364,6 +364,10 @@ export const PROVIDER_CAPABILITIES = {
     "gpt-5.6-terra-review":      CODEX_GPT_56_DEFAULT_CAPS,
     "gpt-5.6-luna":              CODEX_GPT_56_DEFAULT_CAPS,
     "gpt-5.6-luna-review":       CODEX_GPT_56_DEFAULT_CAPS,
+    // daybreak-blue / reserve：codex 模型目录确认在线，规格未公开——按 codex 家族保守值声明，
+    // 避免静默落到 DEFAULT_CAPABILITIES 地板（capability-floor 审计以此为准）。
+    "gpt-daybreak-blue-latest":  CODEX_GPT_56_DEFAULT_CAPS,
+    "gpt-reserve":               CODEX_GPT_56_DEFAULT_CAPS,
   },
   "kiro": {
     "gpt-5.6-sol": KIRO_GPT_5_6_CAPABILITIES,
@@ -492,8 +496,12 @@ export const PROVIDER_CAPABILITIES = {
  * a broad family pattern swallowing an exception (e.g. glm-4.6v vs glm-5).
  */
 export const PATTERN_CAPABILITIES = [
-  // ── Claude (4.6+ = adaptive thinking; older/haiku = budget) ──────
+  // ── Claude (4.6+ / Sonnet 5.x = adaptive thinking; older/haiku = budget) ──
   { pattern: "*claude*opus-5*",     caps: { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 } },
+  // 未知 Sonnet 5.x id（如 5.5）必须落在本行而不是下方泛化的 `*claude*sonnet*`：
+  // 落后者会走 claude-budget，翻译层为 tool_use 轮伪造带签名 thinking 占位，
+  // Sonnet 5.x 只认 adaptive，实测大上下文直接 refusal。
+  { pattern: "*claude*sonnet-5*",   caps: { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive", contextWindow: 1000000, maxOutput: 128000 } },
   { pattern: "*claude*opus-4.6*",   caps: { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive" } },
   { pattern: "*claude*opus-4.7*",   caps: { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive" } },
   { pattern: "*claude*opus-4.8*",   caps: { vision: true, reasoning: true, search: true, thinkingFormat: "claude-adaptive" } },
