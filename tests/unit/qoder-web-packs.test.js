@@ -21,6 +21,19 @@ const proxyAwareFetch = vi.fn(async (url, opts = {}) => {
   }
   if (url.includes("/api/v2/me/usages/big_model_credits")) {
     if (opts.headers?.Cookie === "dead-session") return { ok: false, status: 401, json: async () => ({}) };
+    if (opts.headers?.Cookie === "plan-session") return { ok: true, status: 200, json: async () => ({
+      user_id: "u-1",
+      plan_quota: { quota_detail: [
+        { limit_value: 200, used_value: 50, remaining_value: 150, expires_at: 1792635167844, source: "PLAN" },
+        { limit_value: 100, used_value: 100, remaining_value: 0, expires_at: 1790000000000, source: "PLAN" },
+      ] },
+      resource_package_quota: { quota_detail: [
+        { limit_value: 800, used_value: 0, remaining_value: 800, expires_at: 1793000000000, source: "RESOURCE_PACKAGE_SOURCE_BONUS" },
+      ] },
+      dedicated_resource_package_quota: { quota_detail: [
+        { limit_value: 50, used_value: 10, remaining_value: 40, expires_at: 1794000000000, source: "RESOURCE_PACKAGE_SOURCE_ORG" },
+      ] },
+    }) };
     return { ok: true, status: 200, json: async () => ({
       user_id: "u-1",
       resource_package_quota: { quota_detail: [
@@ -63,6 +76,9 @@ describe("getQoderUsage — web per-pack breakdown (CreditDaddy synced cookie)",
     expect(packs.every((p) => p.expiresAt)).toBe(true);
     // Exact breakdown → no synthetic "unitemized" remainder row.
     expect(packs.some((p) => p.unitemized)).toBe(false);
+    // Fixture carries no plan_quota rows → the user bucket falls back to the
+    // openapi aggregate (zeroed here), keeping the pre-web behavior intact.
+    expect(out.quotas.user.total).toBe(0);
     // CN cookie goes to the CN web host, not openapi.
     const webCall = calls.find((c) => c.url.includes("big_model_credits"));
     expect(webCall.url).toBe("https://qoder.cn/api/v2/me/usages/big_model_credits");
@@ -102,5 +118,24 @@ describe("getQoderUsage — web per-pack breakdown (CreditDaddy synced cookie)",
     // showing another account's resource packs.)
     expect(calls.some((c) => c.url.includes("big_model_credits"))).toBe(true);
     expect(calls.some((c) => c.url.includes("/campaigns"))).toBe(true);
+  });
+
+  it("surfaces plan and org buckets from the web detail when openapi zeroes them", async () => {
+    const getQoderUsage = await load();
+    const out = await getQoderUsage("dt-token", null, "qoder-cn", {
+      userId: "u-1",
+      creditDaddyWebSession: { cookie: "plan-session", userId: "u-1" },
+    });
+    // Plan rows sum into the user bucket — the openapi userQuota is zeroed on
+    // accounts like this one, which used to hide the 套餐内 Credits row entirely.
+    expect(out.quotas.user).toMatchObject({ total: 300, used: 150, remaining: 150 });
+    expect(out.quotas.user.resetAt).toBe(new Date(1790000000000).toISOString());
+    // Org packages sum into the organization bucket.
+    expect(out.quotas.organization).toMatchObject({ total: 50, used: 10, remaining: 40 });
+    // Packs still ride addOn with the shared web resetAt (soonest pack expiry).
+    expect(out.quotas.addOn.packs.map((p) => p.total)).toEqual([800]);
+    expect(out.quotas.addOn.resetAt).toBe(new Date(1793000000000).toISOString());
+    // Campaign endpoint NOT consulted — the web packs are present.
+    expect(calls.some((c) => c.url.includes("/campaigns"))).toBe(false);
   });
 });

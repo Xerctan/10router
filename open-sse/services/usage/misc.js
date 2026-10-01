@@ -326,17 +326,22 @@ export function buildQoderAddOnPacks({ campaigns = [], used = 0, total = 0, now 
 }
 
 /**
- * Per-resource-pack breakdown from the Qoder WEB console
+ * Credit detail from the Qoder WEB console
  * (GET {web}/api/v2/me/usages/big_model_credits).
  *
- * The openapi quota endpoint only exposes the aggregate addOnQuota; the web
- * console is the sole source of per-pack totals with real per-pack expiry, and
- * it accepts ONLY the browser's httpOnly session cookie (device/job tokens get
- * 401). CreditDaddy captures that cookie in its login window and ships it to
- * 10Router inside providerSpecificData.creditDaddyWebSession on account sync.
+ * The openapi quota endpoint only exposes the aggregate buckets (userQuota /
+ * addOnQuota), and for some accounts those come back zeroed while credits are
+ * still live. The web console is the authoritative per-row source — plan
+ * credits (plan_quota), gifted/purchased resource packs (resource_package_quota)
+ * and org packages (dedicated_resource_package_quota) each carry real per-row
+ * expiry — and it accepts ONLY the browser's httpOnly session cookie
+ * (device/job tokens get 401). CreditDaddy captures that cookie in its login
+ * window and ships it to 10Router inside
+ * providerSpecificData.creditDaddyWebSession on account sync.
  *
- * Returns { packs, resetAt, sourceUserId } or null (no cookie / call failed /
- * response shape changed) so callers fall back to the campaign approximation.
+ * Returns { packs, planRows, orgRows, resetAt, sourceUserId } or null (no
+ * cookie / call failed / response shape changed) so callers fall back to the
+ * aggregate-only view.
  */
 export async function fetchQoderWebPacks(cookie, providerId = "qoder", proxyOptions = null) {
   if (!cookie || typeof cookie !== "string") return null;
@@ -358,20 +363,31 @@ export async function fetchQoderWebPacks(cookie, providerId = "qoder", proxyOpti
     if (!res.ok) return null;
     const body = await res.json().catch(() => null);
     if (!body || !body.user_id) return null;
-    const rows = body.resource_package_quota?.quota_detail;
-    if (!Array.isArray(rows) || rows.length === 0) return null;
-    const packs = rows
-      .map((r) => ({
-        total: Number(r?.limit_value) || 0,
-        used: Number(r?.used_value) || 0,
-        remaining: Number(r?.remaining_value) || 0,
-        expiresAt: Number(r?.expires_at) > 0 ? new Date(Number(r.expires_at)).toISOString() : null,
-        source: r?.source || null,
-      }))
-      .filter((p) => p.total > 0)
-      .sort((a, b) => (a.expiresAt || "9999").localeCompare(b.expiresAt || "9999"));
-    if (!packs.length) return null;
-    return { packs, resetAt: packs[0].expiresAt || null, sourceUserId: body.user_id };
+    const readSection = (key) => {
+      const rows = body?.[key]?.quota_detail;
+      if (!Array.isArray(rows)) return [];
+      return rows
+        .map((r) => ({
+          total: Number(r?.limit_value) || 0,
+          used: Number(r?.used_value) || 0,
+          remaining: Number(r?.remaining_value) || 0,
+          expiresAt: Number(r?.expires_at) > 0 ? new Date(Number(r.expires_at)).toISOString() : null,
+          source: r?.source || null,
+        }))
+        .filter((p) => p.total > 0)
+        .sort((a, b) => (a.expiresAt || "9999").localeCompare(b.expiresAt || "9999"));
+    };
+    const packs = readSection("resource_package_quota");
+    const planRows = readSection("plan_quota");
+    const orgRows = readSection("dedicated_resource_package_quota");
+    if (!packs.length && !planRows.length && !orgRows.length) return null;
+    return {
+      packs,
+      planRows,
+      orgRows,
+      resetAt: packs[0]?.expiresAt || null,
+      sourceUserId: body.user_id,
+    };
   } catch {
     return null;
   }
@@ -427,9 +443,24 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
     // fall back to the aggregate-only view.
     let addOnResetAt = null;
     let addOnPacks = [];
-    // Preferred: the web console's real per-pack list, when a synced session
+    // The web rows also carry the plan (套餐内) and org-package buckets, which
+    // the openapi endpoint zeroes out on some accounts — sum them into the
+    // user / organization quota records so the dashboard's plan row survives.
+    let webPlan = null;
+    let webOrg = null;
+    const sumWebRows = (rows) => {
+      if (!Array.isArray(rows) || rows.length === 0) return null;
+      const sum = (k) => rows.reduce((s, r) => s + (Number(r[k]) || 0), 0);
+      return {
+        total: sum("total"),
+        used: sum("used"),
+        remaining: sum("remaining"),
+        resetAt: rows.find((r) => r.expiresAt)?.expiresAt || null,
+      };
+    };
+    // Preferred: the web console's real per-row detail, when a synced session
     // exists and belongs to this same account (userId cross-check guards
-    // against a stale/mismatched cookie attributing someone else's packs).
+    // against a stale/mismatched cookie attributing someone else's credits).
     const webSession = providerSpecificData?.creditDaddyWebSession;
     if (webSession?.cookie) {
       const web = await fetchQoderWebPacks(webSession.cookie, providerId, proxyOptions);
@@ -437,9 +468,11 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
       if (web && (!owner || !web.sourceUserId || owner === web.sourceUserId)) {
         addOnPacks = web.packs;
         addOnResetAt = web.resetAt;
+        webPlan = sumWebRows(web.planRows);
+        webOrg = sumWebRows(web.orgRows);
       }
     }
-    const hasWebPacks = addOnPacks.length > 0;
+
     if (!hasWebPacks) try {
       const campBase = providerId === "qoder-cn" ? QODER_CN_OPENAPI_BASE : QODER_OPENAPI_BASE;
       const campUrl = `${campBase}/sash/api/v1/me/campaigns?clientType=10`;
@@ -473,11 +506,11 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
 
     const quotas = {
       user: {
-        total: Number(userQuota.total) || 0,
-        used: Number(userQuota.used) || 0,
-        remaining: Number(userQuota.remaining) || 0,
+        total: planBucket.total,
+        used: planBucket.used,
+        remaining: planBucket.remaining,
         unit: userQuota.unit || "credits",
-        resetAt,
+        resetAt: planBucket.resetAt || resetAt,
         unlimited: false,
       },
       addOn: {
@@ -490,11 +523,11 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
         packs: addOnPacks,
       },
       organization: {
-        total: Number(orgQuota.total) || 0,
-        used: Number(orgQuota.used) || 0,
-        remaining: Number(orgQuota.remaining) || 0,
+        total: orgBucket.total,
+        used: orgBucket.used,
+        remaining: orgBucket.remaining,
         unit: orgQuota.unit || "credits",
-        resetAt,
+        resetAt: orgBucket.resetAt || resetAt,
         unlimited: false,
       },
     };
