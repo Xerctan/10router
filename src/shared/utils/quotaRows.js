@@ -125,7 +125,7 @@ function ownRemainingOf(row) {
  *
  * Each row still reports its OWN `X / Y` in the label.
  */
-export function buildNestedCycle(rows = []) {
+export function buildNestedCycle(rows = [], { force = false } = {}) {
   const buckets = { monthly: null, weekly: null, rolling: null };
   for (const row of rows) {
     // A monthly GRANT (CodeBuddy) is a credit pack, not a plan window, so it
@@ -144,7 +144,10 @@ export function buildNestedCycle(rows = []) {
   }
 
   // No monthly head → no containment chain. Parallel windows (antigravity's
-  // 5h + weekly) stay independent.
+  // 5h + weekly) stay independent. `force` (the experimental nested-bars
+  // toggle) relaxes that: with a monthly head and ≥2 real-amount layers the
+  // caller wants the ladder even so — clamping below still keeps each child's
+  // fill inside its parent's value.
   if (!buckets.monthly) return [];
 
   const ladder = [buckets.monthly, buckets.weekly, buckets.rolling].filter(Boolean);
@@ -158,13 +161,18 @@ export function buildNestedCycle(rows = []) {
 
   // Containment on one scale: each ceiling strictly inside its parent's. Equal
   // totals (percent-only windows, all 100) or an inverted pair mean the layers
-  // are not measured in a shared unit, so they cannot be drawn nested.
-  for (let i = 1; i < ladder.length; i += 1) {
-    const child = ownTotalOf(ladder[i]);
-    if (!(child > 0 && child < ownTotalOf(ladder[i - 1]))) return [];
+  // are not measured in a shared unit, so they cannot be drawn nested — UNLESS
+  // `force` is on: commandcode's 每周 ceiling equals its 月度额度's, which trips
+  // the equality case even though the scopes genuinely contain one another.
+  if (!force) {
+    for (let i = 1; i < ladder.length; i += 1) {
+      const child = ownTotalOf(ladder[i]);
+      if (!(child > 0 && child < ownTotalOf(ladder[i - 1]))) return [];
+    }
   }
 
   const scale = ownTotalOf(ladder[0]);
+  if (!(scale > 0)) return [];
   let parentValue = scale;
   return ladder.map((row, depth) => {
     const ownTotal = ownTotalOf(row);
@@ -214,7 +222,8 @@ export function classifyCycleRows(rows = []) {
 
 /**
  * The cycle rows that get their own progress line under the pool bar, in
- * display order: monthly first (the widest window), then the other windows.
+ * display order: the shorter windows first in upstream order (滚动 → 每周),
+ * monthly LAST — the widest window anchors the block at the bottom.
  *
  * `giftPack` monthly rows are EXCLUDED — a provider's monthly *grant* (CodeBuddy
  * hands out a fresh credit pack each month) is not a plan window, so it belongs
@@ -226,7 +235,7 @@ export function cycleRowLines(rows = []) {
   const { monthly, windows } = classifyCycleRows(rows);
   const planMonthly = monthly.filter((r) => r?.giftPack !== true);
   const nonMonthly = windows.filter((r) => !monthly.includes(r));
-  return [...planMonthly, ...nonMonthly];
+  return [...nonMonthly, ...planMonthly];
 }
 
 /**

@@ -118,11 +118,11 @@ describe("classifyCycleRows", () => {
 });
 
 describe("cycleRowLines", () => {
-  it("orders monthly first, then the remaining windows", () => {
+  it("orders shorter windows first, monthly anchored at the bottom", () => {
     const session = row("session (5h)", { recurring: true, total: 3 });
     const weekly = row("weekly (7d)", { recurring: true, total: 6 });
     const monthly = row("Monthly Credits", { recurring: true, total: 10 });
-    expect(cycleRowLines([weekly, session, monthly])).toEqual([monthly, weekly, session]);
+    expect(cycleRowLines([weekly, session, monthly])).toEqual([weekly, session, monthly]);
   });
 
   it("a GIFT-pack monthly stays collapsed (CodeBuddy's monthly grant)", () => {
@@ -143,7 +143,7 @@ describe("cycleRowLines", () => {
   it("mixes them: only the plan window shows, the grant stays collapsed", () => {
     const planMonthly = row("Monthly", { recurring: true, total: 100 }); // opencode-go
     const weekly = row("Weekly", { recurring: true, total: 50 });
-    expect(cycleRowLines([weekly, planMonthly])).toEqual([planMonthly, weekly]);
+    expect(cycleRowLines([weekly, planMonthly])).toEqual([weekly, planMonthly]);
 
     const grant = row("Monthly", { recurring: true, total: 500, giftPack: true });
     const bonus = row("Bonus Pack 1", { recurring: false, total: 100 });
@@ -209,6 +209,36 @@ describe("buildNestedCycle", () => {
     // scale to nest on — they stay flat rows.
     const pct = (name) => row(name, { recurring: true, total: 100, remainingNum: 70 });
     expect(buildNestedCycle([pct("Rolling"), pct("Weekly"), pct("Monthly")])).toEqual([]);
+  });
+
+  // The experimental "nested cycle quota bars" toggle (localStorage
+  // quotaNestedCycle → QuotaPackBar nestedCycle → force). The user's live
+  // commandcode data: 每周 ceiling == 月度额度 ceiling, which trips the strict
+  // containment rule even though the scopes genuinely nest.
+  const eqChain = () => [
+    row("session (5h)", { recurring: true, total: 3, remainingNum: 1.94 }),
+    row("weekly (7d)", { recurring: true, total: 6, remainingNum: 1.62 }),
+    row("Monthly Credits", { recurring: true, total: 6, remainingNum: 5.62 }),
+  ];
+
+  it("default: equal ceilings are NOT nested (commandcode 6/6 live data)", () => {
+    expect(buildNestedCycle(eqChain())).toEqual([]);
+  });
+
+  it("force: an equal-ceilings chain nests, clamped parent-fit", () => {
+    const [m, w, s] = buildNestedCycle(eqChain(), { force: true });
+    expect([m.ownTotal, w.ownTotal, s.ownTotal]).toEqual([6, 6, 3]);
+    expect(m.widthPct).toBeCloseTo((5.62 / 6) * 100, 3);
+    expect(w.widthPct).toBeCloseTo((1.62 / 6) * 100, 3);
+    expect(s.widthPct).toBeCloseTo((1.62 / 6) * 100, 3); // 1.94 会话被每周的 1.62 截断
+    expect(s.ownRemaining).toBe(1.94); // label still reports the window's own number
+  });
+
+  it("force still requires the monthly head and two real-amount layers", () => {
+    const weekly = row("weekly (7d)", { recurring: true, total: 6, remainingNum: 6 });
+    const session = row("session (5h)", { recurring: true, total: 3, remainingNum: 3 });
+    expect(buildNestedCycle([weekly, session], { force: true })).toEqual([]);
+    expect(buildNestedCycle([weekly, session, row("Monthly Credits", { recurring: true, total: 0, remainingNum: 0 })], { force: true })).toEqual([]);
   });
 
   it("a one-shot credit row never heads the ladder (Purchased Credits)", () => {

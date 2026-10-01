@@ -39,8 +39,8 @@ import QuotaMeter, {
  *     它就是「以重置日为到期日的资源包」，不再单独成行
  *   15 个资源包（可用）        赠送包 21（55.33）到期 10-15
  *
- * Cycle half — 滚动 → 月度 → 每周, fixed order, each item ALWAYS two lines
- * (name + numbers, then its own full-width bar):
+ * Cycle half — 滚动 → 每周 → 月度, fixed order (monthly anchors the bottom),
+ * each item ALWAYS two lines (name + numbers, then its own full-width bar):
  *
  *   [✦] 每周                       100 / 100 · 于 10-06 重置
  *   [==================== 100%]
@@ -296,7 +296,7 @@ QuotaRow.propTypes = {
   }),
 };
 
-export default function QuotaPackBar({ packs = [], className }) {
+export default function QuotaPackBar({ packs = [], className, nestedCycle = false }) {
   // `detailOnly` rows (Qoder's per-campaign packs) are a breakdown of a row the
   // card already charts — they exist for the per-pack table, never for the card.
   const rows = (packs || []).filter(
@@ -319,8 +319,10 @@ export default function QuotaPackBar({ packs = [], className }) {
   // Cycle rows split two ways (see classifyCycleRows): MONTHLY rows are resource
   // packs that expire at month end (codebuddy / qoder), so they belong in the
   // additive pool; everything else recurring forms the nested 滚动⊂每周 ladder.
+  // `nestedCycle` (experimental toggle) FORCES the ladder whenever a monthly
+  // head and ≥2 real-amount layers exist, relaxing the strict-containment rule.
   const cycle = classifyCycleRows(withNums);
-  const ladder = buildNestedCycle(withNums);
+  const ladder = buildNestedCycle(withNums, { force: nestedCycle === true });
   // Rows that get their own line under the pool bar. Monthly is in here TOO —
   // it counts into the pool and the total, and still shows its own window row.
   // Rows drawn in the ladder are shown there ONCE — never again in the pool
@@ -626,6 +628,7 @@ export default function QuotaPackBar({ packs = [], className }) {
 }
 
 QuotaPackBar.propTypes = {
+  nestedCycle: PropTypes.bool,
   packs: PropTypes.arrayOf(
     PropTypes.shape({
       name: PropTypes.string,

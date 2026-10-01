@@ -230,6 +230,13 @@ export default function ProviderLimits() {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("quotaHideNoQuota") === "1";
   });
+  // Experimental (same localStorage pattern as hideNoQuota, switch on the
+  // Experimental page): draw contained subscription windows as ONE nested
+  // track instead of flat rows.
+  const [nestedCycle] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("quotaNestedCycle") === "1";
+  });
   // "Only with balance" is NOT a separate view filter. It writes the
   // zero-balance rows into the SAME per-connection `quotaVisibility.hidden` list
   // that the per-row hide button writes, so the two stay one thing: a row hidden
@@ -1441,7 +1448,7 @@ export default function ProviderLimits() {
                   the connection-wide used/total sums. */}
               {quota && visibleQuotas.length > 0 && (
                 <div className="px-3 pt-2.5">
-                  <QuotaPackBar packs={visibleQuotas} />
+                  <QuotaPackBar packs={visibleQuotas} nestedCycle={nestedCycle} />
                 </div>
               )}
 

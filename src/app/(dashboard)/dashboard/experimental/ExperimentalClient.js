@@ -18,12 +18,26 @@ export default function ExperimentalClient() {
       typeof window !== "undefined" &&
       window.localStorage.getItem("quotaHideNoQuota") === "1",
   );
+  // Same client-side view preference as hideNoQuota, key read by the quota
+  // page: draw contained subscription windows (滚动 ⊂ 每周 ⊂ 月度) as one
+  // nested concentric track instead of split flat rows.
+  const [nestedCycle, setNestedCycle] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.localStorage.getItem("quotaNestedCycle") === "1",
+  );
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       window.localStorage.setItem("quotaHideNoQuota", hideNoQuota ? "1" : "0");
     }
   }, [hideNoQuota]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("quotaNestedCycle", nestedCycle ? "1" : "0");
+    }
+  }, [nestedCycle]);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -72,6 +86,22 @@ export default function ExperimentalClient() {
               <Toggle
                 checked={hideNoQuota}
                 onChange={() => setHideNoQuota((prev) => !prev)}
+              />
+            </div>
+
+            {/* Cycle quota display shape — flat split rows (default, monthly
+                anchored at the bottom) vs the previous nested concentric
+                track. Takes effect on the next quota-page load. */}
+            <div className="flex items-start sm:items-center justify-between gap-4 pb-4 border-b border-border/50">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm sm:text-base">{translate("Nested cycle quota bars")}</p>
+                <p className="text-xs sm:text-sm text-text-muted">
+                  {translate("Draw contained windows (rolling ⊂ weekly ⊂ monthly) as one nested track instead of flat rows")}
+                </p>
+              </div>
+              <Toggle
+                checked={nestedCycle}
+                onChange={() => setNestedCycle((prev) => !prev)}
               />
             </div>
 
