@@ -24,6 +24,7 @@ import {
   canonicalizeKiroConversation,
   normalizeKiroToolSpecs,
 } from "../concerns/kiroConversation.js";
+import { attachToolNameMap } from "../concerns/geminiTools.js";
 
 /**
  * Safely parse JSON string, returning fallback on failure.
@@ -427,6 +428,12 @@ export function openaiToKiroRequest(model, body, stream, credentials) {
     value: upstreamModel,
     enumerable: false
   });
+
+  // Same as claude-to-kiro: expose real renames as sanitized→original so
+  // chatCore can decloak the response side.
+  attachToolNameMap(payload, new Map(
+    [...nameMap].filter(([raw, clean]) => raw !== clean).map(([raw, clean]) => [clean, raw])
+  ));
 
   return payload;
 }
