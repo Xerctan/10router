@@ -1244,5 +1244,10 @@
         }
       }
     ]
+  },
+  "apinex": {
+    "baseUrl": "https://api.apinex.bond/v1/chat/completions",
+    "validateUrl": "https://api.apinex.bond/v1/models",
+    "format": "openai"
   }
 }

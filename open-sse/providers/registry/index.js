@@ -149,6 +149,7 @@ import p149 from "./atria.js";
 import p150 from "./tokenharbor.js";
 import p151 from "./v1m.js";
 import p152 from "./muse.js";
+import p153 from "./apinex.js";
 
 export default [
   p0,
@@ -299,4 +300,5 @@ export default [
   p150,
   p151,
   p152,
+  p153,
 ];

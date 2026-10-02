@@ -4,20 +4,21 @@
 
 ## v1.3.2 (未发布)
 
+### ✨ 新功能
+
+- **APInex（apinex.bond）供应商复上架**：v1.0.5 上线、v1.1.0 因上游宕站下架（9cefa48b）的聚合网关恢复——取回历史 registry（18 模型含 5 个 free/* 注册即送免费档，vendor 前缀 id 透传）、图标、目录 JSON、capabilities 行与 free/* 判定注释；邀请码 chip（notice.inviteCode）沿用现行 InviteCodeChip。三项基线（104 providers / 148 alias tokens / audit-capabilities）与 golden-url-header 全过。
+- **安装器品牌侧板（首装/卸载观感对齐产品设计语言）**：assisted 向导（`nsis.oneClick:false`）的欢迎/完成/卸载页左侧 164×314 位图位此前是 electron-builder 默认白底占位。新增 `desktop/make_installer_art.py`（Pillow，与 make_icon.py 同工具链）按 update-window.html 同一套 globals.css token 生成 `installerSidebar.bmp` / `uninstallerSidebar.bmp`（24 位 BMP：米白底 + 应用图标同款橙渐变圆角块 + 字标 + 特性清单 + 底部品牌条），nsis 配置仅加两个位图键——NSIS 脚本逻辑一行未动。刻意只对齐有品牌位的两屏：目录/进度页保留原生（Windows 装软件的既有心智），且升级路径走壳内静默安装本就看不到向导，全套自绘不划算。
+- **应用内自更新 UI 重做（`desktop/update-window.html`）**：原生「安装包已就绪」对话框与 data-URL 进度弹窗全部退役，改为统一的无边框 HTML 更新窗——状态机 检查中 → 有新版 → 下载中（进度条 + % + MB，关窗即中止）→ 就绪（立即安装/稍后）→ 错误（重试/打开 Releases）；420 宽定高自适应（ResizeObserver 回报）、圆角卡片 + 品牌主色、深色模式自适应、contextIsolation + sandbox preload（白名单 bridge）、严格 CSP 无远程资源；行为契约不变（SHA256 校验、安装前 `stopServer` 再 spawn、macOS/Portable 走 Releases 引导）。用例 `desktop-update-window.test.js` 8 例；顺带修 Windows 非整数缩放下窗口内容亚像素溢出导致更新窗出现滚动条（内容区 `overflow:hidden`，固定尺寸窗不该滚，fit 量高逻辑不变）。
+- **仪表盘 → 桌面壳 更新握手（`/api/version/shell-update`）**：仪表盘内的「检查更新」与壳的更新器此前是两条平行路径——页面查到新版本只有一句文案（profile）或 Sidebar 的 Releases 链接，托盘里现成的「下载 → SHA256 校验 → 更新窗安装」全自动流程够不着（浏览器页面没有到 Electron 的桥）。按 reset-password 同款 marker 约定打通：桌面安装（sidecar 由壳以 `INSTALL_CHANNEL=desktop` 启动）下，profile 页「立即检查」发现新版本且本端为桌面渠道时出现「通过桌面壳更新」按钮，POST 在数据目录落一次性 `update-request.json`；壳每 3s 消费（`desktop/updateRequest.js`：新鲜度 15 min、时钟漂移容忍 5 min、消费即删、壳正在下载时忽略不打断），命中即跑既有 `checkForUpdates()`——检查/下载/校验/安装全复用更新窗既有状态机，marker 只承载「用户要更新」这一个意图，不带权威数据。远端（LAN/Tailscale）打开的仪表盘同样生效：sidecar 与壳同机、共用 DATA_DIR。非桌面渠道一律 403（没有壳在消费，拒绝让按钮静默无效）；新路径随 `/api/version/shutdown` 进 ALWAYS_PROTECTED；`desktop/updateRequest.js` 已登记 build.files（漏登记 = 打包后静默消失）；字面量补 zh-CN/zh-TW。用例 `desktop-update-request.test.js` 9 例（解析/新鲜度/时钟漂移/一次性消费）+ `shell-update-route.test.js` 4 例（渠道门禁/版本清洗/空 body）；desktop 源码形状三件套回归 PASS。
+
 ### 🐛 修复
 
 - **`/v1/models` noAuth 免登录静态模型补齐上下文窗口 / 输出上限上报**：`exposeStaticModels` 发射通道（zcode-free 等无连接供应商的唯一出口）此前只发 `id/owned_by`，唯独这里不调 `getCapabilitiesForModel()`——客户端读不到 `context_length` / `max_completion_tokens`，智能体模型卡显示「该供应商也未上报窗口大小」、无法显示占用百分比；而能力表里 `glm-5.3-flash`（1M / 131072）等条目一直都在，仪表盘因走本地解析所以显示正常，只有对外列表漏了。现与已连接供应商循环同口径：LLM 类条目挂 `capabilities` 并落顶层 snake_case 字段，仪表盘钉值（modelCaps 覆盖）仍在其上。用例 `tests/unit/models-empty-connections.test.js` 补 2 例（目录值上报 / 钉值优先、嵌套块同步）。
-
-## v1.3.2 (未发布)
-
-### ✨ 新功能
-
-- **应用内自更新 UI 重做（`desktop/update-window.html`）**：原生「安装包已就绪」对话框与 data-URL 进度弹窗全部退役，改为统一的无边框 HTML 更新窗——状态机 检查中 → 有新版 → 下载中（进度条 + % + MB，关窗即中止）→ 就绪（立即安装/稍后）→ 错误（重试/打开 Releases）；420 宽定高自适应（ResizeObserver 回报）、圆角卡片 + 品牌主色、深色模式自适应、contextIsolation + sandbox preload（白名单 bridge）、严格 CSP 无远程资源；行为契约不变（SHA256 校验、安装前 `stopServer` 再 spawn、macOS/Portable 走 Releases 引导）。用例 `desktop-update-window.test.js` 8 例。
-
-### 🐛 修复
-
-- **`/v1/models` 无连接时 noAuth 静态模型不再"无窗口"**：`exposeStaticModels` 发射通道此前只带 pinned override，不带 catalog 能力，客户端拿不到 context_length/max_completion_tokens 只能按模型名瞎猜（zcode-free 在 agent 模型卡上裸奔）；现与有连接路径同走 `getCapabilitiesForModel`，同步发布 `capabilities`。用例 `models-empty-connections` 新增 1 例。
 - **Windows 升级安装不再被旧进程锁死（严重）**：sidecar（Next 服务）与托盘是同一个 `10Router.exe`（`ELECTRON_RUN_AS_NODE` 无窗进程），旧版卸载器对它只能"找窗口关闭"、杀不掉——v1.3.0 → 1.3.1 升级实测「Failed to uninstall old application files / 无法关闭」。两道防线：① NSIS `customInit` 在新安装器最早阶段 `taskkill /F /IM 10Router.exe /T`（升级跑的是旧版卸载器，代码改不到，只能由新安装器先清场）；② 退出路径确定性停车——托盘退出 / 应用内自更新 / NSIS 引导关闭都先 `stopServer()` 再退出，安装器到达替换阶段时锁已释放（此前 updater 是 spawn 与 quit 竞速）。1.3.1 的四个 Windows 桌面资产已**原位替换**（同版本号，CI 原版同样未签名；端到端验证：app 运行 5 进程中 `/S` 覆盖安装 24 秒完成、进程全清、版本完整）。用例 `desktop-install-kill.test.js` 5 例。
+
+### 🔧 其他
+
+- **`desktop/test-local.ps1` 步 7 增加「服务自报版本」校验**：`currentVersion` 是构建期烘焙进 bundle 的（`config.js` 静态 import），磁盘上 app/package.json 的手动对齐救不了它——实测 `-SkipAppBuild` 跨测试号复用旧产物（test.4 壳 + test.3 bundle）时，仪表盘陈旧检测横幅「Installed version … differs from the running build」报得完全正确、脚本却全绿。现完整构建自报版本不一致直接 Die；`-SkipAppBuild` 只警告不拦（该模式本就以「界面停留旧号」为代价），权衡显式化。
 
 ## v1.3.1 (2026-10-02)
 

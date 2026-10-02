@@ -459,6 +459,29 @@ export const PROVIDER_CAPABILITIES = {
     "gpt-5.5-medium": DEVIN_CLI_GPT_CAPS,
     "gpt-5.5-low": DEVIN_CLI_GPT_CAPS,
   },
+  // APInex — vendor-prefixed ids ("gpt/5.6-sol") pass through verbatim; the
+  // capabilities lookup keys on the FULL id, so these rows must carry the
+  // prefix too (恢复自 v1.0.5 的下架卡片 d603aa89)。
+  "apinex": {
+    "grok/4.6":                    { reasoning: true, thinkingFormat: "openai", contextWindow: 500000 },
+    "claude/opus-5":               { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000 },
+    "claude/sonnet-5":             { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000 },
+    "gpt/5.6-sol":                 { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000 },
+    "gpt/5.6-terra":               { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000 },
+    "gpt/5.6-luna":                { reasoning: true, thinkingFormat: "openai", contextWindow: 1050000 },
+    "gemini/3.1-pro":              { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000 },
+    "gemini/3.8-flash":            { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000 },
+    "deepseek/v4-flash-0731":      { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000 },
+    "deepseek/v4-pro-0813":        { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000 },
+    "glm/5.3-flash":               { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000 },
+    "glm/5.3":                     { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000 },
+    "kimi/k3":                     { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000 },
+    "free/glm-5.3-flash":          { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000 },
+    "free/deepseek-v4-flash-0731": { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000 },
+    "free/deepseek-v4-pro-0813":   { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000 },
+    "free/gpt-5.6-luna":           { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000 },
+    "free/qwen-3.8-max":           { reasoning: true, thinkingFormat: "openai", contextWindow: 1000000 },
+  },
   // CodeBuddy.cn — authoritative per-model metadata from the gateway's model
   // config (contextWindow=maxInputTokens, maxOutput=maxOutputTokens, vision=
   // supportsImages). Every model reasons via OpenAI-style reasoning_effort
