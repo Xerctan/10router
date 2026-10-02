@@ -271,6 +271,22 @@ try {
     if (-not $health.ok) { Die "20128 /api/health 没通(旧实例还占着端口?看 server.log)" }
     Ok "20128 /api/health -> ok"
 
+    # 服务自报版本:currentVersion 是**构建期**烘焙进 bundle 的(config.js 静态
+    # import),磁盘上 app/package.json 的手动对齐救不了它——SkipAppBuild 跨测试号
+    # 复用旧产物时这里必露馅(实测 test.4 复用 test.3 bundle,仪表盘陈旧横幅
+    # "Installed version ... differs from the running build" 报得完全正确)。
+    # 完整构建必须自洽(不一致直接 Die);SkipAppBuild 只警告不拦,权衡留给调用者。
+    $serving = Invoke-RestMethod "http://127.0.0.1:20128/api/version" -TimeoutSec 5
+    if ($serving.currentVersion -ne $Version) {
+        if ($SkipAppBuild) {
+            Write-Host "  ! 服务自报版本 $($serving.currentVersion) ≠ $Version(SkipAppBuild 复用旧 bundle:陈旧检测横幅会按旧号报,要自洽就完整重建)" -ForegroundColor Yellow
+        } else {
+            Die "服务自报版本 $($serving.currentVersion) ≠ $Version(bundle 里烘焙的版本号没跟上——build-cli.js 真跑了吗?)"
+        }
+    } else {
+        Ok "服务自报版本 $Version -> ok"
+    }
+
     # 登录态 SSR 冒烟:用本地 jwt-secret 铸 cookie 打 /dashboard。
     # /api/health 不走页面渲染,挡不住 "health 绿但页面 500"(如 TDZ/循环引用回归)。
     # 铸 JWT 走落盘 helper(PS5.1 传参会吃掉内嵌双引号,内联 -e 必炸,见 mint-smoke-jwt.mjs 头注)。

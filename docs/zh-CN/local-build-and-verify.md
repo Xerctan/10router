@@ -55,6 +55,12 @@ npm run test-version -- --revert         # 测完回退（只在「改动全是�
 > `-SkipAppBuild`（复用已有 `cli/app`）、`-Marker "<字面量>"`（顺带断言产物里含该标记）、
 > `-Version X.Y.Z-test.N`（指定测试号）。
 >
+> **步 7 的「服务自报版本」校验**：界面与 `/api/version` 的版本号是**构建期烘焙进 bundle** 的
+> （`src/shared/constants/config.js` 静态 import），脚本对磁盘上 app/package.json 的手动对齐救不了它。
+> `-SkipAppBuild` 跨测试号复用旧产物时会黄字警告——仪表盘随之出现
+> 「Installed version … differs from the running build」陈旧横幅，属预期现象，要自洽就完整重建；
+> 完整构建若不一致则直接 Die（实测 2026-10-02：test.4 复用 test.3 bundle 被横幅抓个正着）。
+>
 > **选路：别一上来就 replace。**
 >
 > | 改了什么 | 用什么 | 实际成本 |
