@@ -33,6 +33,7 @@
       "update-window.html",
       "passwordStore.js",
       "releaseUpdater.js",
+      "updateRequest.js",
       "package.json",
       "icon.ico",
       "icon.png",

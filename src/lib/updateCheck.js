@@ -25,3 +25,20 @@ export function syncUpdateCheckMarker(enabled) {
     else fs.writeFileSync(file, "Automatic update checks are off (Settings → Security).\n");
   } catch { /* best effort */ }
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// Dashboard → desktop-shell update handoff. On a desktop install the tray shell
+// owns the full check → download → SHA256 → install flow, but a dashboard page
+// cannot reach Electron. Contract: this side drops a one-shot marker file in
+// the data dir; the shell (desktop/updateRequest.js) polls, consumes and runs
+// its own checkForUpdates(). Same pattern as the reset-password marker. File
+// name and JSON shape must stay in sync with desktop/updateRequest.js; the
+// consumer drops requests older than 15 minutes.
+export const UPDATE_REQUEST_FILE = "update-request.json";
+
+export function writeUpdateRequest({ version } = {}) {
+  const file = path.join(getDataDir(), UPDATE_REQUEST_FILE);
+  const payload = { version: version || "", requestedAt: Date.now() };
+  fs.writeFileSync(file, `${JSON.stringify(payload)}\n`, "utf8");
+  return payload;
+}

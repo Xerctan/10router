@@ -30,6 +30,7 @@ const os = require('os');
 const path = require('path');
 const { createPasswordStore } = require('./passwordStore');
 const releaseUpdater = require('./releaseUpdater');
+const updateRequest = require('./updateRequest');
 
 // 必须先于一切 getPath('userData') 调用:productName "10Router" 在 Windows(大小写
 // 不敏感)上会与服务数据目录 %APPDATA%\10router 撞名,壳日志会混进服务数据。
@@ -1191,6 +1192,30 @@ async function autoCheckUpdate() {
     } catch { /* 静默失败 */ }
 }
 
+// ───────────────── 仪表盘发起的更新请求（数据目录 marker 握手） ─────────────────
+// 仪表盘「检查更新」发现新版本且本端是桌面安装时，POST /api/version/shell-update
+// 在 DATA_DIR 落一个 update-request.json（写入侧 src/lib/updateCheck.js）；这里
+// 轮询消费，命中即跑壳自己的检查流程（打开更新窗 → available → 用户确认下载），
+// 下载/SHA256/安装全走既有路径。远端（LAN/Tailscale）打开的仪表盘同样生效：
+// sidecar 与壳同机、共用同一 DATA_DIR。
+const UPDATE_REQUEST_POLL_MS = 3000;
+let updateRequestTimer = null;
+function startUpdateRequestPolling() {
+    if (updateRequestTimer) return;
+    updateRequestTimer = setInterval(() => {
+        if (quitting) return;
+        const req = updateRequest.consumeUpdateRequest(DATA_DIR);
+        if (!req) return;
+        if (updateDlCtrl) {
+            log('dashboard update request ignored: a download is already running');
+            return;
+        }
+        log(`dashboard update request${req.version ? ` (v${req.version})` : ''} → checkForUpdates`);
+        checkForUpdates();
+    }, UPDATE_REQUEST_POLL_MS);
+    if (updateRequestTimer.unref) updateRequestTimer.unref();
+}
+
 function showAbout() {
     dialog.showMessageBox({
         type: 'info',
@@ -2080,6 +2105,7 @@ if (!gotLock) {
         log(`app start (packaged=${IS_PACKAGED}, appDir=${APP_DIR}, data=${DATA_DIR}, locale=${LOCALE})`);
         setAppMenu();
         createTray();
+        startUpdateRequestPolling();  // 消费仪表盘的更新请求(见 updateRequest.js)
         await startServer();          // 启动即拉起服务
     });
 
@@ -2090,6 +2116,7 @@ if (!gotLock) {
     let quitStopping = false;
     app.on('before-quit', (e) => {
         quitting = true;
+        if (updateRequestTimer) { clearInterval(updateRequestTimer); updateRequestTimer = null; }
         if (!quitStopping && nodeProc) {
             quitStopping = true;
             e.preventDefault();

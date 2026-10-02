@@ -63,6 +63,9 @@ const ALWAYS_PROTECTED = [
   "/api/settings/database",
   "/api/version/shutdown",
   "/api/version/update",
+  // Triggers the desktop shell's update flow via a data-dir marker — a
+  // state-changing handoff that only the operator should be able to fire.
+  "/api/version/shell-update",
   "/api/oauth/cursor/auto-import",
   "/api/oauth/kiro/auto-import",
   "/api/oauth/zed/auto-import",

@@ -40,6 +40,10 @@ export default function ProfilePage() {
   // one here and enable the check in the same request.
   const [loginOnPassword, setLoginOnPassword] = useState({ open: false, value: "", confirm: "", error: "", loading: false });
   const [updateCheckStatus, setUpdateCheckStatus] = useState({ loading: false, message: "", type: "" });
+  // Last explicit check's result (only what the desktop-shell handoff needs):
+  // hasUpdate + which install channel this server was launched by.
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [shellNotifyStatus, setShellNotifyStatus] = useState({ loading: false, message: "", type: "" });
   const [isShuttingDown, setIsShuttingDown] = useState(false);
   const [settings, setSettings] = useState({ fallbackStrategy: "fill-first" });
   const [loading, setLoading] = useState(true);
@@ -465,6 +469,8 @@ export default function ProfilePage() {
   // Explicit check — works with automatic checks off (?check=1 asks the registry now).
   const checkForUpdatesNow = async () => {
     setUpdateCheckStatus({ loading: true, message: "", type: "" });
+    setUpdateInfo(null);
+    setShellNotifyStatus({ loading: false, message: "", type: "" });
     try {
       const res = await fetch("/api/version?check=1", { cache: "no-store" });
       const data = res.ok ? await res.json() : null;
@@ -472,11 +478,34 @@ export default function ProfilePage() {
         setUpdateCheckStatus({ loading: false, type: "error", message: translate("Could not reach the update server. Try again later.") });
       } else if (data.hasUpdate) {
         setUpdateCheckStatus({ loading: false, type: "info", message: translate("New version available: v${latest} (installed v${current})").replace("${latest}", data.latestVersion).replace("${current}", data.currentVersion) });
+        setUpdateInfo({ latestVersion: data.latestVersion, installChannel: data.installChannel || "" });
       } else {
         setUpdateCheckStatus({ loading: false, type: "ok", message: translate("You are on the latest version (v${current}).").replace("${current}", data.currentVersion) });
       }
     } catch {
       setUpdateCheckStatus({ loading: false, type: "error", message: translate("Could not reach the update server. Try again later.") });
+    }
+  };
+
+  // Desktop install (tray shell): hand the update over to the shell, which owns
+  // the download → SHA256 → install flow. The shell reacts to the marker with
+  // its own update window; this page cannot reach Electron directly.
+  const notifyShellUpdate = async () => {
+    setShellNotifyStatus({ loading: true, message: "", type: "" });
+    const failMessage = translate("Could not notify the desktop shell. Use the Releases page instead.");
+    try {
+      const res = await fetch("/api/version/shell-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: updateInfo?.latestVersion || "" }),
+      });
+      setShellNotifyStatus(
+        res.ok
+          ? { loading: false, type: "ok", message: translate("Desktop shell notified — confirm the download in its update window (system tray).") }
+          : { loading: false, type: "error", message: failMessage }
+      );
+    } catch {
+      setShellNotifyStatus({ loading: false, type: "error", message: failMessage });
     }
   };
 
@@ -1269,9 +1298,19 @@ export default function ProfilePage() {
                 <Button type="button" variant="secondary" size="sm" onClick={checkForUpdatesNow} loading={updateCheckStatus.loading}>
                   {translate("Check now")}
                 </Button>
+                {updateInfo && updateInfo.installChannel === "desktop" && (
+                  <Button type="button" variant="secondary" size="sm" onClick={notifyShellUpdate} loading={shellNotifyStatus.loading}>
+                    {translate("Update via desktop shell")}
+                  </Button>
+                )}
                 {updateCheckStatus.message && (
                   <p className={`text-xs sm:text-sm ${updateCheckStatus.type === "error" ? "text-red-500" : updateCheckStatus.type === "info" ? "text-primary" : "text-green-500"}`}>
                     {updateCheckStatus.message}
+                  </p>
+                )}
+                {shellNotifyStatus.message && (
+                  <p className={`text-xs sm:text-sm ${shellNotifyStatus.type === "error" ? "text-red-500" : "text-green-500"}`}>
+                    {shellNotifyStatus.message}
                   </p>
                 )}
               </div>
