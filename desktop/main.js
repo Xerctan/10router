@@ -915,7 +915,7 @@ function openUpdateWindow() {
         title: tr('update.windowTitle'),
         autoHideMenuBar: true,
         show: false,
-        backgroundColor: nativeTheme.shouldUseDarkColors ? '#191918' : '#FBF9F6',
+        backgroundColor: nativeTheme.shouldUseDarkColors ? '#1a1a1a' : '#FDFAF6',   // 与仪表盘 --color-bg(globals.css)一致
         webPreferences: {
             preload: UPDATE_PRELOAD,
             contextIsolation: true,
