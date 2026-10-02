@@ -244,6 +244,32 @@ describe("getUsageDashboard imported-row handling", () => {
     expect(dash.lifetime.cacheRequests).toBe(1);
   });
 
+  it("cacheHitRate counts raw Claude-shape rows (prompt cache-exclusive) via max(prompt, read+creation)", async () => {
+    // The old `cached >= prompt` skip silently dropped exactly these rows:
+    // raw translator usage stores prompt cache-EXCLUSIVE next to a large
+    // cache_read (e.g. zcode-free: prompt_tokens=8, cache_read=263296) —
+    // near-100% hits excluded from the rate. max(prompt, read+creation)
+    // resolves both storage shapes without a shape flag.
+    await usageRepo.saveRequestUsage({
+      ...LIVE_ROW,
+      tokens: { prompt_tokens: 8, completion_tokens: 5, cache_read_input_tokens: 263296 },
+    });
+    // Creation rides in the denominator as a miss; for the raw shape the
+    // total is read + creation (prompt is exclusive), not the tiny prompt.
+    await usageRepo.saveRequestUsage({
+      ...LIVE_ROW,
+      tokens: { prompt_tokens: 200, completion_tokens: 10, cache_read_input_tokens: 600, cache_creation_input_tokens: 200 },
+    });
+
+    const dash = await usageRepo.getUsageDashboard({ days: 30, minRequests: 1 });
+    // Prior valid row (750/1000) + these two: hit = 750+263296+600 = 264646;
+    // total = 1000 + 263296 + 800 = 265096 → 99.8%.
+    expect(dash.lifetime.cacheTokens).toBe(264646);
+    expect(dash.lifetime.cacheRequests).toBe(3);
+    expect(dash.lifetime.cacheCreationTokens).toBe(200);
+    expect(dash.lifetime.cacheHitRate).toBe(99.8);
+  });
+
   it("avgSpeed computes correctly for streaming and non-streaming requests", async () => {
     const { getAdapter } = await import("@/lib/db/driver.js");
     const db = await getAdapter();

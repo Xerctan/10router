@@ -1038,6 +1038,7 @@ export async function getUsageDashboard({ minRequests = 50 } = {}) {
     cacheHitRate: null,
     cacheTokens: 0,
     cacheRequests: 0,
+    cacheCreationTokens: 0,
   };
   {
     const allDays = db.all(`SELECT dateKey, data FROM usageDaily ORDER BY dateKey`);
@@ -1111,11 +1112,23 @@ export async function getUsageDashboard({ minRequests = 50 } = {}) {
     }
 
     // Cache hit rate over real cached requests: strictly excludes requests
-    // with no cache (cached <= 0) and mock/distorted data where input == cached
-    // (cached >= prompt or prompt <= 0).
-    let cacheTokensSum = 0;
-    let cachePromptSum = 0;
+    // with no cache. The denominator is the request's TOTAL input, which must
+    // handle two storage shapes side by side (see usageDisplay.js):
+    //   - canonical / mirasim-imported rows: promptTokens is cache-INCLUSIVE
+    //     (fresh + cache_read + cache_creation) → total = promptTokens;
+    //   - raw Claude-shape rows (prompt cache-EXCLUSIVE, e.g. prompt_tokens=8
+    //     next to cache_read_input_tokens=263296) → total = cache_read +
+    //     cache_creation.
+    // max(prompt, cached + creation) resolves both without a shape flag: an
+    // inclusive prompt always ≥ cached+creation, an exclusive prompt is
+    // dwarfed by it. The old `cached >= prompt` skip silently dropped exactly
+    // those cache-dense raw rows (near-100% hits) and biased the rate. The
+    // distorted-import guard narrows to the case it was built for: input ==
+    // cache with no writes.
+    let cacheHitSum = 0;
+    let cacheTotalSum = 0;
     let cacheRequestsCount = 0;
+    let cacheCreationSum = 0;
     try {
       const cacheRows = db.all(
         `SELECT promptTokens, tokens FROM usageHistory WHERE tokens LIKE '%cache%'`
@@ -1123,15 +1136,20 @@ export async function getUsageDashboard({ minRequests = 50 } = {}) {
       for (const r of cacheRows) {
         const t = parseJson(r.tokens, {});
         const cached = t.cached_tokens || t.cache_read_input_tokens || 0;
+        const creation = t.cache_creation_input_tokens || 0;
         const prompt = r.promptTokens || t.prompt_tokens || 0;
-        if (cached <= 0 || prompt <= 0 || cached >= prompt) continue;
-        cacheTokensSum += cached;
-        cachePromptSum += prompt;
+        if (cached <= 0 || prompt <= 0) continue;
+        if (cached === prompt && creation <= 0) continue;
+        const total = Math.max(prompt, cached + creation);
+        cacheHitSum += cached;
+        cacheTotalSum += total;
+        cacheCreationSum += creation;
         cacheRequestsCount += 1;
       }
-      lifetime.cacheHitRate = cachePromptSum > 0 ? round1((cacheTokensSum / cachePromptSum) * 100) : null;
-      lifetime.cacheTokens = cacheTokensSum;
+      lifetime.cacheHitRate = cacheTotalSum > 0 ? round1((cacheHitSum / cacheTotalSum) * 100) : null;
+      lifetime.cacheTokens = cacheHitSum;
       lifetime.cacheRequests = cacheRequestsCount;
+      lifetime.cacheCreationTokens = cacheCreationSum;
     } catch {}
   }
 
