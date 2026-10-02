@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>10Router</title>
+<style>
+:root {
+  --bg: #FBF9F6;
+  --surface: #FFFFFF;
+  --text: #383733;
+  --muted: #75736E;
+  --border: rgba(0, 0, 0, .1);
+  --primary: #D97757;
+  --primary-hover: #C56243;
+  --track: rgba(0, 0, 0, .08);
+  --danger: #EF4444;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #191918;
+    --surface: #242423;
+    --text: #ECEBE8;
+    --muted: #9E9D99;
+    --border: rgba(255, 255, 255, .1);
+    --track: rgba(255, 255, 255, .12);
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font: 13px/1.55 system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.titlebar {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 38px; padding: 0 6px 0 14px;
+  -webkit-app-region: drag;
+}
+.titlebar .brand { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+#closeBtn {
+  -webkit-app-region: no-drag;
+  width: 28px; height: 28px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--muted); font-size: 15px; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+#closeBtn:hover { background: var(--track); color: var(--text); }
+.card {
+  margin: 4px 12px 12px;
+  padding: 18px 18px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .12);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.iconRow { display: flex; align-items: center; gap: 12px; }
+.badge {
+  width: 38px; height: 38px; flex: none; border-radius: 11px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  color: #fff; font-size: 15px; font-weight: 700;
+  display: none; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(217, 119, 87, .35);
+}
+.badge.err { background: var(--danger); box-shadow: 0 4px 12px rgba(239, 68, 68, .3); }
+.badge.ok { background: #22C55E; box-shadow: 0 4px 12px rgba(34, 197, 94, .3); }
+#title { margin: 0; font-size: 15px; font-weight: 650; line-height: 1.35; }
+#version {
+  display: none; align-self: flex-start;
+  padding: 2px 10px; border-radius: 999px;
+  background: rgba(217, 119, 87, .12); color: var(--primary);
+  font-size: 13px; font-weight: 700;
+}
+#body { margin: 0; font-size: 13px; color: var(--muted); white-space: pre-line; }
+#fileName {
+  display: none; font-size: 11px; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#progress { display: none; flex-direction: column; gap: 6px; }
+.bar { height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; }
+#barFill {
+  height: 100%; width: 0; border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary), var(--primary-hover));
+  transition: width .18s ease-out;
+}
+#barFill.indet { width: 40% !important; animation: slide 1.1s ease-in-out infinite; }
+@keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+#progressText { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.spinner {
+  width: 22px; height: 22px; flex: none; display: none;
+  border: 3px solid var(--track); border-top-color: var(--primary);
+  border-radius: 50%; animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+#buttons:empty { display: none; }
+#buttons button {
+  padding: 7px 16px; font-size: 13px; font-weight: 550; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--text);
+}
+#buttons button:hover { background: var(--track); }
+#buttons button.primary {
+  background: var(--primary); border-color: var(--primary); color: #fff;
+  box-shadow: 0 3px 10px rgba(217, 119, 87, .3);
+}
+#buttons button.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+</style>
+</head>
+<body>
+<div class="titlebar">
+  <span class="brand" id="brand">10Router</span>
+  <button id="closeBtn" title="×" aria-label="close">✕</button>
+</div>
+<div class="card">
+  <div class="iconRow">
+    <div class="spinner" id="spinner"></div>
+    <div class="badge" id="badge">10</div>
+    <h1 id="title"></h1>
+  </div>
+  <span id="version"></span>
+  <p id="body"></p>
+  <div id="progress">
+    <div id="fileName"></div>
+    <div class="bar"><div id="barFill"></div></div>
+    <div id="progressText"></div>
+  </div>
+  <div id="buttons"></div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var api = window.updateApi;
+  var $ = function (id) { return document.getElementById(id); };
+  var strings = {};
+
+  function fit() {
+    requestAnimationFrame(function () {
+      api.fitHeight(Math.ceil(document.body.getBoundingClientRect().height));
+    });
+  }
+
+  function fmtMb(n) { return (n / 1048576).toFixed(1); }
+
+  function addBtn(label, action, primary) {
+    var b = document.createElement('button');
+    b.textContent = label;
+    if (primary) b.className = 'primary';
+    b.addEventListener('click', function () { api.action(action); });
+    $('buttons').appendChild(b);
+  }
+
+  function render(view) {
+    if (!view || !view.state) return;
+    var st = view.state;
+    var badge = $('badge');
+    badge.className = 'badge';
+    badge.style.display = 'none';
+    $('spinner').style.display = st === 'checking' ? 'block' : 'none';
+    if (st === 'error') { badge.textContent = '!'; badge.classList.add('err'); badge.style.display = 'flex'; }
+    else if (st === 'latest' || st === 'ready') { badge.textContent = '✓'; badge.classList.add('ok'); badge.style.display = 'flex'; }
+    else if (st === 'available' || st === 'downloading') { badge.textContent = '10'; badge.style.display = 'flex'; }
+
+    $('title').textContent = view.title || '';
+    var ver = $('version');
+    if (st === 'available' && view.version) {
+      ver.textContent = 'v' + view.version;
+      ver.style.display = 'inline-block';
+    } else {
+      ver.style.display = 'none';
+    }
+    var bodyEl = $('body');
+    bodyEl.textContent = view.body || view.detail || '';
+    bodyEl.style.display = bodyEl.textContent ? 'block' : 'none';
+
+    var prog = $('progress');
+    if (st === 'downloading') {
+      prog.style.display = 'flex';
+      $('fileName').textContent = view.file || '';
+      $('fileName').style.display = view.file ? 'block' : 'none';
+      var got = Number(view.got) || 0;
+      var total = Number(view.total) || 0;
+      var fill = $('barFill');
+      if (total > 0) {
+        var pct = Math.min(100, Math.round((got / total) * 100));
+        fill.classList.remove('indet');
+        fill.style.width = pct + '%';
+        $('progressText').textContent = pct + '% · ' + fmtMb(got) + ' / ' + fmtMb(total) + ' MB';
+      } else {
+        fill.classList.add('indet');
+        $('progressText').textContent = fmtMb(got) + ' MB';
+      }
+    } else {
+      prog.style.display = 'none';
+    }
+
+    var btns = $('buttons');
+    btns.textContent = '';
+    if (st === 'latest') {
+      addBtn(strings.ok, 'close', true);
+    } else if (st === 'available' && view.mode === 'download') {
+      addBtn(strings.downloadInstall, 'download', true);
+      addBtn(strings.openReleases, 'open-releases', false);
+      addBtn(strings.later, 'close', false);
+    } else if (st === 'available') {
+      addBtn(strings.openReleases, 'open-releases', true);
+      addBtn(strings.later, 'close', false);
+    } else if (st === 'downloading') {
+      addBtn(strings.cancel, 'cancel', false);
+    } else if (st === 'ready') {
+      addBtn(view.installLabel || 'Install', 'install', true);
+      addBtn(strings.later, 'close', false);
+    } else if (st === 'error') {
+      addBtn(strings.retry, 'retry', true);
+      addBtn(strings.openReleases, 'open-releases', false);
+      addBtn(strings.close, 'close', false);
+    }
+    fit();
+  }
+
+  $('closeBtn').addEventListener('click', function () { api.action('close'); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') api.action('close'); });
+  if (window.ResizeObserver) new ResizeObserver(fit).observe(document.body);
+  api.onState(function (view) { render(view); fit(); });
+  api.bootstrap().then(function (boot) {
+    if (!boot) return;
+    strings = boot.strings || {};
+    $('brand').textContent = strings.windowTitle || '10Router';
+    document.title = strings.windowTitle || '10Router';
+    render(boot.view);
+    fit();
+  });
+})();
+</script>
+</body>
+</html>

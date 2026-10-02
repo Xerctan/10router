@@ -29,6 +29,8 @@
     "files": [
       "main.js",
       "preload-container.js",
+      "preload-update.js",
+      "update-window.html",
       "passwordStore.js",
       "releaseUpdater.js",
       "package.json",

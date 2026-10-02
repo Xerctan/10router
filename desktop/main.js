@@ -89,6 +89,10 @@ const STRINGS = {
         'update.spawnFailedTitle': 'Could not start the installer',
         'update.spawnFailedBody': 'Failed to launch the installer:\n{message}\n\nYou can run it manually:\n{path}',
         'update.sizeUnknown': 'size unknown',
+        'update.windowTitle': '10Router Update',
+        'update.checking': 'Checking for updates…',
+        'update.cancel': 'Cancel',
+        'update.retry': 'Retry',
         'about.detail': 'FREE AI Router & Token Saver\n\nVersion: v{version}\nShell: v{shell}\nData folder: {dataDir}',
         'about.github': 'GitHub Page',
         'dialog.later': 'Later',
@@ -210,6 +214,10 @@ const STRINGS = {
         'update.spawnFailedTitle': '无法启动安装程序',
         'update.spawnFailedBody': '安装程序启动失败:\n{message}\n\n也可以手动运行已下载的安装包:\n{path}',
         'update.sizeUnknown': '大小未知',
+        'update.windowTitle': '10Router 更新',
+        'update.checking': '正在检查更新…',
+        'update.cancel': '取消',
+        'update.retry': '重试',
         'about.detail': 'FREE AI Router & Token Saver\n\n版本: v{version}\n壳版本: v{shell}\n数据目录: {dataDir}',
         'about.github': 'GitHub 主页',
         'dialog.later': '稍后',
@@ -331,6 +339,10 @@ const STRINGS = {
         'update.spawnFailedTitle': '無法啟動安裝程式',
         'update.spawnFailedBody': '安裝程式啟動失敗:\n{message}\n\n也可以手動執行已下載的安裝包:\n{path}',
         'update.sizeUnknown': '大小未知',
+        'update.windowTitle': '10Router 更新',
+        'update.checking': '正在檢查更新…',
+        'update.cancel': '取消',
+        'update.retry': '重試',
         'about.detail': 'FREE AI Router & Token Saver\n\n版本: v{version}\n殼版本: v{shell}\n資料目錄: {dataDir}',
         'about.github': 'GitHub 首頁',
         'dialog.later': '稍後',
@@ -845,12 +857,132 @@ function fetchJson(url, timeoutMs = 8000) {
     });
 }
 
+// ──────────────────────── 应用内更新窗（统一 HTML 承载更新全流程） ─────────────
+// 一个无边框小窗(update-window.html + preload-update.js)承载整个状态机:
+//   checking → available(manual=只引导 Releases / download=可下载安装)
+//            → downloading(进度+取消) → ready(立即安装/稍后) → 安装退出
+//        任意节点 ↘ latest(已最新) / error(重试 / 打开 Releases)
+// 关窗即取消下载(AbortController);页面无 nodeIntegration(contextIsolation +
+// sandbox + preload 白名单 API),文案全部主进程 tr() 渲染后 IPC 推送——tr() 单源,
+// 页面只做展示。替代旧的原生 dialog/数据 URL 进度窗。
+const UPDATE_HTML = path.join(__dirname, 'update-window.html');
+const UPDATE_PRELOAD = path.join(__dirname, 'preload-update.js');
+let updateWin = null;
+let updateDlCtrl = null;                       // 下载中的 AbortController(关窗/取消 → abort)
+let updateView = { state: 'checking' };        // 最近一次推给页面的状态(页面晚加载时由 bootstrap 补发)
+let updateCtx = { phase: 'check', inst: null, file: null };   // error 态「重试」所需的上下文
+
+function sendUpdateState(state, extra) {
+    updateView = { state, ...(extra || {}) };
+    try {
+        if (updateWin && !updateWin.isDestroyed()) updateWin.webContents.send('update:state', updateView);
+    } catch { /* 窗口可能已关 */ }
+}
+
+// 页面静态按钮/标题文案(bootstrap 一次性下发);带参数的正文在各状态 payload 里现算
+function updateStrings() {
+    return {
+        windowTitle: tr('update.windowTitle'),
+        downloadInstall: tr('update.downloadInstall'),
+        openReleases: tr('update.openReleases'),
+        later: tr('dialog.later'),
+        ok: tr('dialog.ok'),
+        cancel: tr('update.cancel'),
+        retry: tr('update.retry'),
+        close: tr('dialog.close'),
+    };
+}
+
+function clearUpdateProgress() {
+    try { if (updateWin && !updateWin.isDestroyed()) updateWin.setProgressBar(-1); } catch { /* ignore */ }
+}
+
+function openUpdateWindow() {
+    if (updateWin && !updateWin.isDestroyed()) {
+        updateWin.show();
+        updateWin.focus();
+        return;
+    }
+    updateWin = new BrowserWindow({
+        width: 420,
+        height: 360,
+        useContentSize: true,
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        fullscreenable: false,
+        frame: false,                      // 页面内自定义标题栏(拖拽区 + 关闭按钮)
+        title: tr('update.windowTitle'),
+        autoHideMenuBar: true,
+        show: false,
+        backgroundColor: nativeTheme.shouldUseDarkColors ? '#191918' : '#FBF9F6',
+        webPreferences: {
+            preload: UPDATE_PRELOAD,
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true,
+        },
+    });
+    updateWin.once('ready-to-show', () => { try { if (updateWin && !updateWin.isDestroyed()) updateWin.show(); } catch { /* ignore */ } });
+    // 本地 file 页面:外链/导航一律拦死(「打开 Releases」走主进程 shell.openExternal)
+    updateWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    updateWin.webContents.on('will-navigate', (e, url) => {
+        if (!String(url).startsWith('file://')) e.preventDefault();
+    });
+    updateWin.on('closed', () => {
+        // 关窗即取消下载
+        if (updateDlCtrl) { try { updateDlCtrl.abort(); } catch { /* ignore */ } updateDlCtrl = null; }
+        updateWin = null;
+    });
+    updateWin.loadFile(UPDATE_HTML).catch((e) => {
+        log(`update window load failed: ${e && e.message}`);
+        try { updateWin.close(); } catch { /* ignore */ }
+    });
+}
+
+// 页面 bootstrap:一次性静态文案 + 当前状态(页面可能比状态推送晚完成加载)
+ipcMain.handle('update:bootstrap', (e) => {
+    if (!updateWin || updateWin.isDestroyed() || e.sender !== updateWin.webContents) return null;
+    return { strings: updateStrings(), view: updateView };
+});
+
+// 页面量好内容高度后回报,窗口按状态贴合(各态高度不同,宽度恒 420)
+ipcMain.on('update:fit', (e, height) => {
+    if (!updateWin || updateWin.isDestroyed() || e.sender !== updateWin.webContents) return;
+    const h = Math.max(200, Math.min(640, Math.ceil(Number(height) || 0)));
+    try { updateWin.setContentSize(420, h); } catch { /* ignore */ }
+});
+
+ipcMain.on('update:action', (e, msg) => {
+    if (!updateWin || updateWin.isDestroyed() || e.sender !== updateWin.webContents) return;
+    const action = msg && msg.action;
+    if (action === 'close' || action === 'later') { updateWin.close(); return; }
+    if (action === 'cancel') {
+        if (updateDlCtrl) { try { updateDlCtrl.abort(); } catch { /* ignore */ } updateDlCtrl = null; }
+        updateWin.close();   // closed 处理器兜底 abort,语义与关窗一致
+        return;
+    }
+    if (action === 'open-releases') { shell.openExternal(RELEASES_URL); return; }
+    if (action === 'download') { if (updateCtx.inst && !updateDlCtrl) startUpdateDownload(updateCtx.inst); return; }
+    if (action === 'install') { installDownloadedUpdate(); return; }
+    if (action === 'retry') retryUpdatePhase();
+});
+
+function retryUpdatePhase() {
+    if (updateCtx.phase === 'download' && updateCtx.inst) { startUpdateDownload(updateCtx.inst); return; }
+    if (updateCtx.phase === 'install' && updateCtx.file) { installDownloadedUpdate(); return; }
+    checkForUpdates();   // phase === 'check':重跑完整检查流程
+}
+
 // 检查更新:主路径走本地服务 /api/version(免鉴权,带 npm latest 1h 缓存),
 // 与 fpk/CLI 同一数据源。Windows 安装版发现新版本后可直接下载对应 release 的
 // 10Router.Setup.<版本>.exe(SHA256 校验)并运行安装,不再只引导去 Releases 页;
 // 本地服务不在时直查 GitHub Releases API 兜底。release 缺安装包、macOS、
 // Portable 则维持「打开 Releases 页面」的旧引导。
 async function checkForUpdates() {
+    openUpdateWindow();
+    updateCtx.phase = 'check';
+    sendUpdateState('checking', { title: tr('update.checking') });
     let info = null;
     try {
         // ?check=1:手动检查是明确操作,即使「设置 → 安全」关闭了自动检查更新也照常查询。
@@ -863,7 +995,10 @@ async function checkForUpdates() {
     if (info.hasUpdate) {
         await offerUpdate(info.latestVersion, info.currentVersion);
     } else {
-        dialog.showMessageBox({ type: 'info', title: tr('update.latestTitle'), message: tr('update.latestTitle'), detail: tr('update.latestBody', { current: info.currentVersion }), buttons: [tr('dialog.ok')] });
+        sendUpdateState('latest', {
+            title: tr('update.latestTitle'),
+            body: tr('update.latestBody', { current: info.currentVersion }),
+        });
     }
 }
 
@@ -891,80 +1026,36 @@ async function offerUpdate(latestVersion, currentVersion) {
         try { inst = await resolveInstaller(latestVersion); } catch { /* release 未发布/网络失败 → 手动引导 */ }
     }
     if (inst) {
-        await offerDownloadableUpdate(inst, currentVersion);
+        offerDownloadableUpdate(inst, currentVersion);
     } else {
-        await offerManualUpdate(latestVersion, currentVersion, RELEASES_URL);
+        offerManualUpdate(latestVersion, currentVersion);
     }
 }
 
-// 旧引导:应用内装不了(macOS / Portable / release 缺安装包),去 Releases 页手动下
-async function offerManualUpdate(latestVersion, currentVersion, relUrl) {
-    const choice = await dialog.showMessageBox({
-        type: 'info',
+// 手动引导:应用内装不了(macOS / Portable / release 缺安装包),只给「打开 Releases」
+function offerManualUpdate(latestVersion, currentVersion) {
+    sendUpdateState('available', {
+        mode: 'manual',
+        version: latestVersion,
         title: tr('update.availableTitle'),
-        message: tr('update.availableTitle'),
-        detail: tr('update.availableBody', { latest: latestVersion, current: currentVersion }),
-        buttons: [tr('update.openReleases'), tr('dialog.later')],
-        defaultId: 0,
-        cancelId: 1,
+        body: tr('update.availableBody', { latest: latestVersion, current: currentVersion }),
     });
-    if (choice.response === 0) shell.openExternal(relUrl || RELEASES_URL);
 }
 
-// 新版本 → 三选一:下载并安装(进度窗 + SHA256 校验后运行安装包)/ 打开 Releases 页 / 稍后
-async function offerDownloadableUpdate(inst, currentVersion) {
+// 可下载:给「下载并安装 / 打开 Releases / 稍后」,下载走 startUpdateDownload
+function offerDownloadableUpdate(inst, currentVersion) {
+    updateCtx.inst = inst;
     const sizeText = inst.asset.size ? `≈${(inst.asset.size / 1048576).toFixed(1)} MB` : tr('update.sizeUnknown');
-    const choice = await dialog.showMessageBox({
-        type: 'info',
+    sendUpdateState('available', {
+        mode: 'download',
+        version: inst.version,
         title: tr('update.availableTitle'),
-        message: tr('update.availableTitle'),
-        detail: tr('update.downloadBody', { latest: inst.version, current: currentVersion, size: sizeText }),
-        buttons: [tr('update.downloadInstall'), tr('update.openReleases'), tr('dialog.later')],
-        defaultId: 0,
-        cancelId: 2,
+        body: tr('update.downloadBody', { latest: inst.version, current: currentVersion, size: sizeText }),
     });
-    if (choice.response === 1) { shell.openExternal(RELEASES_URL); return; }
-    if (choice.response !== 0) return;
-    let file;
-    try {
-        file = await downloadWithProgress(inst);
-    } catch (e) {
-        if ((e && e.name) === 'AbortError') return;   // 关掉进度窗=取消
-        const r = await dialog.showMessageBox({
-            type: 'warning',
-            title: tr('update.downloadFailedTitle'),
-            message: tr('update.downloadFailedTitle'),
-            detail: String((e && e.message) || e),
-            buttons: [tr('update.openReleases'), tr('dialog.ok')],
-            defaultId: 0,
-            cancelId: 1,
-        });
-        if (r.response === 0) shell.openExternal(RELEASES_URL);
-        return;
-    }
-    const run = await dialog.showMessageBox({
-        type: 'question',
-        title: tr('update.readyTitle', { latest: inst.version }),
-        message: tr('update.readyTitle', { latest: inst.version }),
-        detail: tr('update.readyBody'),
-        buttons: [tr('update.installNow'), tr('dialog.later')],
-        defaultId: 0,
-        cancelId: 1,
-    });
-    if (run.response !== 0) return;
-    try {
-        // 先确定性停掉 sidecar 再起安装器：安装器到达卸载/替换阶段时文件锁
-        // 必须已经释放（此前 spawn 与 app.quit 并发竞速，NSIS 撞上「无法
-        // 关闭/卸载旧文件」）。before-quit 的兜底路径见文件尾部。
-        await stopServer();
-        spawn(file, [], { detached: true, stdio: 'ignore' }).unref();
-        app.quit();   // 先退出再让安装器接管;NSIS 遇到残留进程也会引导关闭
-    } catch (e) {
-        dialog.showErrorBox(tr('update.spawnFailedTitle'), tr('update.spawnFailedBody', { message: String((e && e.message) || e), path: file }));
-    }
 }
 
-// 下载安装包到临时目录(进度窗 + 任务栏进度条,关窗即取消),校验通过返回文件路径
+// 下载安装包到临时目录(进度推更新窗 + 任务栏进度条,关窗/取消即 abort),
+// SHA256 校验通过返回文件路径
 async function downloadInstallerToTemp(inst, onProgress, signal) {
     let expectedSha = inst.expectedSha || null;
     if (inst.sumsUrl) {
@@ -1001,37 +1092,60 @@ async function downloadInstallerToTemp(inst, onProgress, signal) {
     return file;
 }
 
-// 进度小窗(窗口标题 + 文本 + 任务栏进度条;关窗=取消)
-function downloadWithProgress(inst) {
-    return new Promise((resolve, reject) => {
-        const title = tr('update.downloadingTitle', { latest: inst.version });
-        const dlWin = new BrowserWindow({
-            width: 460, height: 100, resizable: false, maximizable: false, fullscreenable: false,
-            title, autoHideMenuBar: true, webPreferences: { sandbox: true },
-        });
-        dlWin.setMenuBarVisibility(false);
-        dlWin.loadURL('data:text/html,' + encodeURIComponent(
-            `<meta charset="utf-8"><body style="margin:14px;font:13px/1.6 'Segoe UI',sans-serif;color:#444">`
-            + `<div>${inst.asset.name}</div><div id="p" style="margin-top:4px;color:#888">…</div>`));
-        const ctrl = new AbortController();
-        let cancelled = false;
-        dlWin.on('closed', () => { cancelled = true; ctrl.abort(); });
-        const onProgress = (got, total) => {
-            const mb = (got / 1048576).toFixed(1);
-            const text = total ? `${Math.min(100, Math.round((got / total) * 100))}% (${mb} MB)` : `${mb} MB`;
-            try {
-                dlWin.setTitle(`${title} ${text}`);
-                dlWin.setProgressBar(total ? Math.min(1, got / total) : 2);
-                dlWin.webContents.executeJavaScript(`document.getElementById('p').textContent=${JSON.stringify(text)}`).catch(() => {});
-            } catch { /* 窗口可能已关 */ }
-        };
-        downloadInstallerToTemp(inst, onProgress, ctrl.signal)
-            .then((file) => { try { dlWin.destroy(); } catch { /* 已关 */ } resolve(file); })
-            .catch((e) => {
-                try { dlWin.destroy(); } catch { /* 已关 */ }
-                reject(cancelled ? Object.assign(new Error('cancelled'), { name: 'AbortError' }) : e);
+// 下载中:进度推页(got/total,页面格式化 % 与 MB)+ 任务栏进度条;
+// 关窗/取消按钮 → AbortController → 静默结束;失败 → error 态(可重试)
+function startUpdateDownload(inst) {
+    updateCtx.phase = 'download';
+    const ctrl = new AbortController();
+    updateDlCtrl = ctrl;
+    const title = tr('update.downloadingTitle', { latest: inst.version });
+    const push = (got, total) => {
+        sendUpdateState('downloading', { title, file: inst.asset.name, got, total });
+        try {
+            if (updateWin && !updateWin.isDestroyed()) updateWin.setProgressBar(total ? Math.min(1, got / total) : 2);
+        } catch { /* 窗口可能已关 */ }
+    };
+    push(0, inst.asset.size || 0);
+    downloadInstallerToTemp(inst, push, ctrl.signal)
+        .then((file) => {
+            updateDlCtrl = null;
+            clearUpdateProgress();
+            updateCtx.phase = 'install';
+            updateCtx.file = file;
+            sendUpdateState('ready', {
+                title: tr('update.readyTitle', { latest: inst.version }),
+                body: tr('update.readyBody'),
+                installLabel: tr('update.installNow'),
             });
-    });
+        })
+        .catch((err) => {
+            updateDlCtrl = null;
+            clearUpdateProgress();
+            if (!updateWin || updateWin.isDestroyed()) return;   // 关窗取消:静默
+            if ((err && err.name) === 'AbortError') return;      // 取消按钮已关窗
+            sendUpdateState('error', {
+                title: tr('update.downloadFailedTitle'),
+                detail: String((err && err.message) || err),
+            });
+        });
+}
+
+// 就绪态「立即安装」:先确定性停 sidecar 再起安装器(文件锁必须先释放,
+// 同路径注释见文件尾部 before-quit);失败回落 error 态,可重试。
+async function installDownloadedUpdate() {
+    const file = updateCtx.file;
+    if (!file) return;
+    try {
+        // 先停服务再 spawn:安装器到达卸载/替换阶段时文件锁必须已经释放。
+        await stopServer();
+        spawn(file, [], { detached: true, stdio: 'ignore' }).unref();
+        app.quit();   // 先退出再让安装器接管;NSIS 遇到残留进程也会引导关闭
+    } catch (e) {
+        sendUpdateState('error', {
+            title: tr('update.spawnFailedTitle'),
+            detail: tr('update.spawnFailedBody', { message: String((e && e.message) || e), path: file }),
+        });
+    }
 }
 
 // /api/version 不可达(服务没起/挂了)时的兜底:直查 GitHub 最新正式 release,
@@ -1044,25 +1158,22 @@ async function checkUpdateViaGitHub() {
         const inst = releaseUpdater.pickInstaller(rel);
         const current = getServiceVersion();
         if (!inst || !releaseUpdater.isNewerVersion(inst.version, current)) {
-            dialog.showMessageBox({ type: 'info', title: tr('update.latestTitle'), message: tr('update.latestTitle'), detail: tr('update.latestBody', { current }), buttons: [tr('dialog.ok')] });
+            sendUpdateState('latest', {
+                title: tr('update.latestTitle'),
+                body: tr('update.latestBody', { current }),
+            });
             return;
         }
         if (canInstallInPlace()) {
-            await offerDownloadableUpdate(inst, current);
+            offerDownloadableUpdate(inst, current);
         } else {
-            await offerManualUpdate(inst.version, current, RELEASES_URL);
+            offerManualUpdate(inst.version, current);
         }
     } catch (e) {
-        const r = await dialog.showMessageBox({
-            type: 'warning',
+        sendUpdateState('error', {
             title: tr('update.failedTitle'),
-            message: tr('update.failedTitle'),
             detail: `${tr('update.failedBody')}\n\n${String((e && e.message) || e)}`,
-            buttons: [tr('update.openReleases'), tr('dialog.ok')],
-            defaultId: 0,
-            cancelId: 1,
         });
-        if (r.response === 0) shell.openExternal(RELEASES_URL);
     }
 }
 

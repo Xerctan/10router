@@ -10,8 +10,13 @@
 
 ## v1.3.2 (未发布)
 
+### ✨ 新功能
+
+- **应用内自更新 UI 重做（`desktop/update-window.html`）**：原生「安装包已就绪」对话框与 data-URL 进度弹窗全部退役，改为统一的无边框 HTML 更新窗——状态机 检查中 → 有新版 → 下载中（进度条 + % + MB，关窗即中止）→ 就绪（立即安装/稍后）→ 错误（重试/打开 Releases）；420 宽定高自适应（ResizeObserver 回报）、圆角卡片 + 品牌主色、深色模式自适应、contextIsolation + sandbox preload（白名单 bridge）、严格 CSP 无远程资源；行为契约不变（SHA256 校验、安装前 `stopServer` 再 spawn、macOS/Portable 走 Releases 引导）。用例 `desktop-update-window.test.js` 8 例。
+
 ### 🐛 修复
 
+- **`/v1/models` 无连接时 noAuth 静态模型不再"无窗口"**：`exposeStaticModels` 发射通道此前只带 pinned override，不带 catalog 能力，客户端拿不到 context_length/max_completion_tokens 只能按模型名瞎猜（zcode-free 在 agent 模型卡上裸奔）；现与有连接路径同走 `getCapabilitiesForModel`，同步发布 `capabilities`。用例 `models-empty-connections` 新增 1 例。
 - **Windows 升级安装不再被旧进程锁死（严重）**：sidecar（Next 服务）与托盘是同一个 `10Router.exe`（`ELECTRON_RUN_AS_NODE` 无窗进程），旧版卸载器对它只能"找窗口关闭"、杀不掉——v1.3.0 → 1.3.1 升级实测「Failed to uninstall old application files / 无法关闭」。两道防线：① NSIS `customInit` 在新安装器最早阶段 `taskkill /F /IM 10Router.exe /T`（升级跑的是旧版卸载器，代码改不到，只能由新安装器先清场）；② 退出路径确定性停车——托盘退出 / 应用内自更新 / NSIS 引导关闭都先 `stopServer()` 再退出，安装器到达替换阶段时锁已释放（此前 updater 是 spawn 与 quit 竞速）。1.3.1 的四个 Windows 桌面资产已**原位替换**（同版本号，CI 原版同样未签名；端到端验证：app 运行 5 进程中 `/S` 覆盖安装 24 秒完成、进程全清、版本完整）。用例 `desktop-install-kill.test.js` 5 例。
 
 ## v1.3.1 (2026-10-02)
