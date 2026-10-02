@@ -70,7 +70,7 @@ describe("CodeBuddy international static model catalog", () => {
   it("carries the published name and credit multiplier for the probed additions", () => {
     const byId = Object.fromEntries(entry.models.map((model) => [model.id, model]));
     // every one of these answered 200 on a live request through the gateway
-    expect(byId["deepseek-v4.1-flash"]).toMatchObject({ name: "DeepSeek-V4.1-Flash", rateMultiplier: 0.03 });
+    expect(byId["deepseek-v4.1-flash"]).toMatchObject({ name: "DeepSeek-V4.1-Flash", rateMultiplier: 0.11 });
     expect(byId["glm-5.1"]).toMatchObject({ name: "GLM-5.1", rateMultiplier: 0.79 });
     expect(byId["glm-5v-turbo"]).toMatchObject({ name: "GLM-5v-Turbo", rateMultiplier: 0.71 });
     expect(byId["minimax-m3"]).toMatchObject({ name: "MiniMax-M3", rateMultiplier: 0.25 });

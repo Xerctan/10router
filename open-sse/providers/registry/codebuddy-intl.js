@@ -126,7 +126,7 @@ export default {
     // badge, which shows `free` while the window is open and falls back to
     // 0.03x by itself afterwards — no hand cleanup, and the CN/intl parity
     // invariant in tests/unit/codebuddy-intl-models.test.js keeps holding.
-    { id: "deepseek-v4.1-flash", name: "DeepSeek-V4.1-Flash", rateMultiplier: 0.03, promoFreeUntil: "2026-09-24" },
+    { id: "deepseek-v4.1-flash", name: "DeepSeek-V4.1-Flash", rateMultiplier: 0.11 },
   ],
   oauth: {
     baseUrl: "https://www.codebuddy.ai",

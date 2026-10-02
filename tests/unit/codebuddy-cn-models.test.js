@@ -22,6 +22,7 @@ describe("CodeBuddy CN static model catalog", () => {
     expect(cn.models.map((model) => model.id)).toEqual([
       "hy4-preview",
       "hy3",
+      "space-bunny",
       "glm-5v-turbo",
       "glm-5.3",
       "glm-5.3-flash",
@@ -45,6 +46,8 @@ describe("CodeBuddy CN static model catalog", () => {
     expect(rates).toEqual({
       "hy4-preview": 0.29,
       hy3: 0,
+      // 10/2–10/7 限时折扣价（官方应用上架页标注）；窗口后按积分页回填。
+      "space-bunny": 0.03,
       "glm-5v-turbo": 0.71,
       "glm-5.3": 0.79,
       "glm-5.3-flash": 0.06,
@@ -54,7 +57,8 @@ describe("CodeBuddy CN static model catalog", () => {
       "kimi-k3": 1.62,
       "kimi-k2.7": 0.57,
       "kimi-k2.6": 0.52,
-      "deepseek-v4.1-flash": 0.03,
+      // 2026-10-02 官方积分页已回调 0.03 → 0.11（首周尝鲜价结束）。
+      "deepseek-v4.1-flash": 0.11,
       "deepseek-v4-pro": 0.51,
     });
     // The night-free window itself, pinned (intl hy4 is free ALL DAY — separate).

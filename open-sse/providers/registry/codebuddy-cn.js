@@ -76,6 +76,11 @@ export default {
     // the window and 0.29x outside it.
     { id: "hy4-preview", name: "Hy4-Preview", rateMultiplier: 0.29, nightFree: { from: 23, to: 8 } },
     { id: "hy3", name: "Hy3", rateMultiplier: 0 },
+    // Space-Bunny：2026-10-02 官方应用（WorkBuddy 工作台）上架的"匿名大模型"，
+    // 原生多模态输入、1M 上下文、编码向。0.03x 为 10/2–10/7 限时折扣价，窗口
+    // 结束后按官方积分页回填正式倍率（deepseek-v4.1-flash 同期从 0.03 回调到
+    // 0.11 的先例说明这类新模型首周价会动）。
+    { id: "space-bunny", name: "Space-Bunny", rateMultiplier: 0.03 },
     { id: "glm-5v-turbo", name: "GLM-5v-Turbo", rateMultiplier: 0.71 },
     { id: "glm-5.3", name: "GLM-5.3", rateMultiplier: 0.79 },
     { id: "glm-5.3-flash", name: "GLM-5.3-Flash", rateMultiplier: 0.06 },
@@ -85,7 +90,8 @@ export default {
     { id: "kimi-k3", name: "Kimi-K3", rateMultiplier: 1.62 },
     { id: "kimi-k2.7", name: "Kimi-K2.7-Code", rateMultiplier: 0.57 },
     { id: "kimi-k2.6", name: "Kimi-K2.6", rateMultiplier: 0.52 },
-    { id: "deepseek-v4.1-flash", name: "DeepSeek-V4.1-Flash", rateMultiplier: 0.03 },
+    // 官方积分页 2026-10-02 已将此模型回调至 0.11x（曾为首周 0.03x 尝鲜价）。
+    { id: "deepseek-v4.1-flash", name: "DeepSeek-V4.1-Flash", rateMultiplier: 0.11 },
     { id: "deepseek-v4-pro", name: "DeepSeek-V4-Pro", rateMultiplier: 0.51 },
     // NOTE: the GPT/Gemini family (gpt-5.6-sol/terra/luna, gpt-5.5, gpt-5.4,
     // gpt-5.3-codex, gemini-3.5-flash) belongs to CodeBuddy *international*
