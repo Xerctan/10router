@@ -73,7 +73,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "10Router"
+      "shortcutName": "10Router",
+      "include": "nsis/installer.nsh"
     },
     "portable": {
       "artifactName": "10Router-Portable-${version}.exe"

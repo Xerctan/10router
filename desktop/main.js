@@ -953,6 +953,10 @@ async function offerDownloadableUpdate(inst, currentVersion) {
     });
     if (run.response !== 0) return;
     try {
+        // 先确定性停掉 sidecar 再起安装器：安装器到达卸载/替换阶段时文件锁
+        // 必须已经释放（此前 spawn 与 app.quit 并发竞速，NSIS 撞上「无法
+        // 关闭/卸载旧文件」）。before-quit 的兜底路径见文件尾部。
+        await stopServer();
         spawn(file, [], { detached: true, stdio: 'ignore' }).unref();
         app.quit();   // 先退出再让安装器接管;NSIS 遇到残留进程也会引导关闭
     } catch (e) {
@@ -1968,7 +1972,21 @@ if (!gotLock) {
         await startServer();          // 启动即拉起服务
     });
 
-    app.on('before-quit', () => { quitting = true; });
+    // 退出=确定性停车：sidecar 与托盘是同一个 10Router.exe（ELECTRON_RUN_AS_NODE，
+    // 无窗口），安装器/卸载器对它只能强杀——而旧版本的卸载器没有这一段。
+    // 这里在退出前先把服务停掉（≤5s），保证用户手动退出托盘、应用内自更新、
+    // NSIS 引导关闭三种路径下文件锁都真正释放。will-quit 的 taskkill 留作兜底。
+    let quitStopping = false;
+    app.on('before-quit', (e) => {
+        quitting = true;
+        if (!quitStopping && nodeProc) {
+            quitStopping = true;
+            e.preventDefault();
+            stopServer()
+                .catch(() => { })
+                .finally(() => app.exit(0));
+        }
+    });
 
     app.on('will-quit', () => {
         if (nodeProc) {

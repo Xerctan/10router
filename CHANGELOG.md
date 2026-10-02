@@ -2,6 +2,18 @@
 
 > 面向用户的精简更新见 [`public/i18n/changelog/`](https://github.com/techysy/10router/tree/main/public/i18n/changelog)（`en.md` / `zh-CN.md` / `zh-TW.md`，仪表盘「Change Log」按界面语言加载对应文件）。本文件为完整开发日志，按版本从上往下排列。
 
+## v1.3.2 (未发布)
+
+### 🐛 修复
+
+- **`/v1/models` noAuth 免登录静态模型补齐上下文窗口 / 输出上限上报**：`exposeStaticModels` 发射通道（zcode-free 等无连接供应商的唯一出口）此前只发 `id/owned_by`，唯独这里不调 `getCapabilitiesForModel()`——客户端读不到 `context_length` / `max_completion_tokens`，智能体模型卡显示「该供应商也未上报窗口大小」、无法显示占用百分比；而能力表里 `glm-5.3-flash`（1M / 131072）等条目一直都在，仪表盘因走本地解析所以显示正常，只有对外列表漏了。现与已连接供应商循环同口径：LLM 类条目挂 `capabilities` 并落顶层 snake_case 字段，仪表盘钉值（modelCaps 覆盖）仍在其上。用例 `tests/unit/models-empty-connections.test.js` 补 2 例（目录值上报 / 钉值优先、嵌套块同步）。
+
+## v1.3.2 (未发布)
+
+### 🐛 修复
+
+- **Windows 升级安装不再被旧进程锁死（严重）**：sidecar（Next 服务）与托盘是同一个 `10Router.exe`（`ELECTRON_RUN_AS_NODE` 无窗进程），旧版卸载器对它只能"找窗口关闭"、杀不掉——v1.3.0 → 1.3.1 升级实测「Failed to uninstall old application files / 无法关闭」。两道防线：① NSIS `customInit` 在新安装器最早阶段 `taskkill /F /IM 10Router.exe /T`（升级跑的是旧版卸载器，代码改不到，只能由新安装器先清场）；② 退出路径确定性停车——托盘退出 / 应用内自更新 / NSIS 引导关闭都先 `stopServer()` 再退出，安装器到达替换阶段时锁已释放（此前 updater 是 spawn 与 quit 竞速）。1.3.1 的四个 Windows 桌面资产已**原位替换**（同版本号，CI 原版同样未签名；端到端验证：app 运行 5 进程中 `/S` 覆盖安装 24 秒完成、进程全清、版本完整）。用例 `desktop-install-kill.test.js` 5 例。
+
 ## v1.3.1 (2026-10-02)
 
 ### ✨ 新功能
