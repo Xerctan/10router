@@ -36,7 +36,10 @@
   }
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+/* 固定尺寸无边框窗:setContentSize 的 DIP↔物理像素换算在非整数缩放(125%/150%)
+   下可能比内容矮零点几像素,Chromium 对任何 >0 的溢出都给整条滚动条——固定窗
+   不该滚,直接掐掉。内容高度仍由 fit 精确回报,这里只兜亚像素的底。 */
+html, body { margin: 0; padding: 0; overflow: hidden; }
 body {
   /* --font-sans(globals.css:199),CJK 回退追加在后 */
   font: 13px/1.55 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, 'PingFang SC', 'Microsoft YaHei', sans-serif;

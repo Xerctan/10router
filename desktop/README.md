@@ -27,10 +27,12 @@
 
 ```
 desktop/
-├── main.js          # 全部壳逻辑(托盘/窗口/启停/健康轮询/单实例)
+├── main.js          # 全部壳逻辑(托盘/窗口/启停/健康轮询/单实例/更新握手)
+├── updateRequest.js # 仪表盘→壳 更新握手 marker 的解析与一次性消费
 ├── package.json     # electron + electron-builder(devDeps)+ build 配置
 ├── icon.ico/.png    # 托盘/安装包图标(品牌橙,与 CLI 托盘一致)
 ├── make_icon.py     # 用 Pillow 重新生成图标(改品牌色后跑一遍)
+├── make_installer_art.py  # 用 Pillow 生成安装器/卸载器品牌侧板 BMP(跑一遍)
 ├── build.ps1        # Windows 一键打包
 ├── build.sh         # macOS 一键打包(必须在 mac 上执行)
 └── dist/            # 产物(gitignore)
