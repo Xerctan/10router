@@ -423,6 +423,23 @@ describe("buildModelsList — provider order follows settings.providerCardOrder"
     expect(orphan.context_length).toBe(500000);
   });
 
+  it("orphan custom models resolve catalog caps (ocz free models not bare)", async () => {
+    // opencode-zen 无连接行 → 自定义模型走孤儿出口；fledge-alpha-free 在
+    // canonical 表有行（1M/131072、vision、reasoning），裸条目会让客户端瞎猜。
+    mocks.getProviderConnections.mockResolvedValue([
+      { id: "c1", provider: "codebuddy-cn", authType: "oauth", isActive: true, providerSpecificData: { enabledModels: ["hy3"] } },
+    ]);
+    mocks.getCustomModels.mockResolvedValue([
+      { providerAlias: "ocz", id: "fledge-alpha-free", type: "llm", enabled: true },
+    ]);
+    const models = await buildModelsList([LLM_KIND]);
+    const orphan = models.find((m) => m.id === "ocz/fledge-alpha-free");
+    expect(orphan.context_length).toBe(1048576);
+    expect(orphan.max_completion_tokens).toBe(131072);
+    expect(orphan.capabilities?.vision).toBe(true);
+    expect(orphan.capabilities?.reasoning).toBe(true);
+  });
+
   it("ignores a broken caps read instead of failing the whole list", async () => {
     mocks.getProviderConnections.mockResolvedValue([
       { id: "c1", provider: "codebuddy-cn", authType: "oauth", isActive: true, providerSpecificData: { enabledModels: ["hy3"] } },

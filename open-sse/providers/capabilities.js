@@ -283,6 +283,10 @@ export const MODEL_CAPABILITIES = {
   // text+image+video、1048576 窗口、输入/输出各 524288。名字读不出多模态，
   // 必须显式声明，否则 vision 落 false 图片被剥。
   "space-bunny-free":           { vision: true, videoInput: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 524288 },
+  // Fledge Alpha Free（opencode zen 目录；models.dev opencode 条目 2026-10-02）：
+  // text+image 进、1M/131072、reasoning/tool_call 均 true——与 space-bunny-free
+  // 同形（openai 转发，thinkingFormat: openai）。
+  "fledge-alpha-free":          { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 131072 },
   "sensenova-6.8-flash-lite":   { vision: true, reasoning: true, thinkingFormat: "openai", contextWindow: 262144, maxOutput: 65536 }, // sensenova（第一方）
   "venice-uncensored-1-2":      { vision: true, contextWindow: 128000, maxOutput: 8192 }, // venice（第一方）；无 reasoning
   // Morph：第一方明说纯文本且 **不支持工具调用**（tools:false 必须显式写，

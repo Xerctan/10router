@@ -828,11 +828,22 @@ export async function buildModelsList(kindFilter, options = {}) {
         object: "model",
         owned_by: alias,
       };
-      const pinned = capsOverrides[alias]?.[modelId];
-      const cw = pinned?.contextWindow ?? posNum(customModel.contextWindow);
-      const mo = pinned?.maxOutput ?? posNum(customModel.maxOutput);
-      if (cw) entry.context_length = cw;
-      if (mo) entry.max_completion_tokens = mo;
+      // Orphan customs resolve catalog caps too: the connected loop and the
+      // noAuth branch both publish capabilities + top-level sizes, and the
+      // same id on a connected provider gets them — leaving this branch bare
+      // made clients guess (ocz free models surfaced window-less). Order:
+      // pinned > the custom row's own stored values > catalog.
+      if (kind === LLM_KIND) {
+        const caps = getCapabilitiesForModel(alias, modelId);
+        const pinned = capsOverrides[alias]?.[modelId];
+        const cw = pinned?.contextWindow ?? posNum(customModel.contextWindow);
+        const mo = pinned?.maxOutput ?? posNum(customModel.maxOutput);
+        if (cw) caps.contextWindow = cw;
+        if (mo) caps.maxOutput = mo;
+        entry.capabilities = caps;
+        entry.context_length = caps.contextWindow;
+        entry.max_completion_tokens = caps.maxOutput;
+      }
       emit(entry, rankOf(alias));
     }
   }
