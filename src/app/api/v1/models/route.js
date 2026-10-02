@@ -774,9 +774,20 @@ export async function buildModelsList(kindFilter, options = {}) {
         object: "model",
         owned_by: alias,
       };
-      const pinned = capsOverrides[alias]?.[modelId];
-      if (pinned?.contextWindow) entry.context_length = pinned.contextWindow;
-      if (pinned?.maxOutput) entry.max_completion_tokens = pinned.maxOutput;
+      // Publish the same size metadata as the connected loop: without this,
+      // clients reading context_length/max_completion_tokens got nothing and
+      // fell back to guessing the window from the model name (zcode-free
+      // surfaced window-less in agent model cards) even though the catalog
+      // tables carry the values.
+      if (kind === LLM_KIND) {
+        const caps = getCapabilitiesForModel(pid, modelId);
+        const pinned = capsOverrides[alias]?.[modelId];
+        if (pinned?.contextWindow) caps.contextWindow = pinned.contextWindow;
+        if (pinned?.maxOutput) caps.maxOutput = pinned.maxOutput;
+        entry.capabilities = caps;
+        entry.context_length = caps.contextWindow;
+        entry.max_completion_tokens = caps.maxOutput;
+      }
       emit(entry, rankOf(alias));
     }
   }

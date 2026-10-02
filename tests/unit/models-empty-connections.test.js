@@ -356,6 +356,34 @@ describe("buildModelsList — provider order follows settings.providerCardOrder"
     expect(hy3.capabilities?.maxOutput).toBe(7890);
   });
 
+  it("noAuth static models report catalog caps in context_length (zcode-free)", async () => {
+    mocks.getProviderConnections.mockResolvedValue([]);
+    const models = await buildModelsList([LLM_KIND]);
+    const zc = models.find((m) => m.id === "zcode-free/glm-5.3-flash");
+    expect(zc).toBeTruthy();
+    // Canonical MODEL_CAPABILITIES row for glm-5.3-flash — the noAuth emit
+    // branch must run the same getCapabilitiesForModel resolution as the
+    // connected loop, or clients guess the window from the model name.
+    expect(zc.context_length).toBe(1000000);
+    expect(zc.max_completion_tokens).toBe(131072);
+    expect(zc.capabilities?.contextWindow).toBe(1000000);
+    expect(zc.capabilities?.maxOutput).toBe(131072);
+  });
+
+  it("pinned modelCaps beat the catalog for noAuth static models too", async () => {
+    mocks.getProviderConnections.mockResolvedValue([]);
+    mocks.getAllModelCaps.mockResolvedValue({
+      "zcode-free": { "glm-5.3-flash": { contextWindow: 123456, maxOutput: 7890 } },
+    });
+    const models = await buildModelsList([LLM_KIND]);
+    const zc = models.find((m) => m.id === "zcode-free/glm-5.3-flash");
+    expect(zc.context_length).toBe(123456);
+    expect(zc.max_completion_tokens).toBe(7890);
+    // Nested capabilities block stays in sync with the snake_case fields.
+    expect(zc.capabilities?.contextWindow).toBe(123456);
+    expect(zc.capabilities?.maxOutput).toBe(7890);
+  });
+
   it("surfaces a custom model's stored window (beats the 200k catalog default)", async () => {
     mocks.getProviderConnections.mockResolvedValue([
       { id: "c1", provider: "codebuddy-cn", authType: "oauth", isActive: true, providerSpecificData: { enabledModels: ["hy3"] } },
