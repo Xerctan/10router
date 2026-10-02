@@ -1918,7 +1918,9 @@ export default function ProviderDetailPage() {
                 「0 connections」是噪音——直接不渲染 */}
             {!isFreeNoAuth && (
               <p className="text-text-muted">
-                {connections.length} connection{connections.length === 1 ? "" : "s"}
+                {connections.length === 1
+                  ? translate("1 connection")
+                  : translate("{n} connections").replace("{n}", String(connections.length))}
               </p>
             )}
           </div>
@@ -1946,7 +1948,6 @@ export default function ProviderDetailPage() {
               {translate("Get API Key →")}
             </a>
           )}
-          <InviteCodeChip code={providerInfo.notice?.inviteCode} />
         </div>
       )}
 

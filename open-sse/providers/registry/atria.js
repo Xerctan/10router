@@ -14,7 +14,7 @@ export default {
     textIcon: "AD",
     website: "https://atria-asi.ai",
     notice: {
-      apiKeyUrl: "https://api.atria-asi.ai/dashboard",
+      apiKeyUrl: "https://api.atria-asi.ai/console",
     },
   },
   category: "apikey",

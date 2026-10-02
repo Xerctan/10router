@@ -1185,11 +1185,6 @@
       }
     ]
   },
-  "dahl": {
-    "baseUrl": "https://inference.dahl.global/v1/chat/completions",
-    "validateUrl": "https://inference.dahl.global/v1/models",
-    "format": "openai"
-  },
   "atria": {
     "baseUrl": "https://api.atria-asi.ai/v1/chat/completions",
     "validateUrl": "https://api.atria-asi.ai/v1/models",

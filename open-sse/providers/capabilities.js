@@ -391,15 +391,6 @@ export const PROVIDER_CAPABILITIES = {
     "Qwen3.8-Flash-Next":           { vision: true, reasoning: true, thinkingFormat: "openai", thinkingCanDisable: true, contextWindow: 262144, maxOutput: 32768 },
     "MiniCPM5-2B":                 { reasoning: false, contextWindow: 131072, maxOutput: 32768 },
   },
-  // Dahl Inference（Gonka 节点）按上游原名转发请求 —— 思考线格式跟着各模型自己的
-  // 家族走（GLM→z.ai、DeepSeek→deepseek、MiniMax→pattern 兜底）。原名单独成行：
-  // 它们带厂商前缀且大小写与 canonical 键不一致，generic pattern 只会给出 V3 时代的
-  // 旧窗口。
-  "dahl": {
-    "zai-org/GLM-5.3-Flash":              { vision: true, videoInput: true, pdf: true, reasoning: true, thinkingFormat: "zai", contextWindow: 1000000, maxOutput: 131072 },
-    // V4 Flash 保持纯文本（与全仓 DeepSeek V4 口径一致，见 deepseek-v4-capabilities）。
-    "deepseek-ai/DeepSeek-V4-Flash-0731": { reasoning: true, thinkingFormat: "deepseek", contextWindow: 1000000, maxOutput: 384000 },
-  },
   // Atria Dawn 研究预览：单一文本模型，上游用 hook 直接拒绝图片/PDF 输入。
   // 无公开的上下文规格 —— 走显式默认行，避免落进 floor。
   "atria": {
@@ -407,8 +398,15 @@ export const PROVIDER_CAPABILITIES = {
   },
   // Token Harbor 原样转发请求，思考格式由各模型经 capabilities 解析。
   // 显式行只列 pattern 兜底会明显低报的 id（其余种子 id 命中各自家族 pattern）。
+  // `:free` 后缀使 exact/canonical 键全部失配，落到泛化 pattern 就是旧窗口 +
+  // 丢模态——免费档三件套各占一行，模态/窗口取官网 Models 页（2026-10-02）与
+  // 各自 canonical 同族行同值。
   "tokenharbor": {
     "deepseek-v4.1-flash:free": { vision: true, reasoning: true, thinkingFormat: "deepseek", contextWindow: 1000000, maxOutput: 384000 },
+    "qwen3.8-flash:free":       { vision: true, videoInput: true, reasoning: true, thinkingFormat: "qwen", contextWindow: 1000000, maxOutput: 131072 },
+    // MiMo V2.6 全模态（text+image+audio+video）且与 canonical mimo-v2.6 系一致地
+    // 不声明 reasoning（上游用非标准 thinking 字段，无法安全发档位）。
+    "mimo-v2.6-flash:free":     { vision: true, audioInput: true, videoInput: true, contextWindow: 1048576, maxOutput: 131072 },
   },
   "codex": {
     "gpt-6-astra":               { vision: true, reasoning: true, search: true, thinkingFormat: "openai", contextWindow: 272000, maxOutput: 128000 },
