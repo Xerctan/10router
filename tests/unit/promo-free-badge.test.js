@@ -36,8 +36,11 @@ describe("promoFree / promoFreeUntil", () => {
 describe("codebuddy-intl V4.1-Flash launch promo", () => {
   const entry = intl.models.find((m) => m.id === "deepseek-v4.1-flash");
 
-  it("keeps the published multiplier and marks the promo window separately", () => {
-    expect(entry).toMatchObject({ name: "DeepSeek-V4.1-Flash", rateMultiplier: 0.03, promoFreeUntil: "2026-09-24" });
+  it("carries the post-promo published multiplier with no promo marker", () => {
+    // The launch promo (0.03x, 2026-09-11 → 09-24) has ended: the official
+    // credit page moved the model back to 0.11x on 2026-10-02, both gateways.
+    expect(entry).toMatchObject({ name: "DeepSeek-V4.1-Flash", rateMultiplier: 0.11 });
+    expect(entry.promoFreeUntil).toBeUndefined();
   });
 
   it("stays multiplier-identical to the CN gateway (shared credit system)", () => {
@@ -51,8 +54,10 @@ describe("codebuddy-intl V4.1-Flash launch promo", () => {
     expect(cn.models.find((m) => m.id === "deepseek-v4.1-flash").promoFreeUntil).toBeUndefined();
   });
 
-  it("is currently inside the window relative to the upstream launch date", () => {
-    expect(isPromoFree(entry, Date.parse("2026-09-11T00:00:00Z"))).toBe(true);
+  it("left the launch promo window fully behind", () => {
+    // 2026-09-24T00:00:00Z was the first instant the window was closed; time
+    // only moves forward, so once past this stays true forever.
+    expect(Date.now()).toBeGreaterThan(Date.parse("2026-09-24T00:00:00Z"));
   });
 });
 
