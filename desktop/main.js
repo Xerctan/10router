@@ -94,7 +94,8 @@ const STRINGS = {
         'update.checking': 'Checking for updates…',
         'update.cancel': 'Cancel',
         'update.retry': 'Retry',
-        'about.detail': 'FREE AI Router & Token Saver\n\nVersion: v{version}\nShell: v{shell}\nData folder: {dataDir}',
+        'about.tagline': 'FREE AI Router & Token Saver',
+        'about.detail': 'Shell: v{shell}\nData folder: {dataDir}',
         'about.github': 'GitHub Page',
         'dialog.later': 'Later',
         'dialog.ok': 'OK',
@@ -219,7 +220,8 @@ const STRINGS = {
         'update.checking': '正在检查更新…',
         'update.cancel': '取消',
         'update.retry': '重试',
-        'about.detail': 'FREE AI Router & Token Saver\n\n版本: v{version}\n壳版本: v{shell}\n数据目录: {dataDir}',
+        'about.tagline': 'FREE AI Router & Token Saver',
+        'about.detail': '壳版本: v{shell}\n数据目录: {dataDir}',
         'about.github': 'GitHub 主页',
         'dialog.later': '稍后',
         'dialog.ok': '好',
@@ -344,7 +346,8 @@ const STRINGS = {
         'update.checking': '正在檢查更新…',
         'update.cancel': '取消',
         'update.retry': '重試',
-        'about.detail': 'FREE AI Router & Token Saver\n\n版本: v{version}\n殼版本: v{shell}\n資料目錄: {dataDir}',
+        'about.tagline': 'FREE AI Router & Token Saver',
+        'about.detail': '殼版本: v{shell}\n資料目錄: {dataDir}',
         'about.github': 'GitHub 首頁',
         'dialog.later': '稍後',
         'dialog.ok': '好',
@@ -1216,18 +1219,85 @@ function startUpdateRequestPolling() {
     if (updateRequestTimer.unref) updateRequestTimer.unref();
 }
 
+// ──────────────────────── 应用内关于窗(与更新窗同款 UI) ─────────────────────
+// 一个无边框小窗(about-window.html + preload-about.js)承载「关于」:品牌图标 +
+// 标题/标语、版本胶囊、壳版本与数据目录、GitHub 外链按钮(主进程 shell.openExternal)。
+// 页面无 nodeIntegration,文案全部主进程 tr() 渲染后随 bootstrap 下发——替代旧的
+// 原生 MessageBox(样式与系统主题脱节,和更新窗不统一)。
+const ABOUT_HTML = path.join(__dirname, 'about-window.html');
+const ABOUT_PRELOAD = path.join(__dirname, 'preload-about.js');
+let aboutWin = null;
+
 function showAbout() {
-    dialog.showMessageBox({
-        type: 'info',
-        title: '10Router',
-        message: '10Router',
-        detail: tr('about.detail', { version: getServiceVersion(), shell: app.getVersion(), dataDir: DATA_DIR }),
-        buttons: [tr('about.github'), tr('dialog.close')],
-        defaultId: 0,
-        cancelId: 1,
-        noLink: true,
-    }).then((r) => { if (r.response === 0) shell.openExternal(GITHUB_URL); });
+    if (aboutWin && !aboutWin.isDestroyed()) {
+        aboutWin.show();
+        aboutWin.focus();
+        return;
+    }
+    aboutWin = new BrowserWindow({
+        width: 420,
+        height: 320,
+        useContentSize: true,
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        fullscreenable: false,
+        frame: false,                      // 页面内自定义标题栏(拖拽区 + 关闭按钮)
+        title: tr('menu.about'),
+        autoHideMenuBar: true,
+        show: false,
+        backgroundColor: nativeTheme.shouldUseDarkColors ? '#1a1a1a' : '#FDFAF6',
+        webPreferences: {
+            preload: ABOUT_PRELOAD,
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true,
+        },
+    });
+    aboutWin.once('ready-to-show', () => { try { if (aboutWin && !aboutWin.isDestroyed()) aboutWin.show(); } catch { /* ignore */ } });
+    // 本地 file 页面:外链/导航一律拦死(「GitHub 主页」走主进程 shell.openExternal)
+    aboutWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    aboutWin.webContents.on('will-navigate', (e, url) => {
+        if (!String(url).startsWith('file://')) e.preventDefault();
+    });
+    aboutWin.on('closed', () => { aboutWin = null; });
+    aboutWin.loadFile(ABOUT_HTML).catch((e) => {
+        log(`about window load failed: ${e && e.message}`);
+        try { aboutWin.close(); } catch { /* ignore */ }
+    });
 }
+
+// 页面 bootstrap:一次性静态文案 + 版本信息(服务版本即 dashboard 版本,通常与壳同步)
+ipcMain.handle('about:bootstrap', (e) => {
+    if (!aboutWin || aboutWin.isDestroyed() || e.sender !== aboutWin.webContents) return null;
+    return {
+        strings: {
+            windowTitle: tr('menu.about'),
+            tagline: tr('about.tagline'),
+            github: tr('about.github'),
+            close: tr('dialog.close'),
+        },
+        view: {
+            version: getServiceVersion(),
+            detail: tr('about.detail', { shell: app.getVersion(), dataDir: DATA_DIR }),
+        },
+    };
+});
+
+// 页面量好内容高度后回报,窗口贴合(长数据目录换行时高度由 fit 精确回报)
+ipcMain.on('about:fit', (e, height) => {
+    if (!aboutWin || aboutWin.isDestroyed() || e.sender !== aboutWin.webContents) return;
+    const h = Math.max(200, Math.min(640, Math.ceil(Number(height) || 0)));
+    try { aboutWin.setContentSize(420, h); } catch { /* ignore */ }
+});
+
+ipcMain.on('about:action', (e, msg) => {
+    if (!aboutWin || aboutWin.isDestroyed() || e.sender !== aboutWin.webContents) return;
+    const action = msg && msg.action;
+    if (action === 'close') { aboutWin.close(); return; }
+    // 与原对话框行为一致:打开主页后顺手关窗
+    if (action === 'github') { shell.openExternal(GITHUB_URL); aboutWin.close(); return; }
+});
 
 // 内嵌服务版本 = resources/app/package.json 的 version(打包时与壳版本同步,
 // 开发模式下回退壳版本);读不到不致命。

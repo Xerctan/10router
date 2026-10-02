@@ -31,6 +31,8 @@
       "preload-container.js",
       "preload-update.js",
       "update-window.html",
+      "preload-about.js",
+      "about-window.html",
       "passwordStore.js",
       "releaseUpdater.js",
       "updateRequest.js",
