@@ -96,6 +96,21 @@ export const ALLOWLIST = {
 
   // Private codenames with no public spec and no models.dev entry.
   "github/oswe-vscode-prime": "codename",
+
+  // Windsurf SWE 系列（windsurf.js 与 devin-cli.js 同载 4 款）:无公开规格
+  // （models.dev 截至 2026-10-03 亦未收录）,保留地板值。
+  "windsurf/swe-1.5": "no public spec",
+  "windsurf/swe-1.5-fast": "no public spec",
+  "windsurf/swe-1.6": "no public spec",
+  "windsurf/swe-1.6-fast": "no public spec",
+  "devin-cli/swe-1.5": "no public spec",
+  "devin-cli/swe-1.5-fast": "no public spec",
+  "devin-cli/swe-1.6": "no public spec",
+  "devin-cli/swe-1.6-fast": "no public spec",
+  // Trae 虚拟档:server 按请求挑真实模型（Auto / Work Fast）——同 cursor/default
+  // 与 kilo-auto 的 aggregator 性质,静态能力行不可能准确。
+  "trae/auto": "aggregator",
+  "trae/work": "aggregator",
   "github/goldeneye-free-auto": "codename",
   "iflow/iflow-rome-30ba3b": "codename",
   "dots/dots3-note-prev": "codename",
