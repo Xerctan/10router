@@ -11,7 +11,7 @@ import {
 import { getSettings, getChannelBlock, setChannelBlock, clearChannelBlock } from "@/lib/localDb";
 import { buildChannelBlock, channelBlockRemainingMs, formatRetryAfter, withChannelScopeHint, withRateLimitHint } from "open-sse/services/accountFallback.js";
 import { getModelInfo, getComboModels } from "../services/model.js";
-import { isOversizedForCbcn } from "open-sse/executors/codebuddy-cn.js";
+import { isOversizedForCbcn, describeCbcnOversize } from "open-sse/executors/codebuddy-cn.js";
 import { handleChatCore } from "open-sse/handlers/chatCore.js";
 import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect";
 import { getTransform as getPxpipeTransform } from "@/lib/pxpipe/loader.js";
@@ -288,9 +288,10 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   // channel-breaker strike; it does NOT and cannot prevent ordinary 11128.
   // Real 11128 handling is the channel breaker below.
   if (provider === "codebuddy-cn" && isOversizedForCbcn(body)) {
-    log.warn("CHAT", `[${provider}/${model}] payload exceeds extreme-size backstop (>3.2MB or >1200 msgs); rejected locally`);
+    const stats = describeCbcnOversize(body);
+    log.warn("CHAT", `[${provider}/${model}] payload exceeds extreme-size backstop (${stats}); rejected locally`);
     const hint = withChannelScopeHint(
-      `[${provider}/${model}] 请求体积已达极端量级（>3.2MB 或 >1200 条消息），已在本地拦截，避免触发上游渠道级风控。`
+      `[${provider}/${model}] 请求体积已达极端量级（${stats}），已在本地拦截，避免触发上游渠道级风控。`
     );
     return errorResponse(HTTP_STATUS.BAD_REQUEST, hint);
   }

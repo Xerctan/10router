@@ -12,6 +12,7 @@
 
 ### 🐛 修复
 
+- **CodeBuddy CN 不再本地拦截工具多的 Claude Code / codex 会话**：极端体积后备里的 `tools > 60` 一刀切把挂了 MCP 工具集的真实会话整个锁死（用户报告「cbcn 大部分模型都无法在 Claude 和 codex 内使用」）——而工具数从未与体积分离验证过（09-17 的 11128 样本是 4.5MB / 1676 条 / 54 工具整体失败）。工具数移出拦截标准、只进拒绝诊断信息（错误现在写明超的是哪个维度、实际多少 MB / 多少条 / 多少个工具）；体积 3.2MB 与 1200 条消息两项保留，若上游对「工具多但体积小」仍 11128，由渠道熔断按设计兜底。
 - **windsurf / trae / devin-cli 新目录模型的能力地板收尾**：SWE-1.5/1.6（±Fast）无公开规格（models.dev 未收录）→ 审计 allowlist 注记保留地板值；trae 的 Auto / Work 为 server 挑模型虚拟档 → allowlist「aggregator」性质（同 cursor/default）。
 
 ## v1.3.2 (2026-10-03)

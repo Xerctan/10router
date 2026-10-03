@@ -160,30 +160,46 @@ export function parseCodeBuddyFrequencyLimit(bodyText) {
  * - 4.5MB payload (1676 messages, 54 tools) triggers 11128 instantly (within 848ms).
  * - 126KB payload on the same account succeeds with 200.
  *
- * Intercepting oversized payloads before dispatching to upstream saves the channel
- * from being penalized and triggering a 60s/10m channel block for all accounts.
+ * 2026-10-03 回归：原守卫还本地拒绝 tools > 60——但工具数从未与体积分离验证过
+ * （09-17 的 11128 样本里 54 个工具是随 4.5MB 载体一起失败的），而真实 Claude
+ * Code / codex 会话挂上 MCP 工具集后工具数轻松过 60、体积适中，本地一刀切把
+ * cbcn 从这两类客户端里整个锁死（用户报告：「cbcn 大部分模型都无法在 Claude 和
+ * codex 内使用」）。工具数现在只进拒绝诊断信息；体积与消息数仍是守卫标准——
+ * 若上游对「工具多但体积小」的请求仍然 11128，由下方渠道熔断按设计处理。
  */
 export const CBCN_PAYLOAD_LIMITS = {
   maxBytes: 3.2 * 1024 * 1024, // 3.2MB threshold (4.5MB is known to trigger)
   maxMessages: 1200,
-  maxTools: 60,
 };
+
+export function cbcnPayloadStats(body) {
+  const messages = Array.isArray(body?.messages) ? body.messages.length : 0;
+  const tools = Array.isArray(body?.tools) ? body.tools.length : 0;
+  let bytes = 0;
+  try {
+    bytes = JSON.stringify(body || {}).length;
+  } catch {}
+  return { messages, tools, bytes };
+}
 
 export function isOversizedForCbcn(body) {
   if (!body || typeof body !== "object") return false;
-  if (Array.isArray(body.messages) && body.messages.length > CBCN_PAYLOAD_LIMITS.maxMessages) {
-    return true;
-  }
-  if (Array.isArray(body.tools) && body.tools.length > CBCN_PAYLOAD_LIMITS.maxTools) {
-    return true;
-  }
-  try {
-    const rawLen = JSON.stringify(body).length;
-    if (rawLen > CBCN_PAYLOAD_LIMITS.maxBytes) {
-      return true;
-    }
-  } catch {}
+  const { messages, bytes } = cbcnPayloadStats(body);
+  if (messages > CBCN_PAYLOAD_LIMITS.maxMessages) return true;
+  if (bytes > CBCN_PAYLOAD_LIMITS.maxBytes) return true;
   return false;
+}
+
+// 拒绝时的人话诊断:超的是哪个维度、实际值多少(工具数一并给出,供下轮校准证据)。
+export function describeCbcnOversize(body) {
+  const { messages, tools, bytes } = cbcnPayloadStats(body);
+  const mb = (bytes / 1024 / 1024).toFixed(2) + "MB";
+  const limitMb = (CBCN_PAYLOAD_LIMITS.maxBytes / 1024 / 1024).toFixed(1) + "MB";
+  const parts = [];
+  if (bytes > CBCN_PAYLOAD_LIMITS.maxBytes) parts.push(`${mb} > ${limitMb}`);
+  if (messages > CBCN_PAYLOAD_LIMITS.maxMessages) parts.push(`${messages} 条消息 > ${CBCN_PAYLOAD_LIMITS.maxMessages} 条`);
+  if (!parts.length) parts.push(`${mb} / ${messages} 条消息`);
+  return parts.join("，") + `（${tools} 个工具）`;
 }
 
 export default CodeBuddyExecutor;
