@@ -2,6 +2,19 @@
 
 User-facing highlights per release. See [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md) for the full developer log.
 
+## v1.3.3 (2026-10-04)
+
+### ✨ New
+
+- **New MiniMax Code Free provider (`minimax-free`)** — use MiniMax free credits (M3.1-Flash-Preview / M3 / M2.7) through the local CreditDaddy gateway, same wiring as ZCode Free: no login card, shared host/port with a per-line path, official icon and a gateway-settings section on the detail page.
+- **MiniMax capability wiring matches the official client** — M3.1-Flash-Preview exposes the five official thinking-depth levels (default/low/medium/high/xhigh/max) as pass-through; M3 thinking is an on/off toggle; context reported as 1M.
+
+### 🐛 Fixed
+
+- **zcode-free gateway endpoint** — the ZCode gateway path now carries the `/zcode` segment, matching CreditDaddy's migration (the MiniMax line already used the same shape).
+- **CreditDaddy gateway card** — the path field now shows the value that actually takes effect (prefilled, not a hidden placeholder); the remote-access instructions were corrected: the gateway is protected by an IP allowlist and checks no key, so there is nothing to enter (the old text wrongly asked for a key-bearing connection).
+- **CodeBuddy CN no longer blocks tool-heavy Claude Code / codex sessions** — the `>60 tools` local cutoff locked out real MCP sessions; tool count is now reported in the rejection diagnostic only, with the 3.2MB size and message-count guards unchanged.
+
 ## v1.3.2 (2026-10-03)
 
 ### ✨ New

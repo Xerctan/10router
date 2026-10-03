@@ -2,6 +2,19 @@
 
 這裡展示面向用戶的關鍵更新；完整開發明細見 [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md)。
 
+## v1.3.3 (2026-10-04)
+
+### ✨ 新增
+
+- **新增 MiniMax Code Free 供應商（`minimax-free`）**：經本地 CreditDaddy 閘道使用 MiniMax 免費額度（M3.1-Flash-Preview / M3 / M2.7），與 ZCode Free 同款接線——免登入卡片、主機/連接埠共享、路徑按線獨立，詳情頁附官方圖標與閘道設定區。
+- **MiniMax 家族能力對齊官方用戶端**：M3.1-Flash-Preview 支援五檔思考深度（default/low/medium/high/xhigh/max）透傳；M3 思考為開/關切換；上下文按 1M 上報。
+
+### 🐛 修復
+
+- **zcode-free 閘道端點補齊 `/zcode` 段**：對齊 CreditDaddy 側的路徑遷移（MiniMax 線早已同形）。
+- **CreditDaddy 閘道卡片**：路徑欄位改為顯示實際生效值（預填，不再藏在佔位符後）；遠端接入說明糾錯——閘道由 IP 白名單保護、不驗證 key，無需填憑證（舊文案曾錯誤要求建帶 key 的連線）。
+- **CodeBuddy CN 不再攔截工具多的 Claude Code / codex 工作階段**：移除「工具數 > 60」的本地一刀切（它曾鎖死掛 MCP 工具集的真實工作階段），工具數現在只進拒絕診斷資訊；體積 3.2MB 與訊息數守衛不變。
+
 ## v1.3.2 (2026-10-03)
 
 ### ✨ 新增
