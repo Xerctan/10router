@@ -838,5 +838,11 @@
   "Sign up / Learn more": "註冊 / 瞭解更多",
   "{n} connections": "{n} 個連線",
   "1 connection": "1 個連線",
-  "Get API Key": "取得 API 金鑰"
+  "Get API Key": "取得 API 金鑰",
+  "CreditDaddy gateway host": "CreditDaddy 閘道主機",
+  "Empty = this machine (127.0.0.1); LAN = CreditDaddy host IP": "留空 = 本機 127.0.0.1；區網填 CreditDaddy 主機 IP",
+  "Local: enable the gateway switch under \"MiniMax → Interface settings\" in CreditDaddy desktop and add a MiniMax account (default 127.0.0.1:47860).": "本機：在 CreditDaddy 桌面版「MiniMax → 介面設定」裡開啟閘道開關並新增 MiniMax 帳號（預設 127.0.0.1:47860）。",
+  "Local: enable the gateway switch under \"ZCode → Interface settings\" in CreditDaddy desktop (default 127.0.0.1:47860).": "本機：在 CreditDaddy 桌面版「ZCode → 介面設定」裡開啟閘道開關（預設 127.0.0.1:47860）。",
+  "LAN (NAS, etc.): put the CreditDaddy machine IP above, then in the same CreditDaddy panel turn on \"Allow LAN access\" and add this 10Router machine's IP to the allowlist, then restart CreditDaddy.": "區網（NAS 等）：在上方填 CreditDaddy 所在機器的 IP，再在同一面板裡開啟「允許區網存取」並把本 10Router 機器的 IP 加入白名單，然後重新啟動 CreditDaddy。",
+  "The gateway is protected by an IP allowlist and checks no key, so there is nothing to enter here.": "閘道由 IP 白名單保護、不驗證任何 key，所以這裡無需填憑證。"
 }

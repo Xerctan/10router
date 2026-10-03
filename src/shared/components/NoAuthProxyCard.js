@@ -5,6 +5,7 @@ import PropTypes from "prop-types";
 import Card from "./Card";
 import Select from "./Select";
 import Badge from "./Badge";
+import { translate } from "@/i18n/runtime";
 
 const NONE_PROXY_POOL_VALUE = "__none__";
 const STRATEGIES = [
@@ -15,10 +16,11 @@ const STRATEGIES = [
 
 // CreditDaddy 网关线（zcode-free / minimax-free 共用同一 daemon:主机/端口设置
 // 键共享,路径按线分开——zcode 线可直连 zcode-api 故路径可编辑,MiniMax 线固定
-// 网关路径但同样允许覆盖）。非 CreditDaddy 线不渲染网关区。
+// 网关路径但同样允许覆盖)。defaultPath 同时用作占位符与预填值(输入框显示
+// 的就是生效路径),故不另设 pathPlaceholder。非 CreditDaddy 线不渲染网关区。
 const CREDITDADDY_LINES = {
-  "zcode-free": { pathKey: "zcodeGatewayPath", defaultPath: "/gateway/zcode/v1/messages", pathPlaceholder: "/gateway/zcode/v1/messages" },
-  "minimax-free": { pathKey: "minimaxGatewayPath", defaultPath: "/gateway/minimax/v1/messages", pathPlaceholder: "/gateway/minimax/v1/messages" },
+  "zcode-free": { pathKey: "zcodeGatewayPath", defaultPath: "/gateway/zcode/v1/messages" },
+  "minimax-free": { pathKey: "minimaxGatewayPath", defaultPath: "/gateway/minimax/v1/messages" },
 };
 
 export default function NoAuthProxyCard({ providerId }) {
@@ -44,7 +46,13 @@ export default function NoAuthProxyCard({ providerId }) {
       setRotateStrategy(override.rotateStrategy || "none");
       setGatewayHost(CREDITDADDY_LINES[providerId] ? settingsData.zcodeGatewayHost || "" : "");
       setGatewayPort(CREDITDADDY_LINES[providerId] ? settingsData.zcodeGatewayPort || "" : "");
-      setGatewayPath(CREDITDADDY_LINES[providerId] ? settingsData[CREDITDADDY_LINES[providerId].pathKey] || "" : "");
+      // 路径预填为“生效值”：留空时后端走的是这条线的内置默认（auth.js 的兜底），
+      // 卡片显示占位符会让用户以为没配置。预填出实际会用的路径。
+      setGatewayPath(
+        CREDITDADDY_LINES[providerId]
+          ? settingsData[CREDITDADDY_LINES[providerId].pathKey] || CREDITDADDY_LINES[providerId].defaultPath
+          : ""
+      );
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [providerId]);
@@ -166,12 +174,12 @@ export default function NoAuthProxyCard({ providerId }) {
       </div>
       {CREDITDADDY_LINES[providerId] && (
         <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-black/5 dark:border-white/5">
-          <label className="text-sm font-medium text-text-main">CreditDaddy 网关主机</label>
+          <label className="text-sm font-medium text-text-main">{translate("CreditDaddy gateway host")}</label>
           <div className="flex gap-2">
             <input
               value={gatewayHost}
               onChange={(e) => setGatewayHost(e.target.value)}
-              placeholder="留空 = 本机 127.0.0.1；局域网填 CreditDaddy 主机 IP"
+              placeholder={translate("Empty = this machine (127.0.0.1); LAN = CreditDaddy host IP")}
               className="flex-1 py-2 px-3 text-sm text-text-main bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-md focus:ring-1 focus:ring-primary/30 focus:border-primary/50 focus:outline-none transition-all"
             />
             <input
@@ -183,22 +191,23 @@ export default function NoAuthProxyCard({ providerId }) {
             <input
               value={gatewayPath}
               onChange={(e) => setGatewayPath(e.target.value)}
-              placeholder={CREDITDADDY_LINES[providerId].pathPlaceholder}
-              className="w-44 py-2 px-3 text-sm text-text-main bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-md focus:ring-1 focus:ring-primary/30 focus:border-primary/50 focus:outline-none transition-all"
+              placeholder={CREDITDADDY_LINES[providerId].defaultPath}
+              className="w-56 py-2 px-3 text-sm text-text-main bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-md focus:ring-1 focus:ring-primary/30 focus:border-primary/50 focus:outline-none transition-all"
             />
             <button
               onClick={() => saveGatewayHost(gatewayHost, gatewayPort, gatewayPath)}
               disabled={saving}
               className="px-3 py-2 text-sm rounded-md bg-primary text-white disabled:opacity-50"
             >
-              保存
+              {translate("Save")}
             </button>
           </div>
           <p className="text-xs text-text-muted">
             {providerId === "minimax-free"
-              ? "CreditDaddy 桌面版开启「MiniMax 网关」并添加 MiniMax 账号后即为本机可用；局域网主机需在其面板开启「局域网」并重启。"
-              : "CreditDaddy 桌面版开启「体验包接口」后即为本机可用；局域网主机需在其面板开启「局域网」并重启。"}
-            远程主机需鉴权——建一个带 key 的连接（key = 其「10Router 连接设置」里的虚拟 key）。
+              ? translate('Local: enable the gateway switch under "MiniMax → Interface settings" in CreditDaddy desktop and add a MiniMax account (default 127.0.0.1:47860).')
+              : translate('Local: enable the gateway switch under "ZCode → Interface settings" in CreditDaddy desktop (default 127.0.0.1:47860).')}{" "}
+            {translate('LAN (NAS, etc.): put the CreditDaddy machine IP above, then in the same CreditDaddy panel turn on "Allow LAN access" and add this 10Router machine\'s IP to the allowlist, then restart CreditDaddy.')}{" "}
+            {translate("The gateway is protected by an IP allowlist and checks no key, so there is nothing to enter here.")}
           </p>
         </div>
       )}

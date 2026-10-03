@@ -1995,5 +1995,11 @@
   "Workers AI free tier. Requires a Cloudflare API token and Account ID.": "Workers AI 免费层。需要 Cloudflare API token 与 Account ID。",
   "Sign up / Learn more": "注册 / 了解更多",
   "{n} connections": "{n} 个连接",
-  "1 connection": "1 个连接"
+  "1 connection": "1 个连接",
+  "CreditDaddy gateway host": "CreditDaddy 网关主机",
+  "Empty = this machine (127.0.0.1); LAN = CreditDaddy host IP": "留空 = 本机 127.0.0.1；局域网填 CreditDaddy 主机 IP",
+  "Local: enable the gateway switch under \"MiniMax → Interface settings\" in CreditDaddy desktop and add a MiniMax account (default 127.0.0.1:47860).": "本机：在 CreditDaddy 桌面版「MiniMax → 接口设置」里开启网关开关并添加 MiniMax 账号（默认 127.0.0.1:47860）。",
+  "Local: enable the gateway switch under \"ZCode → Interface settings\" in CreditDaddy desktop (default 127.0.0.1:47860).": "本机：在 CreditDaddy 桌面版「ZCode → 接口设置」里开启网关开关（默认 127.0.0.1:47860）。",
+  "LAN (NAS, etc.): put the CreditDaddy machine IP above, then in the same CreditDaddy panel turn on \"Allow LAN access\" and add this 10Router machine's IP to the allowlist, then restart CreditDaddy.": "局域网（NAS 等）：在上方填 CreditDaddy 所在机器的 IP，再在同一面板里打开「允许局域网访问」并把本 10Router 机器的 IP 加入白名单，然后重启 CreditDaddy。",
+  "The gateway is protected by an IP allowlist and checks no key, so there is nothing to enter here.": "网关由 IP 白名单保护、不校验任何 key，所以这里无需填凭据。"
 }

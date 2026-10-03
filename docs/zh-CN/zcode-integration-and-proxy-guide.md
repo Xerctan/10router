@@ -62,6 +62,17 @@ ZCode 经常发放 Start Plan、Trust Build 以及周末狂欢额度（如 GLM-5
    - 如果 10Router 与 CreditDaddy 运行在**同一台电脑**：网关主机保持留空即可（默认使用 `http://127.0.0.1:47860`）；
    - 如果 10Router 部署在 **NAS / 局域网服务器**，而 CreditDaddy 运行在 Windows/Mac 宿主机：点击卡片设置，在「网关主机」中填写宿主机局域网地址（如 `192.168.31.50:47860`）。
 
+> **局域网部署必读（ZCode 线与 MiniMax 线同）**
+>
+> CreditDaddy 的网关**不校验任何 key**，它由 **IP 白名单**保护。因此远程访问时，10Router 侧**不需要**为它创建带 key 的连接（旧版卡片文案曾这么写，是错的），只要在 CreditDaddy 面板里放行即可：
+>
+> 1. 在本卡片「CreditDaddy 网关主机」填入 CreditDaddy 所在机器的 IP（端口默认 `47860`）；
+> 2. 在 CreditDaddy 同一面板里打开「允许局域网访问 / Allow LAN access」；
+> 3. 把**本 10Router 机器的 IP** 加入其白名单；
+> 4. **重启 CreditDaddy**——该开关是启动时读取的，不重启不生效。
+>
+> 路径输入框显示的是**实际生效的路径**（默认 `/gateway/zcode/v1/messages`，MiniMax 线为 `/gateway/minimax/v1/messages`），与后端 `auth.js` 的内置兜底一致；只有当你要直连 `zcode-api`（其端点为 `/v1/messages`）时才需要改。
+
 #### 第三步：调用模型
 通过 10Router 标准 OpenAI 兼容端点调用：
 - 模型 ID：`zcode-free/glm-5.3-flash`

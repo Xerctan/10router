@@ -13,6 +13,7 @@
 ### 🐛 修复
 
 - **zcode-free 网关端点补齐 `/zcode` 段（与 minimax 线同形）**：CreditDaddy 侧已把 ZCode 网关从 `/gateway/v1/messages` 迁到 `/gateway/zcode/v1/messages`（对齐 MiniMax 线的 `/gateway/minimax/v1/messages`），10Router 的内置默认值同步跟进——注册表 `transport.baseUrl`、运行时兜底（`auth.js`）、卡片预填/占位值、集成文档四处一致。已显式存过 `zcodeGatewayPath` 的用户不受影响（留空才走内置默认）。
+- **CreditDaddy 网关卡片：路径显示生效值 + 远程接入说明纠错 + 补简繁**（zcode-free / minimax-free 两条线同享）：路径输入框此前把内置默认藏在 placeholder 后面，留空时用户看不出实际走哪条路径——改为直接预填生效值（与 `auth.js` 兜底同源，字段 `pathPlaceholder` 一并删掉，名字与行为不再各说各话），输入框 `w-44` 加宽到 `w-56` 免得路径被截断成看不出是 zcode 还是 minimax 线。远程接入文案此前写「远程主机需鉴权——建一个带 key 的连接（key = 其虚拟 key）」，**与实际不符**：CreditDaddy 网关不校验任何 key，它由 IP 白名单保护，10Router 侧无需为它建连接，改为写明「本机开网关开关 / 局域网开 Allow LAN access + 把本机 IP 加白名单 + 重启 CreditDaddy」两步，并点明该开关是启动时读取的。卡片硬编码中文一并收进 i18n（`translate()` 显式调用——运行时 DOM 遍历器只处理文本节点、不碰 `placeholder` 属性，占位符必须自己翻），zh-CN / zh-TW 各补 6 条。集成文档同步加「局域网部署必读」小节。
 - **CodeBuddy CN 不再本地拦截工具多的 Claude Code / codex 会话**：极端体积后备里的 `tools > 60` 一刀切把挂了 MCP 工具集的真实会话整个锁死（用户报告「cbcn 大部分模型都无法在 Claude 和 codex 内使用」）——而工具数从未与体积分离验证过（09-17 的 11128 样本是 4.5MB / 1676 条 / 54 工具整体失败）。工具数移出拦截标准、只进拒绝诊断信息（错误现在写明超的是哪个维度、实际多少 MB / 多少条 / 多少个工具）；体积 3.2MB 与 1200 条消息两项保留，若上游对「工具多但体积小」仍 11128，由渠道熔断按设计兜底。
 - **windsurf / trae / devin-cli 新目录模型的能力地板收尾**：SWE-1.5/1.6（±Fast）无公开规格（models.dev 未收录）→ 审计 allowlist 注记保留地板值；trae 的 Auto / Work 为 server 挑模型虚拟档 → allowlist「aggregator」性质（同 cursor/default）。
 
