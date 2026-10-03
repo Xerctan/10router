@@ -169,7 +169,11 @@ export function parseCodeBuddyFrequencyLimit(bodyText) {
  */
 export const CBCN_PAYLOAD_LIMITS = {
   maxBytes: 3.2 * 1024 * 1024, // 3.2MB threshold (4.5MB is known to trigger)
-  maxMessages: 1200,
+  // 1200 -> 1500 (2026-10-04):真实长会话会自然越过 1200(实测一个 Claude Code
+  // 会话累积到 1552 条才被拦),把阈值抬到 1500 让绝大多数长会话能走到上游。
+  // 体积守卫(3.2MB)才是 09-17 证据里真正区分 11128 与 200 的维度,消息数
+  // 只是体积的粗代理;抬到 1500 后仍越线的会话说明体积也该触顶了。
+  maxMessages: 1500,
 };
 
 export function cbcnPayloadStats(body) {
