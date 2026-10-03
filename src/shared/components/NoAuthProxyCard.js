@@ -13,6 +13,14 @@ const STRATEGIES = [
   { value: "random", label: "Random" },
 ];
 
+// CreditDaddy 网关线（zcode-free / minimax-free 共用同一 daemon:主机/端口设置
+// 键共享,路径按线分开——zcode 线可直连 zcode-api 故路径可编辑,MiniMax 线固定
+// 网关路径但同样允许覆盖）。非 CreditDaddy 线不渲染网关区。
+const CREDITDADDY_LINES = {
+  "zcode-free": { pathKey: "zcodeGatewayPath", defaultPath: "/gateway/v1/messages", pathPlaceholder: "/gateway/v1/messages" },
+  "minimax-free": { pathKey: "minimaxGatewayPath", defaultPath: "/gateway/minimax/v1/messages", pathPlaceholder: "/gateway/minimax/v1/messages" },
+};
+
 export default function NoAuthProxyCard({ providerId }) {
   const [proxyPools, setProxyPools] = useState([]);
   const [proxyPoolId, setProxyPoolId] = useState(NONE_PROXY_POOL_VALUE);
@@ -34,9 +42,9 @@ export default function NoAuthProxyCard({ providerId }) {
       const override = (settingsData.providerStrategies || {})[providerId] || {};
       setProxyPoolId(override.proxyPoolId || NONE_PROXY_POOL_VALUE);
       setRotateStrategy(override.rotateStrategy || "none");
-      setGatewayHost(providerId === "zcode-free" ? settingsData.zcodeGatewayHost || "" : "");
-      setGatewayPort(providerId === "zcode-free" ? settingsData.zcodeGatewayPort || "" : "");
-      setGatewayPath(providerId === "zcode-free" ? settingsData.zcodeGatewayPath || "" : "");
+      setGatewayHost(CREDITDADDY_LINES[providerId] ? settingsData.zcodeGatewayHost || "" : "");
+      setGatewayPort(CREDITDADDY_LINES[providerId] ? settingsData.zcodeGatewayPort || "" : "");
+      setGatewayPath(CREDITDADDY_LINES[providerId] ? settingsData[CREDITDADDY_LINES[providerId].pathKey] || "" : "");
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [providerId]);
@@ -79,7 +87,7 @@ export default function NoAuthProxyCard({ providerId }) {
     save(proxyPoolId, newStrategy);
   };
 
-  // zcode-free: CreditDaddy 网关主机（本机留空 = 127.0.0.1；局域网填 IP；端口留空 = 47860）
+  // CreditDaddy 网关线:主机/端口共享（同一 daemon,本机留空 = 127.0.0.1;局域网填 IP;端口留空 = 47860）,路径按线分开
   const saveGatewayHost = useCallback(async (host, port, reqPath) => {
     setSaving(true);
     try {
@@ -88,7 +96,7 @@ export default function NoAuthProxyCard({ providerId }) {
       const patch = {
         zcodeGatewayHost: String(host || "").trim(),
         zcodeGatewayPort: String(port || "").trim(),
-        zcodeGatewayPath: String(reqPath || "").trim(),
+        [CREDITDADDY_LINES[providerId]?.pathKey || "zcodeGatewayPath"]: String(reqPath || "").trim(),
       };
       await fetch("/api/settings", {
         method: "PATCH",
@@ -156,7 +164,7 @@ export default function NoAuthProxyCard({ providerId }) {
               : `Uses the selected pool above. Set to Round-robin or Random to rotate across all active pools.`}
         </p>
       </div>
-      {providerId === "zcode-free" && (
+      {CREDITDADDY_LINES[providerId] && (
         <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-black/5 dark:border-white/5">
           <label className="text-sm font-medium text-text-main">CreditDaddy 网关主机</label>
           <div className="flex gap-2">
@@ -175,7 +183,7 @@ export default function NoAuthProxyCard({ providerId }) {
             <input
               value={gatewayPath}
               onChange={(e) => setGatewayPath(e.target.value)}
-              placeholder="/gateway/v1/messages"
+              placeholder={CREDITDADDY_LINES[providerId].pathPlaceholder}
               className="w-44 py-2 px-3 text-sm text-text-main bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-md focus:ring-1 focus:ring-primary/30 focus:border-primary/50 focus:outline-none transition-all"
             />
             <button
@@ -187,7 +195,9 @@ export default function NoAuthProxyCard({ providerId }) {
             </button>
           </div>
           <p className="text-xs text-text-muted">
-            CreditDaddy 桌面版开启「体验包接口」后即为本机可用；局域网主机需在其面板开启「局域网」并重启。
+            {providerId === "minimax-free"
+              ? "CreditDaddy 桌面版开启「MiniMax 网关」并添加 MiniMax 账号后即为本机可用；局域网主机需在其面板开启「局域网」并重启。"
+              : "CreditDaddy 桌面版开启「体验包接口」后即为本机可用；局域网主机需在其面板开启「局域网」并重启。"}
             远程主机需鉴权——建一个带 key 的连接（key = 其「10Router 连接设置」里的虚拟 key）。
           </p>
         </div>

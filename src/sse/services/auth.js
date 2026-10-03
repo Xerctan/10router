@@ -133,7 +133,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
           // 路径按线取：zcode = /gateway/v1/messages（留空默认；直连 zcode-api 时
           // 填 /v1/messages，其端点路径与网关别名同形）；minimax = /gateway/minimax/v1/messages
           const gwPath = providerId === 'minimax-free'
-            ? '/gateway/minimax/v1/messages'
+            ? ((settings.minimaxGatewayPath || '').trim() || '/gateway/minimax/v1/messages')
             : ((settings.zcodeGatewayPath || '').trim() || '/gateway/v1/messages');
           const u = new URL(`http://127.0.0.1:47860${gwPath.startsWith('/') ? '' : '/'}${gwPath}`);
           u.hostname = cdHost || '127.0.0.1';
