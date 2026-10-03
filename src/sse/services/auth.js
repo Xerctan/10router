@@ -130,11 +130,12 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       const virtualPsd = {};
       if (isCreditDaddyLine) {
         try {
-          // 路径按线取：zcode = /gateway/v1/messages（留空默认；直连 zcode-api 时
-          // 填 /v1/messages，其端点路径与网关别名同形）；minimax = /gateway/minimax/v1/messages
+          // 路径按线取：zcode = /gateway/zcode/v1/messages（留空默认；直连
+          // zcode-api 时填 /v1/messages，其端点路径与网关别名同形）；
+          // minimax = /gateway/minimax/v1/messages
           const gwPath = providerId === 'minimax-free'
             ? ((settings.minimaxGatewayPath || '').trim() || '/gateway/minimax/v1/messages')
-            : ((settings.zcodeGatewayPath || '').trim() || '/gateway/v1/messages');
+            : ((settings.zcodeGatewayPath || '').trim() || '/gateway/zcode/v1/messages');
           const u = new URL(`http://127.0.0.1:47860${gwPath.startsWith('/') ? '' : '/'}${gwPath}`);
           u.hostname = cdHost || '127.0.0.1';
           const port = Number((settings.zcodeGatewayPort || '').trim());

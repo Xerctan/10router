@@ -2474,8 +2474,8 @@ exports[`GOLDEN buildUrl (default executor providers) > xiaomi-mimo → url (str
 
 exports[`GOLDEN buildUrl (default executor providers) > zcode-free → url (stream + non-stream) 1`] = `
 {
-  "nonStream": "http://127.0.0.1:47860/gateway/v1/messages",
-  "stream": "http://127.0.0.1:47860/gateway/v1/messages",
+  "nonStream": "http://127.0.0.1:47860/gateway/zcode/v1/messages",
+  "stream": "http://127.0.0.1:47860/gateway/zcode/v1/messages",
 }
 `;
 

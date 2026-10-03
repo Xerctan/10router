@@ -17,7 +17,7 @@ const STRATEGIES = [
 // 键共享,路径按线分开——zcode 线可直连 zcode-api 故路径可编辑,MiniMax 线固定
 // 网关路径但同样允许覆盖）。非 CreditDaddy 线不渲染网关区。
 const CREDITDADDY_LINES = {
-  "zcode-free": { pathKey: "zcodeGatewayPath", defaultPath: "/gateway/v1/messages", pathPlaceholder: "/gateway/v1/messages" },
+  "zcode-free": { pathKey: "zcodeGatewayPath", defaultPath: "/gateway/zcode/v1/messages", pathPlaceholder: "/gateway/zcode/v1/messages" },
   "minimax-free": { pathKey: "minimaxGatewayPath", defaultPath: "/gateway/minimax/v1/messages", pathPlaceholder: "/gateway/minimax/v1/messages" },
 };
 

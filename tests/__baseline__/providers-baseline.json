@@ -1274,7 +1274,7 @@
     ]
   },
   "zcode-free": {
-    "baseUrl": "http://127.0.0.1:47860/gateway/v1/messages",
+    "baseUrl": "http://127.0.0.1:47860/gateway/zcode/v1/messages",
     "format": "claude",
     "noAuth": true
   },

@@ -29,7 +29,7 @@
 ZCode 经常发放 Start Plan、Trust Build 以及周末狂欢额度（如 GLM-5.3-Flash 数亿 Token），这些额度只挂接在 `zcode.z.ai` 的内部 Plan 接口上。直接调用该接口会被阿里云滑块风控拦截（HTTP 400 `{"code":3007,"msg":"captcha verify failed"}`）。
 
 为了在**不违规暴力破解或伪造指纹**的前提下合规消费此额度，10Router 与 **CreditDaddy 桌面版** 建立了无缝协同网关：
-- **CreditDaddy**：负责账户会话维护，并在需要时通过静默窗口完成验证码交互，本地暴露无鉴权的 `POST http://127.0.0.1:47860/gateway/v1/messages`；
+- **CreditDaddy**：负责账户会话维护，并在需要时通过静默窗口完成验证码交互，本地暴露无鉴权的 `POST http://127.0.0.1:47860/gateway/zcode/v1/messages`（与 MiniMax 线的 `/gateway/minimax/v1/messages` 同形）；
 - **10Router (`zcode-free`)**：内置该体验包供应商，配置驱动转发请求，支持局域网分布式部署。
 
 ```
