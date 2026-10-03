@@ -283,6 +283,15 @@ export const MODEL_CAPABILITIES = {
   // text+image+video、1048576 窗口、输入/输出各 524288。名字读不出多模态，
   // 必须显式声明，否则 vision 落 false 图片被剥。
   "space-bunny-free":           { vision: true, videoInput: true, reasoning: true, thinkingFormat: "openai", contextWindow: 1048576, maxOutput: 524288 },
+  // MiniMax Code（CreditDaddy MiniMax 线实测 + 官方客户端设置面板 2026-10-03）：
+  //   - M3.1-Flash-Preview：思考深度五档（default/low/medium/high/xhigh/max，
+  //     无 off → canDisable:false），thinking.effort 由 minimax 形态透传；
+  //   - M3：思考是开/关切换（客户端有「思考」开关、无档位）→ canDisable:true,
+  //     显式成行修正 *minimax-m3* pattern 的 canDisable:false（该行写于 M3 无
+  //     开关的旧认知）；上下文 512K/1M 两档是 MiniMax 侧的用量分档（1M 用量
+  //     较高），能力表按上限声明。
+  "MiniMax-M3.1-Flash-Preview": { vision: true, videoInput: true, reasoning: true, thinkingFormat: "minimax", thinkingCanDisable: false, contextWindow: 1000000, maxOutput: 512000 },
+  "MiniMax-M3":                 { vision: true, videoInput: true, reasoning: true, thinkingFormat: "minimax", thinkingCanDisable: true, contextWindow: 1000000, maxOutput: 131072 },
   // Fledge Alpha Free（opencode zen 目录；models.dev opencode 条目 2026-10-02）：
   // text+image 进、1M/131072、reasoning/tool_call 均 true——与 space-bunny-free
   // 同形（openai 转发，thinkingFormat: openai）。

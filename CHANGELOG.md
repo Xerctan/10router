@@ -2,6 +2,18 @@
 
 > 面向用户的精简更新见 [`public/i18n/changelog/`](https://github.com/techysy/10router/tree/main/public/i18n/changelog)（`en.md` / `zh-CN.md` / `zh-TW.md`，仪表盘「Change Log」按界面语言加载对应文件）。本文件为完整开发日志，按版本从上往下排列。
 
+## v1.3.3 (未发布)
+
+### ✨ 新增
+
+- **新增 MiniMax Code Free 供应商（CreditDaddy MiniMax 线，`minimax-free`）**：与 ZCode Free 同款接线——CreditDaddy 桌面版「MiniMax 网关」的本地 Anthropic 网关（`/gateway/minimax/v1/messages`，上游 agent.minimax.cn 标准协议；账号多路轮换、401 自动 OAuth 刷新、429 冷却均在 CreditDaddy 侧），noAuth 免登录卡片，主机/端口复用 CreditDaddy 网关配置。模型面 MiniMax-M3.1-Flash-Preview / M3 / M2.7-highspeed / M2.7（实测可答，响应带 signature thinking 块与 cache_read）。官方 Minimax Coding（api.minimax.io，API key 计费）为并行通道，两者互补。
+- **MiniMax 家族能力接线对齐官方客户端设置面板**：M3.1-Flash-Preview 思考深度五档透传（`thinking.effort`，default/low/medium/high/xhigh/max——CreditDaddy 网关实测 200 接受；透传门控在 `thinkingCanDisable:false` 上，M3 与 M2.x 不带档位）；M3 思考为开/关切换（客户端有「思考」开关 → `canDisable:true`，显式成行修正旧 pattern 的 false）；上下文 512K/1M 两档为 MiniMax 侧用量分档，能力表按上限 1M 声明。MiniMax-M3.1-Flash-Preview / M3 canonical 行按 models.dev minimax-coding-plan 条目（text+image+video 进、1M/512K）。Lobe 官方 MiniMax 图标复用（`minimax-free`）。
+- **`/v1/models` noAuth 静态出口改按 dashboard 优先级排序**（低位在前、id 稳定次序）——此前依赖注册表插入顺序，两个尾部 noAuth 供应商之间会退化成字母序偶然。
+
+### 🐛 修复
+
+- **windsurf / trae / devin-cli 新目录模型的能力地板收尾**：SWE-1.5/1.6（±Fast）无公开规格（models.dev 未收录）→ 审计 allowlist 注记保留地板值；trae 的 Auto / Work 为 server 挑模型虚拟档 → allowlist「aggregator」性质（同 cursor/default）。
+
 ## v1.3.2 (2026-10-03)
 
 ### ✨ 新功能

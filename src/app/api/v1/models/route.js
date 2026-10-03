@@ -759,7 +759,13 @@ export async function buildModelsList(kindFilter, options = {}) {
   // NOT gated on connections.length: a healthy DB with zero connections (a
   // fresh install — exactly the onboarding path these providers target) must
   // still list them.
-  for (const [pid, p] of Object.entries(AI_PROVIDERS)) {
+  // noAuth 静态出口按 dashboard 的优先级规则排序（低位在前，id 稳定次序）——
+  // 依赖注册表插入顺序会让两个尾部供应商之间退化成字母序偶然。
+  const noAuthEntries = Object.entries(AI_PROVIDERS)
+    .filter(([, p]) => p?.noAuth && p?.exposeStaticModels)
+    .sort((a, b) => (a[1].priority ?? Infinity) - (b[1].priority ?? Infinity)
+      || String(a[0]).localeCompare(String(b[0])));
+  for (const [pid, p] of noAuthEntries) {
     if (!p?.noAuth || !p?.exposeStaticModels) continue; // 显式 opt-in（避免既有 noAuth 供应商模型自动冒出）
     if (activeConnectionByProvider.has(pid)) continue; // 已由连接循环处理
     if (!providerMatchesKinds(pid, kindFilter)) continue;
