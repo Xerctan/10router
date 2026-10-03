@@ -116,22 +116,25 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     const providerId = resolveProviderId(provider);
 
     // Inject a virtual connection for no-auth free providers (with optional proxy pool from settings)
-    // zcode-free: CreditDaddy 网关在本机回环免密，但局域网主机要求虚拟 key ——
+    // CreditDaddy 网关线（zcode-free / minimax-free）在本机回环免密，但局域网主机要求虚拟 key ——
     // 用户建了带 key 的连接时优先走真实连接，无连接才落 noAuth 虚拟行
-    const hasZcodeConnection = providerId === "zcode-free"
+    const isCreditDaddyLine = providerId === "zcode-free" || providerId === "minimax-free";
+    const hasCdRealConnection = isCreditDaddyLine
       ? (await getProviderConnections({ provider: providerId, isActive: true })).length > 0
       : false;
-    if (FREE_PROVIDERS[providerId]?.noAuth && !hasZcodeConnection) {
+    if (FREE_PROVIDERS[providerId]?.noAuth && !hasCdRealConnection) {
       const settings = await getSettings();
-      // zcode-free: CreditDaddy 主机可配置（本机 127.0.0.1 或局域网 IP），
+      // CreditDaddy 主机可配置（本机 127.0.0.1 或局域网 IP），
       // 覆盖注册表 baseUrl 的主机部分；端口固定跟 CreditDaddy daemon（47860 起）
       const cdHost = (settings.zcodeGatewayHost || '').trim();
       const virtualPsd = {};
-      if (providerId === 'zcode-free') {
+      if (isCreditDaddyLine) {
         try {
-          // 路径可选：留空 = CreditDaddy 网关（/gateway/v1/messages）；
-          // 直连 zcode-api 时填 /v1/messages（其端点路径与网关别名同形）
-          const gwPath = (settings.zcodeGatewayPath || '').trim() || '/gateway/v1/messages';
+          // 路径按线取：zcode = /gateway/v1/messages（留空默认；直连 zcode-api 时
+          // 填 /v1/messages，其端点路径与网关别名同形）；minimax = /gateway/minimax/v1/messages
+          const gwPath = providerId === 'minimax-free'
+            ? '/gateway/minimax/v1/messages'
+            : ((settings.zcodeGatewayPath || '').trim() || '/gateway/v1/messages');
           const u = new URL(`http://127.0.0.1:47860${gwPath.startsWith('/') ? '' : '/'}${gwPath}`);
           u.hostname = cdHost || '127.0.0.1';
           const port = Number((settings.zcodeGatewayPort || '').trim());
