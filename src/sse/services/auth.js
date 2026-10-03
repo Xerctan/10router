@@ -116,8 +116,8 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     const providerId = resolveProviderId(provider);
 
     // Inject a virtual connection for no-auth free providers (with optional proxy pool from settings)
-    // CreditDaddy 网关线（zcode-free / minimax-free）在本机回环免密，但局域网主机要求虚拟 key ——
-    // 用户建了带 key 的连接时优先走真实连接，无连接才落 noAuth 虚拟行
+    // CreditDaddy 网关线（zcode-free / minimax-free）在本机回环免密，局域网由 IP 白名单保护、
+    // 不校验 key —— 无需建带 key 的连接。仍手动建了连接时优先走真实连接，无连接才落 noAuth 虚拟行
     const isCreditDaddyLine = providerId === "zcode-free" || providerId === "minimax-free";
     const hasCdRealConnection = isCreditDaddyLine
       ? (await getProviderConnections({ provider: providerId, isActive: true })).length > 0
