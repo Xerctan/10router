@@ -2,6 +2,23 @@
 
 User-facing highlights per release. See [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md) for the full developer log.
 
+## v1.3.2 (2026-10-03)
+
+### ✨ New
+
+- **Desktop: unified HTML update window** — checking, download progress, cancel and install all live in one branded window consistent with the dashboard; fixed stray scrollbars under Windows fractional display scaling.
+- **Desktop: "Update via desktop shell" button** — when the dashboard finds a new version, one click hands the download → SHA-256 verify → install flow to the tray shell; works from remote dashboards (LAN / Tailscale) too.
+- **Desktop: installer & About window match the dashboard design language** — the installer/uninstaller gain a branded sidebar; "About 10Router" moved from the native dialog to a branded window.
+- **Fixed: Windows upgrades no longer blocked by stale processes (important)** — the old uninstaller could not kill the background service, failing upgrades with "cannot close"; the new installer clears processes up front and the app stops its service deterministically on quit.
+- **Space-Bunny added to CodeBuddy CN** (0.03x limited-time, 10/2–10/7); **APInex is back** with a live-refreshed 36-model catalog (free tier grown to 18).
+- **Vendor catalog & icon refresh** — Token Harbor free tier gains qwen3.8-flash / mimo-v2.6-flash (1M window, vision); fledge-alpha-free capability row; Atria key link points to the official console; new official icons for Atria / Token Harbor / OpenCode Zen; Dahl Inference retired.
+
+### 🐛 Fixed
+
+- **Model capability reporting is complete** — login-free vendors (zcode-free etc.), custom models of unconnected vendors (opencode-zen etc.) and login-free static models now all publish "context window / max output" so clients stop guessing.
+- **Cache hit rate algorithm fixed** — cache-dense requests are no longer silently dropped from the stat (684 rows); cache-write tokens count toward the denominator, making the number honest (agent traffic legitimately sits in the high 90s).
+- **Provider detail page** — invite code chip no longer shows twice; provider notice texts fully translated (zh-CN / zh-TW).
+
 ## v1.3.1 (2026-10-02)
 
 ### ✨ New
