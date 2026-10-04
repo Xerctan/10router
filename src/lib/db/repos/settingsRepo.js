@@ -44,7 +44,7 @@ const DEFAULT_SETTINGS = {
   // ON by default: the alternative is a request error. Ratio = share of the
   // effective context window at which older turns get summarized away.
   autoCompactEnabled: true,
-  autoCompactRatio: 0.9,
+  autoCompactRatio: 0.95,
   autoCompactKeepMessages: 8,
   apiKeyRotation: false, // experimental: HMAC secret rotation (invalidates all issued keys)
   tunnelDashboardAccess: true,
