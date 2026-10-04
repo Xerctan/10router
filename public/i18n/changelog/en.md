@@ -2,6 +2,16 @@
 
 User-facing highlights per release. See [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md) for the full developer log.
 
+## v1.3.4 (2026-10-05)
+
+### ✨ New
+
+- **New Trae Free provider (`trae-free`)** — use Trae (SOLO) remote-agent credits through the local CreditDaddy gateway, same wiring as ZCode Free / MiniMax Free: no login card, shared host/port with a per-line path, 12 models (Doubao Seed Code, MiniMax M2.7, GLM 5 family, DeepSeek V4, Kimi K2.5/2.6, Qwen 3.5/3.6) and thinking-stream support.
+
+### 🐛 Fixed
+
+- **Auto-compact default trigger ratio 0.9 → 0.95** — auto-compaction now fires closer to the context limit (threshold levels and the master switch are unchanged; still adjustable on the "Experimental" card).
+
 ## v1.3.3 (2026-10-04)
 
 ### ✨ New

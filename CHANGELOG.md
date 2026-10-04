@@ -2,6 +2,16 @@
 
 > 面向用户的精简更新见 [`public/i18n/changelog/`](https://github.com/techysy/10router/tree/main/public/i18n/changelog)（`en.md` / `zh-CN.md` / `zh-TW.md`，仪表盘「Change Log」按界面语言加载对应文件）。本文件为完整开发日志，按版本从上往下排列。
 
+## v1.3.4 (2026-10-05)
+
+### ✨ 新增
+
+- **新增 Trae Free 供应商（CreditDaddy Trae 线，`trae-free`）**：与 ZCode / MiniMax 两条线同款的本地网关接线——CreditDaddy 桌面版「Trae 网关」接口（`/gateway/trae/v1/messages`，Anthropic Messages 形态，默认 `127.0.0.1:47860`；网关内部转译到 sol.trae.cn 的 SOLO agent 会话协议，账号多路 SWRR 轮换、401 凭据热对齐、429 限流冷却与局域网白名单均在 CreditDaddy 侧），noAuth 免登录卡片、主机/端口复用 CreditDaddy 网关配置、路径按线独立（设置键 `traeGatewayPath`）。模型面 12 款：Doubao-Seed-2.0-Code / Doubao-Seed-Code / MiniMax M2.7 / GLM 5.1 / GLM 5v-Turbo / GLM 5 / DeepSeek V4 Pro / V4 Flash / Kimi K2.6 / K2.5 / Qwen 3.6 Plus / 3.5，支持 thinking_delta 思考流与用量回报。五处接入点：注册表条目 + `registry/index.js` 自动列表（p149）、`executors/base.js` 网关 baseUrl 覆盖（三线同判）、`auth.js` noAuth 虚拟行与网关路径分支（三线同源，抽风格从二元改多分支）、`NoAuthProxyCard` 网关设置区与本地/局域网接入说明、`LobeProviderIcon` Trae 官方图标映射。
+
+### 🐛 修复
+
+- **超长上下文自动压缩默认触发比例 0.9 → 0.95**（`DEFAULT_SETTINGS.autoCompactRatio`）：自动压缩（Auto-compact，v1.2.1 引入）此前默认在实际窗口 90% 处触发，现上调到 95%——更贴近窗口上限才压缩，减少长会话里偏早触发对上下文的折损。阈值档位（80 / 90 / 95%）不变，仍可在「实验特性」卡片自行下调，总开关逻辑不动。
+
 ## v1.3.3 (2026-10-04)
 
 ### ✨ 新增

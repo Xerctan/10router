@@ -2,6 +2,16 @@
 
 这里展示面向用户的关键更新；完整开发明细见 [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md)。
 
+## v1.3.4 (2026-10-05)
+
+### ✨ 新增
+
+- **新增 Trae Free 供应商（`trae-free`）**：经本地 CreditDaddy 网关使用 Trae（SOLO）远程 Agent 额度，与 ZCode Free / MiniMax Free 同款接线——免登录卡片、主机/端口共享、路径按线独立，12 款模型（Doubao Seed Code、MiniMax M2.7、GLM 5 系、DeepSeek V4 系、Kimi K2.5/2.6、Qwen 3.5/3.6），支持思考流。
+
+### 🐛 修复
+
+- **超长上下文自动压缩默认触发比例 0.9 → 0.95**：自动压缩改为更贴近窗口上限才触发（阈值档位与总开关不变，可在「实验特性」卡片调整）。
+
 ## v1.3.3 (2026-10-04)
 
 ### ✨ 新增
