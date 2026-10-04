@@ -133,21 +133,22 @@ import p130 from "./tokenrouter.js";
 import p131 from "./topaz.js";
 import p132 from "./tortoise.js";
 import p133 from "./trae.js";
-import p134 from "./v1m.js";
-import p135 from "./venice.js";
-import p136 from "./vercel-ai-gateway.js";
-import p137 from "./vertex-partner.js";
-import p138 from "./vertex.js";
-import p139 from "./volcengine-ark.js";
-import p140 from "./voyage-ai.js";
-import p141 from "./windsurf.js";
-import p142 from "./xai.js";
-import p143 from "./xiaomi-mimo.js";
-import p144 from "./xiaomi-tokenplan.js";
-import p145 from "./xquik.js";
-import p146 from "./youcom.js";
-import p147 from "./zcode-free.js";
-import p148 from "./zed.js";
+import p134 from "./trae-free.js";
+import p135 from "./v1m.js";
+import p136 from "./venice.js";
+import p137 from "./vercel-ai-gateway.js";
+import p138 from "./vertex-partner.js";
+import p139 from "./vertex.js";
+import p140 from "./volcengine-ark.js";
+import p141 from "./voyage-ai.js";
+import p142 from "./windsurf.js";
+import p143 from "./xai.js";
+import p144 from "./xiaomi-mimo.js";
+import p145 from "./xiaomi-tokenplan.js";
+import p146 from "./xquik.js";
+import p147 from "./youcom.js";
+import p148 from "./zcode-free.js";
+import p149 from "./zed.js";
 
 export default [
   p0,
@@ -299,4 +300,5 @@ export default [
   p146,
   p147,
   p148,
+  p149,
 ];

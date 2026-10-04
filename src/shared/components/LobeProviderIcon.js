@@ -116,6 +116,7 @@ export const LOBE_PROVIDER_ICONS = {
   windsurf: Windsurf,
   kiro: Kiro,
   trae: Trae,
+  "trae-free": Trae,
   "jina-ai": Jina,
   exa: Exa,
   tavily: Tavily,

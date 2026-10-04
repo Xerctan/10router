@@ -1158,6 +1158,11 @@
     "clientSecret": "-",
     "tokenUrl": "https://api.marscode.com/cloudide/api/v3/trae/oauth/ExchangeToken"
   },
+  "trae-free": {
+    "baseUrl": "http://127.0.0.1:47860/gateway/trae/v1/messages",
+    "format": "claude",
+    "noAuth": true
+  },
   "venice": {
     "baseUrl": "https://api.venice.ai/api/v1/chat/completions",
     "validateUrl": "https://api.venice.ai/api/v1/models",

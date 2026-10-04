@@ -116,9 +116,9 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     const providerId = resolveProviderId(provider);
 
     // Inject a virtual connection for no-auth free providers (with optional proxy pool from settings)
-    // CreditDaddy 网关线（zcode-free / minimax-free）在本机回环免密，局域网由 IP 白名单保护、
+    // CreditDaddy 网关线（zcode-free / minimax-free / trae-free）在本机回环免密，局域网由 IP 白名单保护、
     // 不校验 key —— 无需建带 key 的连接。仍手动建了连接时优先走真实连接，无连接才落 noAuth 虚拟行
-    const isCreditDaddyLine = providerId === "zcode-free" || providerId === "minimax-free";
+    const isCreditDaddyLine = providerId === "zcode-free" || providerId === "minimax-free" || providerId === "trae-free";
     const hasCdRealConnection = isCreditDaddyLine
       ? (await getProviderConnections({ provider: providerId, isActive: true })).length > 0
       : false;
@@ -132,10 +132,14 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
         try {
           // 路径按线取：zcode = /gateway/zcode/v1/messages（留空默认；直连
           // zcode-api 时填 /v1/messages，其端点路径与网关别名同形）；
-          // minimax = /gateway/minimax/v1/messages
-          const gwPath = providerId === 'minimax-free'
-            ? ((settings.minimaxGatewayPath || '').trim() || '/gateway/minimax/v1/messages')
-            : ((settings.zcodeGatewayPath || '').trim() || '/gateway/zcode/v1/messages');
+          // minimax = /gateway/minimax/v1/messages；
+          // trae = /gateway/trae/v1/messages
+          let gwPath = (settings.zcodeGatewayPath || '').trim() || '/gateway/zcode/v1/messages';
+          if (providerId === 'minimax-free') {
+            gwPath = (settings.minimaxGatewayPath || '').trim() || '/gateway/minimax/v1/messages';
+          } else if (providerId === 'trae-free') {
+            gwPath = (settings.traeGatewayPath || '').trim() || '/gateway/trae/v1/messages';
+          }
           const u = new URL(`http://127.0.0.1:47860${gwPath.startsWith('/') ? '' : '/'}${gwPath}`);
           u.hostname = cdHost || '127.0.0.1';
           const port = Number((settings.zcodeGatewayPort || '').trim());

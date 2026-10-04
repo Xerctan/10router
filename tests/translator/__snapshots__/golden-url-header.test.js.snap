@@ -1696,6 +1696,28 @@ exports[`GOLDEN buildHeaders (default executor providers) > trae → headers (ap
 }
 `;
 
+exports[`GOLDEN buildHeaders (default executor providers) > trae-free → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Content-Type": "application/json",
+    "anthropic-version": "2023-06-01",
+    "x-api-key": undefined,
+  },
+  "nonStream": {
+    "Content-Type": "application/json",
+    "anthropic-version": "2023-06-01",
+    "x-api-key": undefined,
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Content-Type": "application/json",
+    "anthropic-version": "2023-06-01",
+    "x-api-key": undefined,
+  },
+}
+`;
+
 exports[`GOLDEN buildHeaders (default executor providers) > venice → headers (apiKey / oauth) 1`] = `
 {
   "apiKey": {
@@ -2401,6 +2423,13 @@ exports[`GOLDEN buildUrl (default executor providers) > trae → url (stream + n
 {
   "nonStream": "https://core-normal.trae.ai/api/remote/v1",
   "stream": "https://core-normal.trae.ai/api/remote/v1",
+}
+`;
+
+exports[`GOLDEN buildUrl (default executor providers) > trae-free → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "http://127.0.0.1:47860/gateway/trae/v1/messages",
+  "stream": "http://127.0.0.1:47860/gateway/trae/v1/messages",
 }
 `;
 
