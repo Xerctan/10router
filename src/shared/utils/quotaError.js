@@ -16,6 +16,16 @@ import { translate } from "@/i18n/runtime";
 
 const RESET_TEMPLATE_KEY = "Individual quota reached. Resets at {time} (in {duration}).";
 
+// Same failure, but scoped to ONE model. Google bills a single account against
+// several independent per-model buckets (Antigravity's 5h individual quota is
+// per model), while the lock we store is per-model too — yet the account-wide
+// wording above reads as "this whole account is dead for 5 hours", which is
+// exactly what issue #46 reported: other models on the same connection keep
+// serving traffic the entire time. Qualify the sentence when the payload names
+// the model; the account-wide template stays for payloads that don't (a genuine
+// whole-account exhaustion).
+const RESET_PER_MODEL_TEMPLATE_KEY = "Individual quota reached for model {model}. Resets at {time} (in {duration}).";
+
 // Plan/subscription quota (MiMo's weekly allowance and friends) is a DIFFERENT
 // failure from Google's per-minute cap: there is no countdown in the payload and
 // no upgrade path we can speak to, so it gets its own template. Without this
@@ -88,7 +98,13 @@ export function extractQuotaResetInfo(text) {
   timestamp = (tsJson && tsJson[1]) || (tsPlain && tsPlain[1]) || null;
   if (timestamp) timestamp = timestamp.replace(/^"|"$/g, "");
 
-  return { delay, timestamp };
+  // The same metadata block that carries the reset fields also names the model
+  // the bucket belongs to ("model": "gemini-3.8-flash-high"). It was parsed
+  // past and dropped, which is how a per-model limit rendered as an
+  // account-wide outage (#46).
+  const model = /"model"\s*:\s*"([^"]+)"/.exec(raw)?.[1] || null;
+
+  return { delay, timestamp, model };
 }
 
 function formatResetTime(ts) {
@@ -120,13 +136,14 @@ export function translateQuotaError(errorText) {
 
   // Google-style per-account quota exhausted (HTTP 429 RESOURCE_EXHAUSTED).
   if (/Individual quota reached|QUOTA_EXHAUSTED|RESOURCE_EXHAUSTED/i.test(errorText)) {
-    const { delay, timestamp } = extractQuotaResetInfo(errorText);
+    const { delay, timestamp, model } = extractQuotaResetInfo(errorText);
     const durationStr = formatQuotaDuration(parseQuotaDurationParts(delay));
     const timeStr = timestamp ? formatResetTime(timestamp) : "";
-    let msg = translate(RESET_TEMPLATE_KEY);
+    let msg = translate(model ? RESET_PER_MODEL_TEMPLATE_KEY : RESET_TEMPLATE_KEY);
     // Legacy rows were stored truncated to 100 chars, which cut the reset
     // fields off the JSON tail — substitute neutral values so the sentence
     // never renders with empty placeholders ("将于  重置（约  后）").
+    msg = msg.replace("{model}", model || "");
     msg = msg.replace("{time}", timeStr || translate("shortly"));
     msg = msg.replace("{duration}", durationStr || translate("a short while"));
     return msg;

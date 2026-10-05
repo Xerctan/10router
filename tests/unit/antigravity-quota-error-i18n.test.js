@@ -101,6 +101,45 @@ describe("Antigravity quota exhausted error i18n", () => {
     expect(translateQuotaError(plain)).toBe(plain);
   });
 
+  it("extractQuotaResetInfo also surfaces the model the quota bucket belongs to", async () => {
+    // #46: the payload always named the model, but it was parsed past and dropped,
+    // so a per-model limit rendered with account-wide wording.
+    const { extractQuotaResetInfo } = await import("@/shared/utils/quotaError.js");
+    expect(extractQuotaResetInfo(REAL_429_ERROR).model).toBe("gemini-3.8-flash-high");
+    expect(extractQuotaResetInfo("no json here").model).toBeNull();
+  });
+
+  it("scopes the message to the model when the payload names one (#46)", async () => {
+    const { translateQuotaError } = await import("@/shared/utils/quotaError.js");
+    const out = translateQuotaError(REAL_429_ERROR);
+    expect(out).toContain("gemini-3.8-flash-high");
+    expect(out).not.toContain("{model}");
+    // A per-model limit must not read as "the whole account is dead", because
+    // every other model on this connection keeps serving the whole window.
+    expect(out).toMatch(/for model/);
+  });
+
+  it("keeps the account-wide wording when the payload names no model", async () => {
+    const { translateQuotaError } = await import("@/shared/utils/quotaError.js");
+    const noModel = '[429]: {"error":{"code":429,"message":"Individual quota reached. Resets in 1h27m36s.","status":"RESOURCE_EXHAUSTED"}}';
+    const out = translateQuotaError(noModel);
+    expect(out).toContain("Resets at");
+    expect(out).not.toContain("{model}");
+    expect(out).not.toMatch(/for model\s*\./);
+  });
+
+  it("both dictionaries carry the per-model template (#46)", () => {
+    const key = "Individual quota reached for model {model}. Resets at {time} (in {duration}).";
+    for (const [dict, scope] of [[zhCN, "该账号"], [zhTW, "該帳號"]]) {
+      const msg = dict[key];
+      expect(msg).toBeTruthy();
+      expect(msg).toContain("{model}");
+      // The whole point: name the model, and say the rest still works.
+      expect(msg).toContain(scope);
+      expect(msg).toMatch(/仍可正常使用|仍可正常使用/);
+    }
+  });
+
   it("provider detail page and ConnectionRow route errors through translateQuotaError", () => {
     const pageSrc = readFileSync(resolve(rootDir, "src/app/(dashboard)/dashboard/providers/[id]/page.js"), "utf8");
     expect(pageSrc).toContain("translateQuotaError(error)");
