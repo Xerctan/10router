@@ -399,6 +399,58 @@ export function estimateUsage(body, contentLength, targetFormat = FORMATS.OPENAI
 }
 
 /**
+ * Measure the assistant text a NON-streaming response actually returned, so the
+ * non-streaming paths can run the same estimateUsage fallback the SSE path uses.
+ *
+ * The streaming path accumulates `totalContentLength` chunk by chunk; a whole
+ * response body is already in hand here, so we total it in one pass. Deliberately
+ * format-agnostic: it walks the OpenAI `choices[].message` shape, the Claude
+ * `content[]` block shape and the Responses `output[].content[].text` shape, so
+ * callers can pass the translated body regardless of which source format it is
+ * in. Reasoning/thinking text is counted too — the SSE path counts it as well
+ * (stream.js tracks reasoning + thinking deltas), and the whole point of this
+ * fallback is to approximate a real total, not to bill exactly.
+ *
+ * Returns 0 when the body carries no text, so callers keep their existing
+ * "only estimate when there is something to estimate from" guard.
+ *
+ * @param {object} responseBody - Translated (or raw) non-streaming response body
+ * @returns {number} Total characters of assistant text (thinking included)
+ */
+export function measureResponseTextLength(responseBody) {
+  if (!responseBody || typeof responseBody !== "object") return 0;
+
+  let total = 0;
+  const add = (value) => {
+    if (typeof value === "string") total += value.length;
+  };
+
+  // OpenAI chat-completions: choices[].message.content (+ reasoning_content).
+  for (const choice of Array.isArray(responseBody.choices) ? responseBody.choices : []) {
+    const message = choice?.message || choice?.delta;
+    if (!message) continue;
+    add(typeof message.content === "string" ? message.content : "");
+    add(message.reasoning_content);
+    for (const part of Array.isArray(message.content) ? message.content : []) add(part?.text);
+  }
+
+  // Claude messages: content[] blocks of { type: "text" | "thinking", text }.
+  if (Array.isArray(responseBody.content)) {
+    for (const block of responseBody.content) add(block?.text);
+  }
+
+  // Responses API: output[] items of { type: "message", content: [{ text }] }.
+  if (Array.isArray(responseBody.output)) {
+    for (const item of responseBody.output) {
+      if (typeof item?.text === "string") add(item.text);
+      for (const part of Array.isArray(item?.content) ? item.content : []) add(part?.text);
+    }
+  }
+
+  return total;
+}
+
+/**
  * Log usage with cache info (green color)
  */
 export function logUsage(provider, usage, model = null, connectionId = null, apiKey = null) {

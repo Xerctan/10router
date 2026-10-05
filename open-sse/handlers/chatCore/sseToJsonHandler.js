@@ -5,12 +5,27 @@ import { HTTP_STATUS } from "../../config/runtimeConfig.js";
 import { FORMATS } from "../../translator/formats.js";
 import { PROVIDERS } from "../../config/providers.js";
 import { buildRequestDetail, extractRequestConfig, saveUsageStats, formatDoneLine } from "./requestDetail.js";
+import { estimateUsage, hasValidUsage, measureResponseTextLength } from "../../utils/usageTracking.js";
 import { ROLE, RESPONSES_ITEM } from "../../translator/schema/index.js";
 import { restoreToolNames } from "../../utils/opencodeFingerprint.js";
 
 // Responses-API providers (e.g. codex) may emit SSE without content-type + use Responses output shape
 const isResponsesProvider = (p) => PROVIDERS[p]?.format === FORMATS.OPENAI_RESPONSES;
 import { saveRequestDetail, appendRequestLog } from "@/lib/usageDb.js";
+
+/**
+ * `parsed.usage || {}` used to record an all-zero row whenever the provider's
+ * stream carried no usage block: saveUsageStats drops all-zero rows (Overview
+ * tab empty) while saveRequestDetail kept the row (Details tab showing 0 / 0).
+ * Same estimateUsage fallback the plain SSE path and the non-streaming path use,
+ * so all three agree on what a usage-less response costs.
+ */
+function usageOrEstimate(usage, body, responseBody) {
+  if (hasValidUsage(usage)) return usage;
+  const contentLength = measureResponseTextLength(responseBody);
+  if (contentLength <= 0) return usage;
+  return estimateUsage(body, contentLength, FORMATS.OPENAI);
+}
 
 function textFromResponsesMessageItem(item) {
   if (!item?.content || !Array.isArray(item.content)) return "";
@@ -215,7 +230,11 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
       const jsonResponse = await convertResponsesStreamToJson(providerResponse.body);
       if (onRequestSuccess) await onRequestSuccess();
 
-      const usage = jsonResponse.usage || {};
+      // `jsonResponse` is handed to the client verbatim just below, so the
+      // estimated value stays in a separate variable — never written back.
+      // `upstreamUsage` is the only figure allowed onto the wire below.
+      const upstreamUsage = jsonResponse.usage || {};
+      const usage = usageOrEstimate(upstreamUsage, body, jsonResponse);
       appendLog({ tokens: usage, status: "200 OK" });
       const totalLatency = Date.now() - requestStartTime;
       saveUsageStats({ provider, model, tokens: usage, connectionId, apiKey, endpoint: clientRawRequest?.endpoint, latency: { ttft: totalLatency, total: totalLatency }, usageKey: randomUUID(), silent: true });
@@ -247,10 +266,14 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
       // where the real prompt was ~5344 with 5332 served from cache. Fold the cache
       // counters in, and keep them visible in prompt_tokens_details so a client can
       // tell a cache hit from a small prompt.
-      const cacheRead = usage.cache_read_input_tokens || usage.cached_tokens || 0;
-      const cacheCreate = usage.cache_creation_input_tokens || 0;
-      const inTokens = (usage.input_tokens || 0) + cacheRead + cacheCreate;
-      const outTokens = usage.output_tokens || 0;
+      //
+      // The reported usage must stay exactly what the provider said: the fold
+      // above is a fidelity correction, and mixing the ESTIMATED `usage` in here
+      // would present a guess to the client as a real spend. `usage` is DB-only.
+      const cacheRead = upstreamUsage.cache_read_input_tokens || upstreamUsage.cached_tokens || 0;
+      const cacheCreate = upstreamUsage.cache_creation_input_tokens || 0;
+      const inTokens = (upstreamUsage.input_tokens || 0) + cacheRead + cacheCreate;
+      const outTokens = upstreamUsage.output_tokens || 0;
       const cacheDetails = (cacheRead > 0 || cacheCreate > 0)
         ? { prompt_tokens_details: {
               ...(cacheRead > 0 ? { cached_tokens: cacheRead } : {}),
@@ -315,7 +338,12 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
 
     if (onRequestSuccess) await onRequestSuccess();
 
-    const usage = parsed.usage || {};
+    // Two values on purpose. `upstreamUsage` is what the provider actually
+    // reported and is the only thing allowed onto the wire below — an estimate
+    // must never be presented to a client as a real spend. `usage` is what we
+    // record, falling back to an estimate so the DB rows are not left at 0 / 0.
+    const upstreamUsage = parsed.usage || {};
+    const usage = usageOrEstimate(upstreamUsage, body, parsed);
     appendLog({ tokens: usage, status: "200 OK" });
     const totalLatency = Date.now() - requestStartTime;
     saveUsageStats({ provider, model, tokens: usage, connectionId, apiKey, endpoint: clientRawRequest?.endpoint, latency: { ttft: totalLatency, total: totalLatency }, usageKey: randomUUID(), silent: true });
@@ -333,14 +361,15 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
       status: "success"
     }, { endpoint: clientRawRequest?.endpoint || null })).catch(() => {});
 
-    // Re-attach usage explicitly. This handler already HAS the correct usage — it is
-    // the same object written to the usage DB, and for a cached Claude request that DB
-    // row reads cache_read_input_tokens: 11022 — yet the client was observed receiving
-    // no usage field at all (verified 2026-08-04 with a fingerprinted payload matched
-    // on both sides). Whatever drops it between assembly and serialisation, the client
-    // must not be left unable to account for its own token spend: a caller cannot tell
-    // a 90%-cached request from a cheap one without this.
-    if (usage && Object.keys(usage).length > 0) parsed.usage = usage;
+    // Re-attach usage explicitly. `upstreamUsage` is what the provider actually
+    // reported — and for a cached Claude request the same figure the DB row
+    // carries reads cache_read_input_tokens: 11022 — yet the client was observed
+    // receiving no usage field at all (verified 2026-08-04 with a fingerprinted
+    // payload matched on both sides). Whatever drops it between assembly and
+    // serialisation, the client must not be left unable to account for its own
+    // token spend: a caller cannot tell a 90%-cached request from a cheap one
+    // without this. An estimate is deliberately NOT attached here.
+    if (upstreamUsage && Object.keys(upstreamUsage).length > 0) parsed.usage = upstreamUsage;
 
     // Keep Gemini thought summaries on the forced-SSE-to-JSON path, matching
     // the normal non-streaming path. A Claude client is left alone for the same

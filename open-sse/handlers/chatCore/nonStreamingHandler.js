@@ -3,7 +3,7 @@ import { FORMATS } from "../../translator/formats.js";
 import { needsTranslation } from "../../translator/index.js";
 import { fromOpenAIFinish } from "../../translator/concerns/finishReason.js";
 import { ollamaBodyToOpenAI } from "../../translator/response/ollama-to-openai.js";
-import { addBufferToUsage, filterUsageForFormat } from "../../utils/usageTracking.js";
+import { addBufferToUsage, estimateUsage, filterUsageForFormat, hasValidUsage, measureResponseTextLength } from "../../utils/usageTracking.js";
 import { createErrorResult } from "../../utils/error.js";
 import { upstreamResponseHeaders } from "../../utils/upstreamHeaders.js";
 import { HTTP_STATUS } from "../../config/runtimeConfig.js";
@@ -413,10 +413,26 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
   responseBody = decloakToolNames(responseBody, toolNameMap);
 
   const usage = extractUsageFromResponse(responseBody);
-  appendLog({ tokens: usage, status: "200 OK" });
+  // Providers that answer a non-streaming request without a usage block used to
+  // leave BOTH writers with zeros: saveUsageStats drops all-zero rows outright
+  // (so the Overview tab, which reads usageDaily/usageHistory, showed nothing),
+  // while saveRequestDetail still wrote the row (so the Details tab listed a
+  // request with 0 in / 0 out). The SSE path has always fallen back to
+  // estimateUsage here; do the same, using the same OpenAI shape
+  // extractUsageFromResponse returns so the two paths agree.
+  //
+  // This `usage` only feeds the log line and the DB rows — the client-facing
+  // usage is translatedResponse.usage below — so estimating cannot change the
+  // API response.
+  let recordedUsage = usage;
+  if (!hasValidUsage(usage)) {
+    const contentLength = measureResponseTextLength(responseBody);
+    if (contentLength > 0) recordedUsage = estimateUsage(body, contentLength, FORMATS.OPENAI);
+  }
+  appendLog({ tokens: recordedUsage, status: "200 OK" });
   const usageLatency = { total: Date.now() - requestStartTime };
-  saveUsageStats({ provider, model, tokens: usage, connectionId, apiKey, endpoint: clientRawRequest?.endpoint, latency: usageLatency, usageKey: randomUUID(), silent: true });
-  if (log?.line) log.line(reqTag, "📊", formatDoneLine({ usage, latency: usageLatency }));
+  saveUsageStats({ provider, model, tokens: recordedUsage, connectionId, apiKey, endpoint: clientRawRequest?.endpoint, latency: usageLatency, usageKey: randomUUID(), silent: true });
+  if (log?.line) log.line(reqTag, "📊", formatDoneLine({ usage: recordedUsage, latency: usageLatency }));
 
   const translatedResponse = needsTranslation(targetFormat, sourceFormat)
     ? translateNonStreamingResponse(responseBody, targetFormat, sourceFormat, customToolNames, toolNameMap)
@@ -474,7 +490,7 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
   saveRequestDetail(buildRequestDetail({
     provider, model, connectionId,
     latency: { ttft: totalLatency, total: totalLatency },
-    tokens: usage || { prompt_tokens: 0, completion_tokens: 0 },
+    tokens: recordedUsage || { prompt_tokens: 0, completion_tokens: 0 },
     request: extractRequestConfig(body, stream),
     providerRequest: finalBody || translatedBody || null,
     providerResponse: responseBody || null,

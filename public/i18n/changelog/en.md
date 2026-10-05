@@ -10,6 +10,7 @@ User-facing highlights per release. See [CHANGELOG.md](https://github.com/techys
 
 ### 🐛 Fixed
 
+- **Usage Overview is no longer empty while Details lists 0-token rows** (issue #48) — the two tabs read different tables, and a response that carried no token counts was dropped entirely from one while still being written (as 0 in / 0 out) to the other. The streaming path always estimated a fallback; the non-streaming paths did not. Both tabs now show the same, estimated, counts. Estimates are recorded in the dashboard only — the usage reported to your client is still exactly what the provider returned.
 - **Auto-compact default trigger ratio 0.9 → 0.95** — auto-compaction now fires closer to the context limit (threshold levels and the master switch are unchanged; still adjustable on the "Experimental" card).
 - **Claude Code / mirasim no longer force compaction at 160K** — the model list reported context windows using the OpenAI convention only, so Claude CLI fell back to its built-in 200K default and started compacting models like Qwen3.8-Max (1M actual) client-side. The Anthropic-convention field is now published as well, so clients read the real window.
 - **Dashboard model cards no longer show 1M models as 200K** — Qoder (`qd` / `qdc`), Kiro (`kr`), CodeBuddy CN (`cbcn`) and Antigravity (`ag`) resolved capabilities by alias and fell through to the 200K floor (losing the vision / reasoning badges); Kiro's gpt-5.6 models additionally read a 1.05M window, 5× the real 272K. All four lines are now normalized to the correct 1M values.
