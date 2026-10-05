@@ -861,6 +861,34 @@ function fetchJson(url, timeoutMs = 8000) {
     });
 }
 
+// net.fetch 没有默认超时：GitHub release 资产实际托管在 objects.githubusercontent.com
+// （browser_download_url 302 跳过去），国内网络下常是「挂起」而非「报错」——
+// 裸 fetch 会无限卡住，这正是更新下载卡死的根因（CreditDaddy 走 npm 国内镜像所以流畅）。
+// 这里包一层：合并调用方 signal（关窗取消）与固定超时，任一触发即 abort。
+// 用 AbortController + setTimeout 手动合并（不依赖 AbortSignal.timeout/any，
+// Electron net.fetch 的 Chromium 网络栈对这两个新 API 兼容性未经验证）。
+function fetchWithTimeout(url, timeoutMs, init = {}) {
+    const { signal, ...rest } = init || {};
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(new Error('timeout')), timeoutMs);
+    let onAbort = null;
+    if (signal) {
+        if (signal.aborted) {
+            clearTimeout(timer);
+            ctrl.abort(signal.reason);
+        } else {
+            onAbort = () => { clearTimeout(timer); ctrl.abort(signal.reason); };
+            signal.addEventListener('abort', onAbort);
+        }
+    }
+    const p = net.fetch(url, { ...rest, signal: ctrl.signal });
+    p.finally(() => {
+        clearTimeout(timer);
+        if (onAbort) signal.removeEventListener('abort', onAbort);
+    });
+    return p;
+}
+
 // ──────────────────────── 应用内更新窗（统一 HTML 承载更新全流程） ─────────────
 // 一个无边框小窗(update-window.html + preload-update.js)承载整个状态机:
 //   checking → available(manual=只引导 Releases / download=可下载安装)
@@ -1017,7 +1045,7 @@ function canInstallInPlace() {
 async function resolveInstaller(latestVersion, preloadedRelease) {
     let rel = preloadedRelease;
     if (!rel) {
-        const res = await net.fetch(`https://api.github.com/repos/techysy/10router/releases/tags/v${latestVersion}`, { headers: { Accept: 'application/vnd.github+json' } });
+        const res = await fetchWithTimeout(`https://api.github.com/repos/techysy/10router/releases/tags/v${latestVersion}`, 15000, { headers: { Accept: 'application/vnd.github+json' } });
         if (!res.ok) throw new Error(`GitHub API HTTP ${res.status}`);
         rel = await res.json();
     }
@@ -1064,11 +1092,11 @@ async function downloadInstallerToTemp(inst, onProgress, signal) {
     let expectedSha = inst.expectedSha || null;
     if (inst.sumsUrl) {
         try {
-            const sumsRes = await net.fetch(inst.sumsUrl, { signal });
+            const sumsRes = await fetchWithTimeout(inst.sumsUrl, 30000, { signal });
             if (sumsRes.ok) expectedSha = releaseUpdater.resolveExpectedSha(inst, await sumsRes.text());
         } catch { /* sums 拉不到就回落资产 digest,再没有只能跳过校验 */ }
     }
-    const res = await net.fetch(inst.asset.url, { signal });
+    const res = await fetchWithTimeout(inst.asset.url, 60 * 60 * 1000, { signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const total = Number(res.headers.get('content-length')) || inst.asset.size || 0;
     const chunks = [];
@@ -1076,7 +1104,17 @@ async function downloadInstallerToTemp(inst, onProgress, signal) {
     if (res.body && typeof res.body.getReader === 'function') {
         const reader = res.body.getReader();
         for (;;) {
-            const { done, value } = await reader.read();
+            let chunk;
+            try {
+                chunk = await reader.read();
+            } catch (err) {
+                // 网络中断/超时：reader 抛的不一定是 AbortError（Chromium 网络栈
+                // 对已 abort 的流常抛 TypeError/其他），但只要是下载尚未完成的失败
+                // 都按「可重试的失败」处理，绝不能在这里挂死或当成校验通过。
+                reader.cancel().catch(() => {});
+                throw err;
+            }
+            const { done, value } = chunk;
             if (done) break;
             chunks.push(Buffer.from(value));
             got += value.length;
@@ -1125,8 +1163,14 @@ function startUpdateDownload(inst) {
         .catch((err) => {
             updateDlCtrl = null;
             clearUpdateProgress();
-            if (!updateWin || updateWin.isDestroyed()) return;   // 关窗取消:静默
-            if ((err && err.name) === 'AbortError') return;      // 取消按钮已关窗
+            // 关窗/取消按钮都会先关窗再 abort：窗口没了就当用户主动放弃，静默。
+            if (!updateWin || updateWin.isDestroyed()) return;
+            if ((err && err.name) === 'AbortError') return;
+            // 清理下载到一半的临时文件（若有），避免 temp 里堆积脏文件。
+            try {
+                const tmp = path.join(app.getPath('temp'), inst.asset.name);
+                if (fs.existsSync(tmp)) fs.rmSync(tmp, { force: true });
+            } catch { /* best effort */ }
             sendUpdateState('error', {
                 title: tr('update.downloadFailedTitle'),
                 detail: String((err && err.message) || err),
@@ -1156,7 +1200,7 @@ async function installDownloadedUpdate() {
 // 与当前壳/服务版本比;两路都通时 GitHub 只是备份口径,不改变 npm 为主的数据源。
 async function checkUpdateViaGitHub() {
     try {
-        const res = await net.fetch('https://api.github.com/repos/techysy/10router/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+        const res = await fetchWithTimeout('https://api.github.com/repos/techysy/10router/releases/latest', 15000, { headers: { Accept: 'application/vnd.github+json' } });
         if (!res.ok) throw new Error(`GitHub API HTTP ${res.status}`);
         const rel = await res.json();
         const inst = releaseUpdater.pickInstaller(rel);
