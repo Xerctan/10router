@@ -17,6 +17,22 @@ describe("installer pre-kill (covers upgrades FROM old versions)", () => {
     expect(nsh).toMatch(/Sleep \d{3,}/);
   });
 
+  it("customInit elevates via UAC so an admin-run sidecar (MITM on 443) is also killed", () => {
+    // 安装器以普通用户运行，taskkill 直接杀不掉「以管理员身份运行」的旧 sidecar
+    // （MITM 绑 443 需要提权）——必须 -Verb RunAs 从高权限上下文强杀。提权脚本
+    // 走 PowerShell -EncodedCommand（UTF-16LE Base64），把 blob 解出来验证真实
+    // 行为，而不是去匹配注释里同样出现的字样。
+    const m = nsh.match(/ExecToStack 'powershell .*?-EncodedCommand ([A-Za-z0-9+/=]+)'/);
+    expect(m).toBeTruthy();
+    const script = Buffer.from(m[1], "base64").toString("utf16le");
+    expect(script).toContain("-Verb RunAs");
+    // 直连系统 taskkill.exe，避免 PATH 投毒
+    expect(script).toContain("taskkill.exe");
+    expect(script).toContain("10Router.exe");
+    expect(script).toContain("/F");
+    expect(script).toContain("/T");
+  });
+
   it("the include script is registered with electron-builder", () => {
     const pkg = JSON.parse(read("desktop/package.json"));
     expect(pkg.build.nsis.include).toBe("nsis/installer.nsh");

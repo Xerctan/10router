@@ -110,7 +110,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "10Router"
+      "shortcutName": "10Router",
+      "include": "nsis/installer.nsh"
     }
   },
   "allowScripts": {
