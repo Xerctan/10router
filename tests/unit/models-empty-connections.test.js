@@ -350,6 +350,7 @@ describe("buildModelsList — provider order follows settings.providerCardOrder"
     const models = await buildModelsList([LLM_KIND]);
     const hy3 = models.find((m) => m.id === "cbcn/hy3");
     expect(hy3.context_length).toBe(123456);
+    expect(hy3.context_window).toBe(123456);
     expect(hy3.max_completion_tokens).toBe(7890);
     // Nested capabilities block must stay in sync with the snake_case fields.
     expect(hy3.capabilities?.contextWindow).toBe(123456);
@@ -365,6 +366,7 @@ describe("buildModelsList — provider order follows settings.providerCardOrder"
     // branch must run the same getCapabilitiesForModel resolution as the
     // connected loop, or clients guess the window from the model name.
     expect(zc.context_length).toBe(1000000);
+    expect(zc.context_window).toBe(1000000);
     expect(zc.max_completion_tokens).toBe(131072);
     expect(zc.capabilities?.contextWindow).toBe(1000000);
     expect(zc.capabilities?.maxOutput).toBe(131072);
@@ -378,6 +380,7 @@ describe("buildModelsList — provider order follows settings.providerCardOrder"
     const models = await buildModelsList([LLM_KIND]);
     const zc = models.find((m) => m.id === "zcode-free/glm-5.3-flash");
     expect(zc.context_length).toBe(123456);
+    expect(zc.context_window).toBe(123456);
     expect(zc.max_completion_tokens).toBe(7890);
     // Nested capabilities block stays in sync with the snake_case fields.
     expect(zc.capabilities?.contextWindow).toBe(123456);
@@ -394,6 +397,7 @@ describe("buildModelsList — provider order follows settings.providerCardOrder"
     const models = await buildModelsList([LLM_KIND]);
     const mine = models.find((m) => m.id === "cbcn/my-model");
     expect(mine.context_length).toBe(99999);
+    expect(mine.context_window).toBe(99999);
     expect(mine.max_completion_tokens).toBe(64000);
   });
 
@@ -421,6 +425,7 @@ describe("buildModelsList — provider order follows settings.providerCardOrder"
     const models = await buildModelsList([LLM_KIND]);
     const orphan = models.find((m) => m.id === "oc/big-pickle");
     expect(orphan.context_length).toBe(500000);
+    expect(orphan.context_window).toBe(500000);
   });
 
   it("orphan custom models resolve catalog caps (ocz free models not bare)", async () => {
@@ -435,6 +440,7 @@ describe("buildModelsList — provider order follows settings.providerCardOrder"
     const models = await buildModelsList([LLM_KIND]);
     const orphan = models.find((m) => m.id === "ocz/fledge-alpha-free");
     expect(orphan.context_length).toBe(1048576);
+    expect(orphan.context_window).toBe(1048576);
     expect(orphan.max_completion_tokens).toBe(131072);
     expect(orphan.capabilities?.vision).toBe(true);
     expect(orphan.capabilities?.reasoning).toBe(true);

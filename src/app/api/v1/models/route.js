@@ -527,6 +527,7 @@ export async function buildModelsList(kindFilter, options = {}) {
       const cw = pinned?.contextWindow ?? posNum(customModel.contextWindow);
       const mo = pinned?.maxOutput ?? posNum(customModel.maxOutput);
       if (cw) entry.context_length = cw;
+      if (cw) entry.context_window = cw;   // Anthropic 约定字段，Claude CLI/mirasim 读它
       if (mo) entry.max_completion_tokens = mo;
       emit(entry, rankOf(providerAlias));
     }
@@ -727,6 +728,7 @@ export async function buildModelsList(kindFilter, options = {}) {
             if (Number.isFinite(maxOutput)) caps.maxOutput = maxOutput;
           }
           if (Number.isFinite(contextWindow)) model.context_length = contextWindow;
+          if (Number.isFinite(contextWindow)) model.context_window = contextWindow;   // Anthropic 约定字段，Claude CLI/mirasim 读它
           if (Number.isFinite(maxOutput)) model.max_completion_tokens = maxOutput;
         }
         emit(model, rankOf(providerId));
@@ -792,6 +794,7 @@ export async function buildModelsList(kindFilter, options = {}) {
         if (pinned?.maxOutput) caps.maxOutput = pinned.maxOutput;
         entry.capabilities = caps;
         entry.context_length = caps.contextWindow;
+        entry.context_window = caps.contextWindow;   // Anthropic 约定字段，Claude CLI/mirasim 读它
         entry.max_completion_tokens = caps.maxOutput;
       }
       emit(entry, rankOf(alias));
@@ -848,6 +851,7 @@ export async function buildModelsList(kindFilter, options = {}) {
         if (mo) caps.maxOutput = mo;
         entry.capabilities = caps;
         entry.context_length = caps.contextWindow;
+        entry.context_window = caps.contextWindow;   // Anthropic 约定字段，Claude CLI/mirasim 读它
         entry.max_completion_tokens = caps.maxOutput;
       }
       emit(entry, rankOf(alias));
