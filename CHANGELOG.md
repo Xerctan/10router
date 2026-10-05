@@ -2,6 +2,27 @@
 
 > 面向用户的精简更新见 [`public/i18n/changelog/`](https://github.com/techysy/10router/tree/main/public/i18n/changelog)（`en.md` / `zh-CN.md` / `zh-TW.md`，仪表盘「Change Log」按界面语言加载对应文件）。本文件为完整开发日志，按版本从上往下排列。
 
+## v1.3.5 (2026-10-05)
+
+### 🐛 修复
+
+- **`/v1/models` 补发 `context_window`，Claude Code / mirasim 不再在 160K 处强行压缩**：对外模型列表此前只发 OpenAI 约定的 `context_length` 与嵌套的 `capabilities.contextWindow`，而 Claude CLI / mirasim 走 Anthropic 约定读 `context_window`——读不到就回退到**内置 200k 默认值**，于是 Qwen3.8-Max（真实 1M）等模型在客户端侧 160K 就触发压缩，而 10Router 自己的 auto-compact 因窗口解析正确从不触发，两端口径割裂。现在四个发射点（零连接 custom / 已连接主循环 / noAuth 静态 / 孤儿 custom）同位置补发 `context_window`，纯增量不动既有字段。
+- **供应商别名归一化到 id，仪表盘不再把 1M 模型显示成 200K**：`PROVIDER_CAPABILITIES` 以 provider id 为 key，但 `/api/models` 的 `AI_MODELS` 用 `PROVIDER_MODELS` 的 key（即 alias）拼 provider，alias 查表失配后跌到 `DEFAULT_CAPABILITIES` 200k 地板或泛化 pattern。全量扫描 39 个 `alias ≠ id` 的 provider、547 个模型后定位 5 个别名失配并全部归一化（沿用既有 `cx`/`dv`/`devin` 范式）：
+
+  | 别名 → id | 影响 | 失配后果 |
+  |---|---|---|
+  | `qd` → `qoder` | 15 个模型 | 全部跌 200k 地板，vision / reasoning 被剥 |
+  | `qdc` → `qoder-cn` | 14 个模型 | 同上 |
+  | `kr` → `kiro` | 13 个 gpt-5.6 系 | 窗口 **272k → 1.05M**（掉 `*gpt-6*` 泛化 pattern，虚高 5 倍） |
+  | `cbcn` → `codebuddy-cn` | 13 个模型 | 掉 hunyuan/zai/minimax/kimi/deepseek 泛化行，窗口/输出/思考格式全错 |
+  | `ag` → `antigravity` | 1 个（gemini-pro-agent） | reasoning 被剥、thinkingFormat 变 null |
+
+  新增全量不变量测试（`capabilities.test.js`）遍历所有 `alias ≠ id` 的模型断言 alias 与 id 解析完全一致——以后新增 provider 漏归一化会直接红。
+- **trae-free 的 CreditDaddy 网关 baseUrl 覆盖生效**（v1.3.4 遗留）：v1.3.4 接入 trae-free 时 `executors/base.js` 加了该线但漏了 `executors/default.js` 的同名分支，而 trae-free 没有专属 executor（`executors/index.js` 注册的 `trae` 是另一个 provider，走 `core-normal.trae.ai`），实际由 `DefaultExecutor` 承接——用户配置的局域网主机/端口对 trae-free 完全无效，请求仍打注册表默认 `127.0.0.1:47860`。两处现已同判，并补 `creditdaddy-gateway-url.test.js`（从注册表反推本地网关线，在两个重复实现上各断言 4 种情形；已验证回退 `default.js` 到 v1.3.4 状态即红并点名 trae-free）。
+- **Qoder 网页会话失效不再静默降级**（issue #44）：部分 Qoder 账号的 openapi quota/usage 聚合值归零，套餐积分只能靠 CreditDaddy 同步来的网页会话读取；会话一旦失效（cookie 过期 / owner 不匹配），10Router 会静默回落到 openapi 聚合值，用户只看到「订阅积分凭空消失」，没有任何提示。现在把整条失败路径点亮——`getQoderUsage` 在「会话存在但没产出可用数据」时返回 `webSessionExpired:true`；额度卡片显示琥珀色警告并指明去 CreditDaddy 重新登录网页；导入 qoder 连接后并发（≤6）探测各账号网页会话可用性，弹窗展示结果，有失效时取消自动关闭确保用户看到。
+- **Windows 升级安装不再卡在「10Router 无法关闭」**：assisted installer（`oneClick:false`）以普通用户运行，`taskkill` 只能杀同权限或更低权限的进程——而旧版 sidecar 由 10Router 以「以管理员身份运行」拉起（MITM 绑定 443 需要提权），安装器直接 `taskkill /IM` 被拒绝（access denied），`CHECK_APP_RUNNING` 弹「无法关闭」后放弃升级。现在 `customInit` 在普通 taskkill 之后追加一段 UAC 提权（PowerShell `-EncodedCommand` + `-Verb RunAs`，直连系统 `taskkill.exe` 避免 PATH 投毒）从高权限上下文强杀；用户拒绝提权时退化为普通 taskkill，最坏与之前一致。同时给 `nsisWeb` 目标补上 `include`（此前只有标准 Setup 有 customInit，Web-Setup 没有）。**这条修复同时覆盖 `10Router.Setup` 与 `10Router-Web-Setup` 两个安装包。**
+- **桌面端更新下载加超时保护**：GitHub tags 拉取、安装包下载与 `checkUpdateViaGitHub` 此前无超时，网络挂起会让更新流程永久卡死。新增 `fetchWithTimeout`（AbortController）统一包裹，读流循环加 `try/catch` + `reader.cancel()`，`startUpdateDownload` 失败时清理已下载的临时文件。
+
 ## v1.3.4 (2026-10-05)
 
 ### ✨ 新增
