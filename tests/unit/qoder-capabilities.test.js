@@ -63,4 +63,17 @@ describe("qoder / qoder-cn capability rows", () => {
     expect(getCapabilitiesForModel("qoder", "efficient")).toEqual(expected);
     expect(getCapabilitiesForModel("qoder-cn", "auto")).toEqual(expected);
   });
+
+  it("transport/UI aliases (qd / qdc) resolve the same provider rows as their ids", () => {
+    // /api/models 的 AI_MODELS 用 PROVIDER_MODELS 的 key（即 alias）拼 provider，
+    // 若 alias 不归一化到 id，qmodel_38max 等会跌到 DEFAULT 200k（vision/reasoning 被剥）。
+    for (const [alias, id] of [["qd", "qoder"], ["qdc", "qoder-cn"]]) {
+      for (const m of [qoder, qoderCn].find((p) => p.id === id).models) {
+        expect(
+          getCapabilitiesForModel(alias, m.id),
+          `${alias}/${m.id}`,
+        ).toEqual(getCapabilitiesForModel(id, m.id));
+      }
+    }
+  });
 });
