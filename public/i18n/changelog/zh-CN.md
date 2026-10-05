@@ -6,13 +6,14 @@
 
 ### ✨ 新增
 
-- **新增 Trae Free 供应商（`trae-free`）**：经本地 CreditDaddy 网关使用 Trae（SOLO）远程 Agent 额度，与 ZCode Free / MiniMax Free 同款接线——免登录卡片、主机/端口共享、路径按线独立，12 款模型（Doubao Seed Code、MiniMax M2.7、GLM 5 系、DeepSeek V4 系、Kimi K2.5/2.6、Qwen 3.5/3.6），支持思考流。
+- **新增 Trae Free 供应商（`trae-free`）**：经本地 CreditDaddy 网关使用 Trae（SOLO）远程 Agent 额度，与 ZCode Free / MiniMax Free 同款接线——免登录卡片、主机/端口共享、路径按线独立，12 款模型（Doubao Seed Code、MiniMax M2.7、GLM 5 系、DeepSeek V4 系、Kimi K2.5/2.6、Qwen 3.5/3.6），支持思考流；卡片图标为从客户端 exe 提取的官方黑白标。
 
 ### 🐛 修复
 
 - **超长上下文自动压缩默认触发比例 0.9 → 0.95**：自动压缩改为更贴近窗口上限才触发（阈值档位与总开关不变，可在「实验特性」卡片调整）。
 - **Claude Code / mirasim 不再在 160K 处强行压缩**：模型列表此前只按 OpenAI 约定上报窗口，Claude CLI 读不到就回退到内置的 20 万默认值，于是 Qwen3.8-Max（真实 100 万）等模型在客户端侧 16 万 token 就触发压缩。现在补发 Anthropic 约定的字段，客户端能读到真实窗口。
 - **仪表盘模型卡不再把 1M 窗口显示成 20 万**：Qoder（`qd` / `qdc`）、Kiro（`kr`）、CodeBuddy CN（`cbcn`）、Antigravity（`ag`）这四条线的模型此前在仪表盘上因按别名查能力而跌到 20 万地板（vision / reasoning 徽章也被剥掉），Kiro 的 gpt-5.6 系窗口还虚高到 105 万。现已全部归一化到正确的 1M 档。
+- **Trae Free 卡片图标不再缺图**：本版接入时漏了图标资源，卡片回落成文字缩写、而其它屏又是另一张（彩色）标。现已统一使用从客户端 exe 提取的 Trae（SOLO）官方黑白标。
 - **Trae Free 的网关主机/端口设置生效**：本版接入时漏了一处代码位置，局域网主机与端口配置对 Trae Free 不起作用、请求仍打本机默认地址。已修复。
 - **Qoder 订阅积分「凭空消失」有了明确提示**（issue #44）：CreditDaddy 同步来的网页会话失效时，套餐积分读不到却没有任何提示。现在额度卡片会直接警告会话已失效、并在导入连接时逐账号校验会话可用性点名失效账号。
 - **Windows 升级安装不再卡在「10Router 无法关闭」**：旧版程序以管理员身份运行时（MITM 绑定 443 需要），普通权限的安装器杀不掉它。现在安装器会请求一次管理员授权来关闭旧进程；拒绝授权则退化为原行为，不会更糟。`10Router.Setup` 与 `10Router-Web-Setup` 均已覆盖。

@@ -116,7 +116,9 @@ export const LOBE_PROVIDER_ICONS = {
   windsurf: Windsurf,
   kiro: Kiro,
   trae: Trae,
-  "trae-free": Trae,
+  // trae-free 故意不映射到 Lobe 的彩色 Trae 标：它代表本机 TRAE SOLO 客户端，
+  // 与远程 trae 不是同一张脸。走 /providers/trae-free.png（从 SOLO exe 的 PE
+  // 资源提取的黑白标）才能在卡片 / 拓扑 / 用量各屏保持同一张脸。
   "jina-ai": Jina,
   exa: Exa,
   tavily: Tavily,

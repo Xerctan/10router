@@ -6,13 +6,14 @@ User-facing highlights per release. See [CHANGELOG.md](https://github.com/techys
 
 ### ✨ New
 
-- **New Trae Free provider (`trae-free`)** — use Trae (SOLO) remote-agent credits through the local CreditDaddy gateway, same wiring as ZCode Free / MiniMax Free: no login card, shared host/port with a per-line path, 12 models (Doubao Seed Code, MiniMax M2.7, GLM 5 family, DeepSeek V4, Kimi K2.5/2.6, Qwen 3.5/3.6) and thinking-stream support.
+- **New Trae Free provider (`trae-free`)** — use Trae (SOLO) remote-agent credits through the local CreditDaddy gateway, same wiring as ZCode Free / MiniMax Free: no login card, shared host/port with a per-line path, 12 models (Doubao Seed Code, MiniMax M2.7, GLM 5 family, DeepSeek V4, Kimi K2.5/2.6, Qwen 3.5/3.6) and thinking-stream support. Its card now shows the official Trae (SOLO) desktop icon, extracted from the client executable.
 
 ### 🐛 Fixed
 
 - **Auto-compact default trigger ratio 0.9 → 0.95** — auto-compaction now fires closer to the context limit (threshold levels and the master switch are unchanged; still adjustable on the "Experimental" card).
 - **Claude Code / mirasim no longer force compaction at 160K** — the model list reported context windows using the OpenAI convention only, so Claude CLI fell back to its built-in 200K default and started compacting models like Qwen3.8-Max (1M actual) client-side. The Anthropic-convention field is now published as well, so clients read the real window.
 - **Dashboard model cards no longer show 1M models as 200K** — Qoder (`qd` / `qdc`), Kiro (`kr`), CodeBuddy CN (`cbcn`) and Antigravity (`ag`) resolved capabilities by alias and fell through to the 200K floor (losing the vision / reasoning badges); Kiro's gpt-5.6 models additionally read a 1.05M window, 5× the real 272K. All four lines are now normalized to the correct 1M values.
+- **Trae Free card icon now shows** — the integration shipped without the icon asset, so the card fell back to plain text initials while other screens showed a different (colored) mark. The card now uses the Trae (SOLO) desktop mark everywhere.
 - **Trae Free gateway host/port settings now apply** — a missed code path in this release's integration meant LAN host and port configuration had no effect for Trae Free; requests still went to the default local address. Fixed.
 - **Qoder plan credits no longer vanish without explanation** (issue #44) — when a CreditDaddy-synced web session expires, the plan-credits row silently fell back to an aggregate that reads zero. The quota card now warns that the session expired, and importing connections validates each account's web session and names the failures.
 - **Windows upgrade installs no longer stall on "cannot close 10Router"** — the old app runs elevated (required for MITM on port 443), which a normal-permission installer could not kill. The installer now requests one administrator prompt to close it; declining falls back to the previous behavior, never worse. Both `10Router.Setup` and `10Router-Web-Setup` are covered.
