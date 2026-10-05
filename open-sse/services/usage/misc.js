@@ -432,10 +432,17 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
     // exists and belongs to this same account (userId cross-check guards
     // against a stale/mismatched cookie attributing someone else's credits).
     const webSession = providerSpecificData?.creditDaddyWebSession;
+    // A synced session that yields nothing usable (expired cookie, owner
+    // mismatch, changed response shape) is issue #44's failure mode: the
+    // fallback is the openapi aggregate, and on accounts whose userQuota
+    // zeroes out the plan row then silently disappears. Track usability so
+    // the return value can flag that (see `webSessionExpired` below).
+    let webSessionUsable = false;
     if (webSession?.cookie) {
       const web = await fetchQoderWebPacks(webSession.cookie, providerId, proxyOptions);
       const owner = providerSpecificData?.userId || null;
       if (web && (!owner || !web.sourceUserId || owner === web.sourceUserId)) {
+        webSessionUsable = true;
         // 套餐内 Credits 本身也是一个资源包（用户定版 2026-10-01）：plan 行并入
         // 包序列按到期日混排，随资源包一起进池、进逐包明细，不再单独成行。
         // 保留 "Plan Credits" 名称（i18n: 套餐内 Credits），明细里认得出它。
@@ -534,6 +541,10 @@ export async function getQoderUsage(accessToken, proxyOptions = null, providerId
       totalUsagePercentage: Number(body.totalUsagePercentage) || 0,
       isQuotaExceeded: !!body.isQuotaExceeded,
       expiresAt: expiresAtMs,
+      // Synced a CreditDaddy web session but got nothing usable from it:
+      // tell the caller so the dashboard can say why the plan row may be
+      // incomplete, instead of failing silently (issue #44).
+      ...(webSession?.cookie && !webSessionUsable ? { webSessionExpired: true } : {}),
     };
   } catch (error) {
     return { message: `Qoder connected. Unable to fetch usage: ${error.message}` };

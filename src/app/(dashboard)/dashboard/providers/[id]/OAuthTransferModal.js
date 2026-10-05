@@ -158,7 +158,10 @@ export default function OAuthTransferModal({ isOpen, mode, provider, providerNam
       }
       setResult(data);
       if (typeof onSuccess === "function") onSuccess();
-      if ((data?.imported || 0) + (data?.updated || 0) > 0) scheduleAutoClose(1800);
+      // A dead synced web session (issue #44) is diagnostic, not a receipt —
+      // keep the dialog open so the warning stays readable.
+      const sessionWarn = (data?.webSessions?.failed || 0) > 0;
+      if (!sessionWarn && (data?.imported || 0) + (data?.updated || 0) > 0) scheduleAutoClose(1800);
     } catch (e) {
       setError(e.message || translate("Import failed"));
     } finally {
@@ -241,6 +244,20 @@ export default function OAuthTransferModal({ isOpen, mode, provider, providerNam
                   {translate("updated")}
                   {(result.failed || 0) > 0 ? `, ${result.failed} ${translate("failed")}` : ""}
                 </p>
+                {/* Qoder: synced CreditDaddy web sessions were probed at import
+                    (issue #44). A dead session means the plan-credits row will
+                    fall back to the openapi aggregate — say so right here
+                    instead of letting the quota card silently read low. */}
+                {result.webSessions?.failed > 0 && (
+                  <p className="mt-1 text-amber-600 dark:text-amber-400">
+                    {translate("Web session check failed for")}: {result.webSessions.failures.map((f) => f.name).join(", ")}
+                  </p>
+                )}
+                {result.webSessions?.checked > 0 && result.webSessions.failed === 0 && (
+                  <p className="mt-1 text-green-600">
+                    {translate("Web sessions verified")}: {result.webSessions.ok}/{result.webSessions.checked}
+                  </p>
+                )}
               </div>
             )}
             <Button onClick={handleImport} disabled={busy} fullWidth>

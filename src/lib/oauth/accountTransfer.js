@@ -14,9 +14,12 @@
 
 import {
   getProviderConnections,
+  getProviderConnectionById,
   createProviderConnection,
   updateProviderConnection,
 } from "../../models/index.js";
+import { proxyAwareFetch } from "open-sse/utils/proxyFetch.js";
+import { QODER_WEB_BASE, QODER_CN_WEB_BASE } from "open-sse/shared/qoder/constants.js";
 
 export function decodeJwt(jwt) {
   try {
@@ -202,5 +205,97 @@ export async function importAccounts(provider, accounts) {
     }
   }
 
-  return { imported, updated, skipped, failed, results };
+  // Issue #44: on accounts whose openapi userQuota zeroes out, the synced
+  // CreditDaddy web session is the ONLY source of the plan-credits row. A dead
+  // session therefore means "订阅积分 disappears with no explanation" — surface
+  // it in the import response instead of leaving it for the quota poll to fail
+  // silently.
+  const webSessionCheck = await checkQoderWebSessions(provider, results);
+
+  return { imported, updated, skipped, failed, results, webSessions: webSessionCheck };
+}
+
+/**
+ * Probe each freshly imported/updated Qoder connection's synced web session
+ * against the console usage endpoint. Returns null when nothing was checked
+ * (non-Qoder provider / no synced sessions) so the response stays clean.
+ * Never throws: a probe failure downgrades the check to a warning, it must
+ * not turn a successful import into an error.
+ */
+const WEB_SESSION_PROBE_TIMEOUT_MS = 10_000;
+const WEB_SESSION_PROBE_CONCURRENCY = 6;
+
+export async function checkQoderWebSessions(provider, results) {
+  if (provider !== "qoder" && provider !== "qoder-cn") return null;
+  const targets = [];
+  for (const r of results) {
+    if (!r?.ok || !r.id) continue;
+    const conn = await getProviderConnectionById(r.id).catch(() => null);
+    const session = conn?.providerSpecificData?.creditDaddyWebSession;
+    if (!session || typeof session.cookie !== "string" || !session.cookie) continue;
+    targets.push({
+      id: r.id,
+      name: conn.name || conn.email || r.id,
+      provider: conn.provider || provider,
+      cookie: session.cookie,
+      // Same owner source the quota poll cross-checks against (psd.userId), so
+      // the probe verdict matches what the dashboard will later decide.
+      owner: conn.providerSpecificData?.userId || null,
+    });
+  }
+  if (targets.length === 0) return null;
+
+  const probe = async (t) => {
+    try {
+      const webBase = t.provider === "qoder-cn" ? QODER_CN_WEB_BASE : QODER_WEB_BASE;
+      const res = await proxyAwareFetch(
+        `${webBase}/api/v2/me/usages/big_model_credits`,
+        {
+          method: "GET",
+          headers: {
+            Cookie: t.cookie,
+            Accept: "application/json",
+            Referer: `${webBase}/account/usage`,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          },
+          signal: AbortSignal.timeout(WEB_SESSION_PROBE_TIMEOUT_MS),
+        },
+        null,
+      );
+      if (!res.ok) return { ...t, ok: false, reason: `HTTP ${res.status}` };
+      const body = await res.json().catch(() => null);
+      if (!body?.user_id) return { ...t, ok: false, reason: "bad response" };
+      // Same owner cross-check the quota poll applies — a session that answers
+      // for someone else is unusable here, not "ok".
+      if (t.owner && String(body.user_id) !== String(t.owner)) {
+        return { ...t, ok: false, reason: "session belongs to a different Qoder user" };
+      }
+      return { ...t, ok: true };
+    } catch (e) {
+      return { ...t, ok: false, reason: e?.message || "probe failed" };
+    }
+  };
+
+  // Bounded concurrency: an import of many accounts must not fan out into an
+  // unbounded burst against the web console.
+  const checked = [];
+  let cursor = 0;
+  const workers = Array.from(
+    { length: Math.min(WEB_SESSION_PROBE_CONCURRENCY, targets.length) },
+    async () => {
+      while (cursor < targets.length) {
+        const t = targets[cursor++];
+        checked.push(await probe(t));
+      }
+    },
+  );
+  await Promise.all(workers);
+
+  const failures = checked.filter((c) => !c.ok);
+  return {
+    checked: checked.length,
+    ok: checked.length - failures.length,
+    failed: failures.length,
+    failures: failures.map((f) => ({ id: f.id, name: f.name, reason: f.reason })),
+  };
 }

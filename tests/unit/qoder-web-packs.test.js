@@ -179,4 +179,34 @@ describe("getQoderUsage — web per-pack breakdown (CreditDaddy synced cookie)",
       out.quotas.addOn.packs.reduce((s, p) => s + p.total, 0),
     );
   });
+
+  it("flags webSessionExpired when a synced session yields nothing usable (issue #44)", async () => {
+    const getQoderUsage = await load();
+    // Dead cookie (401): the plan bucket falls back to the openapi aggregate,
+    // which zeroes out on exactly the accounts that need the web rows — the
+    // caller must be able to tell the user why the plan row looks wrong.
+    const dead = await getQoderUsage("dt-token", null, "qoder", {
+      userId: "u-1",
+      creditDaddyWebSession: { cookie: "dead-session", userId: "u-1" },
+    });
+    expect(dead.webSessionExpired).toBe(true);
+    // Owner mismatch is the same silent-failure shape.
+    const mismatch = await getQoderUsage("dt-token", null, "qoder", {
+      userId: "someone-else",
+      creditDaddyWebSession: { cookie: "session=abc", userId: "someone-else" },
+    });
+    expect(mismatch.webSessionExpired).toBe(true);
+  });
+
+  it("stays silent (no webSessionExpired) when no session exists or the session works", async () => {
+    const getQoderUsage = await load();
+    const noSession = await getQoderUsage("dt-token", null, "qoder", null);
+    expect(noSession.webSessionExpired).toBeUndefined();
+    const good = await getQoderUsage("dt-token", null, "qoder-cn", {
+      userId: "u-1",
+      creditDaddyWebSession: { cookie: "session=abc", userId: "u-1" },
+    });
+    expect(good.webSessionExpired).toBeUndefined();
+    expect(good.quotas.addOn.packs.length).toBeGreaterThan(0);
+  });
 });

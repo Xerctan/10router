@@ -844,5 +844,8 @@
   "Local: enable the gateway switch under \"MiniMax → Interface settings\" in CreditDaddy desktop and add a MiniMax account (default 127.0.0.1:47860).": "本機：在 CreditDaddy 桌面版「MiniMax → 介面設定」裡開啟閘道開關並新增 MiniMax 帳號（預設 127.0.0.1:47860）。",
   "Local: enable the gateway switch under \"ZCode → Interface settings\" in CreditDaddy desktop (default 127.0.0.1:47860).": "本機：在 CreditDaddy 桌面版「ZCode → 介面設定」裡開啟閘道開關（預設 127.0.0.1:47860）。",
   "LAN (NAS, etc.): put the CreditDaddy machine IP above, then in the same CreditDaddy panel turn on \"Allow LAN access\" and add this 10Router machine's IP to the allowlist, then restart CreditDaddy.": "區網（NAS 等）：在上方填 CreditDaddy 所在機器的 IP，再在同一面板裡開啟「允許區網存取」並把本 10Router 機器的 IP 加入白名單，然後重新啟動 CreditDaddy。",
-  "The gateway is protected by an IP allowlist and checks no key, so there is nothing to enter here.": "閘道由 IP 白名單保護、不驗證任何 key，所以這裡無需填憑證。"
+  "The gateway is protected by an IP allowlist and checks no key, so there is nothing to enter here.": "閘道由 IP 白名單保護、不驗證任何 key，所以這裡無需填憑證。",
+  "Synced CreditDaddy web session expired — plan credits may read low or missing. Re-export the account from CreditDaddy after logging in to Qoder web again.": "已同步的 CreditDaddy 網頁工作階段已失效——套餐積分可能顯示偏低或缺失。請在 CreditDaddy 重新登入 Qoder 網頁後再次匯出匯入。",
+  "Web session check failed for": "以下帳號的網頁工作階段校驗失敗：",
+  "Web sessions verified": "網頁工作階段校驗通過"
 }

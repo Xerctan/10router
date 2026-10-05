@@ -12,6 +12,15 @@ import { describe, expect, it, beforeAll, afterAll, vi } from "vitest";
 
 import { sealTransfer, openTransfer } from "../../src/lib/auth/secureTransfer.js";
 
+// Issue #44: importAccounts probes synced Qoder web sessions through
+// proxyAwareFetch. Mock it file-wide (no other suite in this file hits the
+// network) so the probe tests run against a canned console endpoint. The
+// factory defers the read to call time — resetModules reloads in beforeAll.
+const webFetch = vi.fn();
+vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
+  proxyAwareFetch: (...args) => webFetch(...args),
+}));
+
 describe("secureTransfer envelope", () => {
   const payload = { provider: "gemini", accounts: [{ name: "A", accessToken: "tok-1" }] };
 
@@ -405,5 +414,99 @@ describe("accountTransfer: api-key compatible nodes (opencode-go shape)", () => 
     ]);
     expect(res.updated).toBe(1);
     expect(res.imported).toBe(0);
+  });
+});
+
+describe("accountTransfer: Qoder web-session probe at import (issue #44)", () => {
+  const originalDataDir = process.env.DATA_DIR;
+  let tempDir;
+  let mod;
+
+  const tokenFor = (sub) => {
+    const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+    return `${b64({ alg: "none" })}.${b64({ iss: "https://r/realm", sub })}.sig`;
+  };
+  const session = (cookie, userId) => ({
+    userId,
+    creditDaddyWebSession: { cookie, capturedAt: "2026-10-01T00:00:00.000Z", userId },
+  });
+
+  beforeAll(async () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "10router-qoder-probe-"));
+    process.env.DATA_DIR = tempDir;
+    vi.resetModules();
+    const db = await import("@/lib/db/index.js");
+    await db.initDb();
+    mod = await import("../../src/lib/oauth/accountTransfer.js");
+  });
+
+  afterAll(() => {
+    process.env.DATA_DIR = originalDataDir;
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch { /* best-effort on Windows */ }
+  });
+
+  beforeEach(() => {
+    webFetch.mockReset();
+    // Default: session alive, answers for u-1.
+    webFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ user_id: "u-1" }) });
+  });
+
+  it("stays null for non-Qoder providers and for Qoder rows without a session", async () => {
+    const gem = await mod.importAccounts("gemini", [
+      { name: "G", accessToken: tokenFor("probe-g"), providerSpecificData: { foo: 1 } },
+    ]);
+    expect(gem.webSessions).toBeNull();
+    const q = await mod.importAccounts("qoder", [
+      { name: "NoSession", accessToken: tokenFor("probe-q1") },
+    ]);
+    expect(q.webSessions).toBeNull();
+    expect(webFetch).not.toHaveBeenCalled();
+  });
+
+  it("reports per-account failures without failing the import", async () => {
+    webFetch.mockImplementation(async (url, opts) => {
+      if (opts?.headers?.Cookie === "dead") return { ok: false, status: 401, json: async () => ({}) };
+      return { ok: true, status: 200, json: async () => ({ user_id: "u-1" }) };
+    });
+    const res = await mod.importAccounts("qoder", [
+      { name: "Live", accessToken: tokenFor("probe-live"), providerSpecificData: session("live", "u-1") },
+      { name: "Dead", accessToken: tokenFor("probe-dead"), providerSpecificData: session("dead", "u-1") },
+    ]);
+    expect(res.imported).toBe(2);
+    expect(res.failed).toBe(0);
+    expect(res.webSessions).toMatchObject({ checked: 2, ok: 1, failed: 1 });
+    expect(res.webSessions.failures).toEqual([
+      { id: expect.any(String), name: "Dead", reason: "HTTP 401" },
+    ]);
+  });
+
+  it("routes qoder-cn probes to the CN web console", async () => {
+    await mod.importAccounts("qoder-cn", [
+      { name: "CN", accessToken: tokenFor("probe-cn"), providerSpecificData: session("cn", "u-1") },
+    ]);
+    expect(webFetch).toHaveBeenCalledTimes(1);
+    expect(webFetch.mock.calls[0][0]).toBe("https://qoder.cn/api/v2/me/usages/big_model_credits");
+    expect(webFetch.mock.calls[0][1].headers.Cookie).toBe("cn");
+  });
+
+  it("flags a session that answers for a different user (owner cross-check)", async () => {
+    const res = await mod.importAccounts("qoder", [
+      { name: "Misbound", accessToken: tokenFor("probe-mis"), providerSpecificData: session("mis", "u-9") },
+    ]);
+    expect(res.webSessions.failed).toBe(1);
+    expect(res.webSessions.failures[0].reason).toContain("different Qoder user");
+  });
+
+  it("a throwing probe downgrades to a warning, never breaks the import", async () => {
+    webFetch.mockRejectedValue(new Error("proxy unreachable"));
+    const res = await mod.importAccounts("qoder", [
+      { name: "Boom", accessToken: tokenFor("probe-boom"), providerSpecificData: session("boom", "u-1") },
+    ]);
+    expect(res.imported).toBe(1);
+    expect(res.failed).toBe(0);
+    expect(res.webSessions).toMatchObject({ checked: 1, ok: 0, failed: 1 });
+    expect(res.webSessions.failures[0].reason).toBe("proxy unreachable");
   });
 });
