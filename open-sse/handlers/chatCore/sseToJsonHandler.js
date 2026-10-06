@@ -5,27 +5,13 @@ import { HTTP_STATUS } from "../../config/runtimeConfig.js";
 import { FORMATS } from "../../translator/formats.js";
 import { PROVIDERS } from "../../config/providers.js";
 import { buildRequestDetail, extractRequestConfig, saveUsageStats, formatDoneLine } from "./requestDetail.js";
-import { estimateUsage, hasValidUsage, measureResponseTextLength } from "../../utils/usageTracking.js";
+import { usageOrEstimate } from "../../utils/usageTracking.js";
 import { ROLE, RESPONSES_ITEM } from "../../translator/schema/index.js";
 import { restoreToolNames } from "../../utils/opencodeFingerprint.js";
 
 // Responses-API providers (e.g. codex) may emit SSE without content-type + use Responses output shape
 const isResponsesProvider = (p) => PROVIDERS[p]?.format === FORMATS.OPENAI_RESPONSES;
 import { saveRequestDetail, appendRequestLog } from "@/lib/usageDb.js";
-
-/**
- * `parsed.usage || {}` used to record an all-zero row whenever the provider's
- * stream carried no usage block: saveUsageStats drops all-zero rows (Overview
- * tab empty) while saveRequestDetail kept the row (Details tab showing 0 / 0).
- * Same estimateUsage fallback the plain SSE path and the non-streaming path use,
- * so all three agree on what a usage-less response costs.
- */
-function usageOrEstimate(usage, body, responseBody) {
-  if (hasValidUsage(usage)) return usage;
-  const contentLength = measureResponseTextLength(responseBody);
-  if (contentLength <= 0) return usage;
-  return estimateUsage(body, contentLength, FORMATS.OPENAI);
-}
 
 function textFromResponsesMessageItem(item) {
   if (!item?.content || !Array.isArray(item.content)) return "";
@@ -241,16 +227,22 @@ export async function handleForcedSSEToJson({ providerResponse, sourceFormat, ta
       if (log?.line) log.line(reqTag, "📊", formatDoneLine({ usage, latency: { total: totalLatency } }));
 
       // Same cache-inclusive total for the recorded detail, so the DB and the
-      // client-facing usage can never disagree.
-      const inTokensForLog = (usage.input_tokens || 0)
+      // client-facing usage can never disagree. Read BOTH usage spellings:
+      // a real Responses payload uses input_tokens/output_tokens, but when the
+      // upstream reported nothing, usageOrEstimate substituted an OpenAI-shaped
+      // estimate (prompt_tokens/completion_tokens) — reading only the Responses
+      // fields here recorded 0/0 into the Details row while the Overview got
+      // the estimate, re-creating issue #48 on this path.
+      const inTokensForLog = (usage.prompt_tokens ?? usage.input_tokens ?? 0)
         + (usage.cache_read_input_tokens || usage.cached_tokens || 0)
         + (usage.cache_creation_input_tokens || 0);
+      const outTokensForLog = usage.completion_tokens ?? usage.output_tokens ?? 0;
       const { msgItem, textContent } = pickAssistantMessageForChatCompletion(jsonResponse.output);
 
       saveRequestDetail(buildRequestDetail({
         ...ctx,
         latency: { ttft: totalLatency, total: totalLatency },
-        tokens: { prompt_tokens: inTokensForLog, completion_tokens: usage.output_tokens || 0 },
+        tokens: { prompt_tokens: inTokensForLog, completion_tokens: outTokensForLog },
         response: { content: textContent, thinking: null, finish_reason: jsonResponse.status || "unknown" },
         status: "success"
       }, { endpoint: clientRawRequest?.endpoint || null })).catch(() => {});

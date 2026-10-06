@@ -77,4 +77,23 @@ describe("an aborted stream updates its row instead of leaving a stub (#48)", ()
     expect(fn, "recordAbort not found").toBeTruthy();
     expect(fn[0]).toMatch(/return message;/);
   });
+
+  it("reaches the cancel path too, not just the terminal builder", () => {
+    // Code-review finding on the first cut of this fix: the terminal builder
+    // only fires from pull(), but a CLIENT cancel calls handleDisconnect and no
+    // further pull() runs — so the row stayed "streaming" forever. Both
+    // termination hooks of the controller must be wrapped.
+    expect(src).toContain("handleError: (e) => {");
+    expect(src).toMatch(/handleError: \(e\) => \{[\s\S]*?recordAbort\(e\?\.message/);
+    expect(src).toMatch(/handleDisconnect: \(r\) => \{[\s\S]*?recordAbort\(/);
+    expect(src).toContain("pipeWithDisconnect(providerResponse, transformStream, abortAwareController");
+  });
+
+  it("writes the abort row at most once per request", () => {
+    // On an upstream error both the wrapped handleError hook AND the terminal
+    // builder fire; the second write would race the first for the same row.
+    const fn = /const recordAbort = \(message\) => \{[\s\S]*?\n  \};/.exec(src);
+    expect(fn[0]).toMatch(/if \(abortRecorded\) return message;/);
+    expect(fn[0]).toMatch(/abortRecorded = true;/);
+  });
 });

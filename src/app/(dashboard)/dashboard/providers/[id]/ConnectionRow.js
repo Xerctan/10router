@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { getStatusVariant as getConnectionStatusVariant } from "@/shared/utils/connectionStatus";
-import { classifyConnectionCooldown } from "@/shared/utils/connectionCooldown";
+import { classifyConnectionCooldown, sameConnectionCooldown } from "@/shared/utils/connectionCooldown";
 import { translate } from "@/i18n/runtime";
 import { extractAccountsVerificationUrl } from "@/shared/utils/validationUrl";
 import { translateQuotaError } from "@/shared/utils/quotaError";
@@ -155,18 +155,28 @@ export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst
         ? connection.displayName.trim()
         : null;
 
-  // Use useState + useEffect for impure Date.now() to avoid calling during render
-  const [cooldown, setCooldown] = useState({ state: "active", lockedModels: [], accountLocked: false, earliestUntil: null });
-
   // Single source of truth for the cooldown reading (issue #46). This used to
   // be recomputed twice in this file with two different filters: the value fed
   // the countdown chip sorted lock STRINGS with no expiry check, while the
   // boolean compared against Date.now() — so the chip could show a lock that had
   // already lapsed while the badge said the account was fine. One helper, one
   // answer, and the model names survive for the message below.
+  //
+  // Lazy initializer classifies ONCE for the first paint, so a connection that
+  // mounts already-unavailable doesn't flash green for a frame before the
+  // effect corrects it. The 1s interval below owns every later tick; the tick
+  // bails out via sameConnectionCooldown because classification returns a fresh
+  // object each call, and identity comparison would re-render a locked row
+  // every second even though nothing visible changed (the countdown ticks on
+  // CooldownTimer's own clock).
+  const [cooldown, setCooldown] = useState(() => classifyConnectionCooldown(connection));
+
   useEffect(() => {
     const checkCooldown = () => {
-      setCooldown(classifyConnectionCooldown(connection));
+      setCooldown((prev) => {
+        const next = classifyConnectionCooldown(connection);
+        return sameConnectionCooldown(prev, next) ? prev : next;
+      });
     };
 
     checkCooldown();

@@ -76,13 +76,23 @@ export function classifyConnectionCooldown(connection, now = Date.now()) {
     }
   }
 
+  const status = conn.testStatus;
+
+  // "error"/"expired" outrank everything but an account-wide lock: they are
+  // written by credential-test flows, so the credentials are genuinely broken
+  // and a stale live model lock must not soften that into an amber "partial"
+  // (or worse, count the connection as healthy). "unavailable" is different —
+  // it is the lazily-cleared account flag, so a live per-model lock means
+  // "partial" and a lapsed one means "recovered".
   const state = accountLocked
     ? "unavailable"
-    : lockedModels.length > 0
-      ? "partial"
-      : conn.testStatus === "unavailable"
-        ? "active" // stale flag, every lock has lapsed → recovered
-        : (conn.testStatus ?? "active");
+    : (status === "error" || status === "expired")
+      ? status
+      : lockedModels.length > 0
+        ? "partial"
+        : status === "unavailable"
+          ? "active" // stale flag, every lock has lapsed → recovered
+          : (status ?? "active");
 
   return {
     state,
@@ -90,4 +100,21 @@ export function classifyConnectionCooldown(connection, now = Date.now()) {
     accountLocked,
     earliestUntil: earliestMs === null ? null : new Date(earliestMs).toISOString(),
   };
+}
+
+/**
+ * Whether two classification results would render identically. Used by the
+ * components' 1s tick to bail out of setState: classifyConnectionCooldown
+ * returns a fresh object every call, and comparing by identity would re-render
+ * a locked row every second even though nothing observable changed — the
+ * countdown itself is CooldownTimer's own clock.
+ */
+export function sameConnectionCooldown(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.state === b.state
+    && a.accountLocked === b.accountLocked
+    && a.earliestUntil === b.earliestUntil
+    && a.lockedModels.length === b.lockedModels.length
+    && a.lockedModels.every((m, i) => m === b.lockedModels[i]);
 }

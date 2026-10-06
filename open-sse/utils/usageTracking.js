@@ -451,6 +451,30 @@ export function measureResponseTextLength(responseBody) {
 }
 
 /**
+ * Fall back to an estimated usage when the provider reported nothing usable —
+ * the shared implementation for every non-streaming writer (plain JSON,
+ * forced-SSE-to-JSON, Responses-to-JSON) so the Overview tab cannot go empty
+ * while the Details tab keeps 0/0 rows (issue #48).
+ *
+ * Callers that ALSO hand the usage to the client must keep the reported value
+ * separate: an estimate must never be presented as a real spend. This returns
+ * the estimate in OpenAI shape ({prompt_tokens, completion_tokens}), so any
+ * consumer reading Responses-shaped fields (input_tokens / output_tokens) off
+ * it must read both spellings.
+ *
+ * @param {object|null} usage - usage extracted from the response (any shape)
+ * @param {object} body - request body, for input-token estimation
+ * @param {object} responseBody - response body, for output-token estimation
+ * @returns {object} the real usage, or an estimate when there was none
+ */
+export function usageOrEstimate(usage, body, responseBody) {
+  if (hasValidUsage(usage)) return usage;
+  const contentLength = measureResponseTextLength(responseBody);
+  if (contentLength <= 0) return usage;
+  return estimateUsage(body, contentLength, FORMATS.OPENAI);
+}
+
+/**
  * Log usage with cache info (green color)
  */
 export function logUsage(provider, usage, model = null, connectionId = null, apiKey = null) {

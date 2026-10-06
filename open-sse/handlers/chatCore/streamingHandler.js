@@ -101,11 +101,13 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
   // request used to sit in the Details tab as a green 0-in / 0-out row forever,
   // reading as a completed call that happened to be free (issue #48).
   //
-  // Written BEFORE the pipe is built so the abort handler below can update the
-  // same row by id. The terminal-frame builder is wrapped rather than replaced:
-  // the client still gets exactly the same bytes, the row just also learns the
-  // request ended early.
+  // Written BEFORE the pipe is built so every early-exit path below can update
+  // the same row by id. Idempotent: on an upstream error the wrapped controller
+  // hook AND the terminal builder both reach for it.
+  let abortRecorded = false;
   const recordAbort = (message) => {
+    if (abortRecorded) return message;
+    abortRecorded = true;
     saveRequestDetail(buildRequestDetail({
       provider, model, connectionId,
       latency: { ttft: 0, total: Date.now() - requestStartTime },
@@ -113,7 +115,7 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
       request: extractRequestConfig(body, stream),
       providerRequest: finalBody || translatedBody || null,
       providerResponse: "[Streaming aborted before completion]",
-      response: { content: "[Streaming aborted]", thinking: null, type: "streaming" },
+      response: { content: "[Streaming aborted]", error: message || "upstream connection lost", thinking: null, type: "streaming" },
       pxpipe,
       status: "error"
     }, { id: streamDetailId })).catch(err => {
@@ -140,7 +142,25 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
   });
 
   const stallTimeoutMs = PROVIDERS[provider]?.stallTimeoutMs || STREAM_STALL_TIMEOUT_MS;
-  const transformedBody = pipeWithDisconnect(providerResponse, transformStream, streamController, abortTerminal, stallTimeoutMs);
+  // The terminal builder above only fires from pull(), so it covers upstream
+  // errors and stall timeouts — but NOT a client cancelling mid-flight: the
+  // stream's cancel() hook calls handleDisconnect and no further pull() runs,
+  // which used to leave the placeholder row "streaming" forever. Wrapping the
+  // controller's two termination hooks makes every early-exit path finalize the
+  // row; the once-guard in recordAbort dedupes against the terminal builder on
+  // paths where both fire (upstream error → handleError AND emitTerminal).
+  const abortAwareController = {
+    ...streamController,
+    handleError: (e) => {
+      recordAbort(e?.message || "upstream error");
+      streamController.handleError(e);
+    },
+    handleDisconnect: (r) => {
+      recordAbort(typeof r === "string" ? r : "cancelled");
+      streamController.handleDisconnect(r);
+    },
+  };
+  const transformedBody = pipeWithDisconnect(providerResponse, transformStream, abortAwareController, abortTerminal, stallTimeoutMs);
   return {
     success: true,
     response: new Response(transformedBody, { headers: { ...SSE_HEADERS, ...upstreamResponseHeaders(providerResponse.headers) } })

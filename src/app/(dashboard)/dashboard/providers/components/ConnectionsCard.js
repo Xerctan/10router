@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { translate } from "@/i18n/runtime";
 import { getStatusVariant as getConnectionStatusVariant } from "@/shared/utils/connectionStatus";
-import { classifyConnectionCooldown } from "@/shared/utils/connectionCooldown";
+import { classifyConnectionCooldown, sameConnectionCooldown } from "@/shared/utils/connectionCooldown";
 import { translateQuotaError } from "@/shared/utils/quotaError";
 import PropTypes from "prop-types";
 import { Card, Badge, Button, Modal, Select, Toggle, EditConnectionModal, ConfirmModal } from "@/shared/components";
@@ -76,12 +76,17 @@ function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMov
 
   // Single source of truth for the cooldown reading (issue #46) — this was a
   // second hand-rolled copy of the rule in ConnectionRow.js and
-  // providerCardOrder.js, each with its own expiry filtering.
-  const [cooldown, setCooldown] = useState({ state: "active", lockedModels: [], accountLocked: false, earliestUntil: null });
+  // providerCardOrder.js, each with its own expiry filtering. Lazy init covers
+  // the first paint; the 1s tick bails out via sameConnectionCooldown (fresh
+  // object every call would otherwise re-render the row every second).
+  const [cooldown, setCooldown] = useState(() => classifyConnectionCooldown(connection));
 
   useEffect(() => {
     const check = () => {
-      setCooldown(classifyConnectionCooldown(connection));
+      setCooldown((prev) => {
+        const next = classifyConnectionCooldown(connection);
+        return sameConnectionCooldown(prev, next) ? prev : next;
+      });
     };
     check();
     const hasAnyLock = Object.keys(connection).some((k) => k.startsWith("modelLock_") && connection[k]);

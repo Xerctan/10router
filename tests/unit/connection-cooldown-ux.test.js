@@ -25,8 +25,10 @@ describe("model-lock cooldown is decided in one place (#46)", () => {
   for (const rel of [CONNECTION_ROW, CONNECTIONS_CARD]) {
     it(`${rel} delegates to classifyConnectionCooldown`, () => {
       const src = read(rel);
-      expect(src).toContain('import { classifyConnectionCooldown } from "@/shared/utils/connectionCooldown"');
-      expect(src).toContain("classifyConnectionCooldown(connection)");
+      expect(src).toMatch(/import \{ classifyConnectionCooldown, sameConnectionCooldown \} from "@\/shared\/utils\/connectionCooldown"/);
+      // Lazy useState init (first-paint correctness) + bail-out tick
+      expect(src).toContain("useState(() => classifyConnectionCooldown(connection))");
+      expect(src).toContain("sameConnectionCooldown(prev, next) ? prev : next");
     });
 
     it(`${rel} no longer re-derives lock expiry inline`, () => {

@@ -118,6 +118,48 @@ describe("classifyConnectionCooldown", () => {
     expect(classifyConnectionCooldown({ testStatus: "error" }, NOW).state).toBe("error");
     expect(classifyConnectionCooldown({ testStatus: "unknown" }, NOW).state).toBe("unknown");
   });
+
+  it("a genuine credential failure outranks a live model lock", () => {
+    // Code-review finding on the #46 fix: "partial" must not mask a real
+    // auth failure. testStatus "error" is written by credential-test flows;
+    // a stale live lock from an earlier 429 must not soften it into an amber
+    // partial (which computeConnectionStats counts as CONNECTED).
+    expect(
+      classifyConnectionCooldown({ testStatus: "error", modelLock_gpt: at(60_000) }, NOW).state,
+    ).toBe("error");
+    expect(
+      classifyConnectionCooldown({ testStatus: "expired", modelLock_gpt: at(60_000) }, NOW).state,
+    ).toBe("expired");
+  });
+});
+
+describe("sameConnectionCooldown", () => {
+  // The components tick every second and must bail out of setState when the
+  // classification is unchanged — classifyConnectionCooldown returns a fresh
+  // object each call, so identity comparison would re-render a locked row
+  // every second even though nothing visible changed.
+  it("treats freshly-computed equal classifications as the same", async () => {
+    const { sameConnectionCooldown } = await import("@/shared/utils/connectionCooldown.js");
+    const conn = { modelLock_gpt: at(60_000), modelLock_claude: at(120_000) };
+    const a = classifyConnectionCooldown(conn, NOW);
+    const b = classifyConnectionCooldown(conn, NOW);
+    expect(a).not.toBe(b);          // fresh objects...
+    expect(sameConnectionCooldown(a, b)).toBe(true); // ...but identical content
+  });
+
+  it("distinguishes a real change (lock expired between ticks)", async () => {
+    const { sameConnectionCooldown } = await import("@/shared/utils/connectionCooldown.js");
+    const before = classifyConnectionCooldown({ modelLock_gpt: at(500) }, NOW);
+    const after = classifyConnectionCooldown({ modelLock_gpt: at(-500) }, NOW);
+    expect(sameConnectionCooldown(before, after)).toBe(false);
+  });
+
+  it("orders lockedModels into the comparison", async () => {
+    const { sameConnectionCooldown } = await import("@/shared/utils/connectionCooldown.js");
+    const a = classifyConnectionCooldown({ modelLock_gpt: at(60_000) }, NOW);
+    const b = classifyConnectionCooldown({ modelLock_claude: at(60_000) }, NOW);
+    expect(sameConnectionCooldown(a, b)).toBe(false);
+  });
 });
 
 describe("earliestUntil agrees with the engine's own helper", () => {
