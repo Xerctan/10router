@@ -10,6 +10,12 @@
 
 ### 🐛 修复
 
+- **CreditDaddy 三条线的 404 不再被误报成「模型不存在」**（issue #47）：报告者在 ZCode Free 上遇到永久 404，而提示文案指向模型列表，与真正原因无关。两件事：
+
+  - **文案**：`errorConfig.js` 把 404 映射为 `code: "model_not_found"` / 文案 `"Model not found"`。这在本地网关上尤其误导——CreditDaddy 的网关端点已从 `/gateway/v1/messages` 迁到 `/gateway/<品牌>/v1/messages`（`zcode` / `minimax` / `trae`），**端点 404 与模型无关**，404 发生在路由阶段、还没走到模型解析。现文案改为「Not found (wrong endpoint path, or the model does not exist)」。`error.code` 是客户端据以编程的机器码，**保持 `model_not_found` 不变**（改动它属破坏性 API 变更）；且 `buildErrorBody` 只在调用方未提供 message 时才回落这句，所以上游自带文案的 404 不受影响——这也正是这个修法安全的原因。
+  - **提示**：`NoAuthProxyCard` 与集成文档此前写着「可直连 `zcode-api`，其端点为 `/v1/messages`」——那是迁移前的裸端点，**任何版本都不再提供**，照着填必然 404。现改为说明「路径必须保留品牌段」，并在卡片上直给 404 排查提示：先看路径带不带 `/gateway/zcode/…`，再看 CreditDaddy 版本（重命名前的旧版仍只提供裸端点，应升级 CreditDaddy 而非改这个输入框）。三条线的 `defaultPath` 本就都是带品牌的，未改。
+
+  新增 `creditdaddy-404-diagnosis.test.js`（8 例，钉住 404 文案 / 机器码不变 / 自带 message 不被覆盖 / 三线默认路径均带品牌段且无裸端点回落 / 卡片与文档的 404 提示 / 两个语种的译文齐全）。
 - **webFetch / webSearch 的锁不再写成账号级、且成功后能自己清掉**（issue #46 连带修复）：`search.js` 早就为搜索线单独引入了 `websearch:<provider>` 锁键（否则一次搜索失败会把共享的聊天 key 整个下线），`fetch.js` 却**既不传锁键也不传 model**——`markAccountUnavailable` 收到 `model=null`，于是写下一个账号级 `modelLock___all`，一次 webFetch 失败会把整条连接停掉；而两个 handler 成功后调 `clearAccountError` 时都没带 model，`clearAccountError` 只清 `modelLock_<model>`，所以自己写的锁谁也清不掉。现按 `search.js` 的既有做法给 fetch 补 `webfetch:<provider>` 锁键，两处都把**同一个键**贯穿「取凭据 → 写锁 → 清锁」三步（`getProviderCredentials` / `markAccountUnavailable` / `clearAccountError`）。新增 `web-handler-lock-key.test.js`（8 例源码文本守卫，`search.js` 此前无任何测试）；`fetch-success-clears-account.test.js` 的断言同步更新为三参数。
 - **单个模型额度用完不再显示成「账号不可用」**（issue #46 收尾）：上一笔只把提示文案点名到模型，状态色仍是红的——「unavailable 且锁已过期 → 当作 active」这条启发式被**独立实现了四份**（`providerCardOrder.js` / `ConnectionRow.js` / `ConnectionsCard.js` / usage 页的 `ProviderLimits`），每份各写一套过期过滤，其中两处还存在「倒计时用的锁不过滤、状态用的锁过滤」的分裂，于是倒计时芯片可能显示一把早已过期的锁而徽章说已恢复。现收敛为单一纯函数 `classifyConnectionCooldown()`，新增第三态 **`partial`（部分受限，黄色）**：
 

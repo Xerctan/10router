@@ -15,8 +15,12 @@ const STRATEGIES = [
 ];
 
 // CreditDaddy 网关线（zcode-free / minimax-free / trae-free 共用同一 daemon:主机/端口设置
-// 键共享,路径按线分开——zcode 线可直连 zcode-api 故路径可编辑,MiniMax / Trae 线固定
-// 网关路径但同样允许覆盖)。defaultPath 同时用作占位符与预填值(输入框显示
+// 键共享,路径按线分开。CreditDaddy 侧统一按品牌分线:zcode = /gateway/zcode/
+// v1/messages、minimax = /gateway/minimax/…、trae = /gateway/trae/…。三条线
+// 的默认路径都由 CreditDaddy 自己的版本决定,10Router 这边只跟随。
+// （旧的裸端点 /gateway/v1/messages 是 CreditDaddy 迁移前的形状,已不存在;
+//  把它当成「可直连 zcode-api」的可选值会让人填出一个必然 404 的路径。）
+// 网关路径同样允许覆盖。defaultPath 同时用作占位符与预填值(输入框显示
 // 的就是生效路径),故不另设 pathPlaceholder。非 CreditDaddy 线不渲染网关区。
 const CREDITDADDY_LINES = {
   "zcode-free": { pathKey: "zcodeGatewayPath", defaultPath: "/gateway/zcode/v1/messages" },
@@ -210,7 +214,8 @@ export default function NoAuthProxyCard({ providerId }) {
               ? translate('Local: enable the gateway switch under "MiniMax → Interface settings" in CreditDaddy desktop and add a MiniMax account (default 127.0.0.1:47860).')
               : translate('Local: enable the gateway switch under "ZCode → Interface settings" in CreditDaddy desktop (default 127.0.0.1:47860).')}{" "}
             {translate('LAN (NAS, etc.): put the CreditDaddy machine IP above, then in the same CreditDaddy panel turn on "Allow LAN access" and add this 10Router machine\'s IP to the allowlist, then restart CreditDaddy.')}{" "}
-            {translate("The gateway is protected by an IP allowlist and checks no key, so there is nothing to enter here.")}
+            {translate("The gateway is protected by an IP allowlist and checks no key, so there is nothing to enter here.")}{" "}
+            {translate("Getting a 404? The path must keep its brand segment (e.g. /gateway/zcode/v1/messages) — CreditDaddy serves only the branded endpoints, and a build older than the rename still serves the old /gateway/v1/messages, so upgrade CreditDaddy rather than editing this field.")}
           </p>
         </div>
       )}

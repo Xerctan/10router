@@ -4,6 +4,9 @@ export const ERROR_TYPES = {
   401: { type: "authentication_error", code: "invalid_api_key" },
   402: { type: "billing_error", code: "payment_required" },
   403: { type: "permission_error", code: "insufficient_quota" },
+  // "model_not_found" here is the OpenAI-compatible code clients key off, and
+  // changing it would be a breaking API change; only the human-readable default
+  // text below is corrected. See the note there.
   404: { type: "invalid_request_error", code: "model_not_found" },
   406: { type: "invalid_request_error", code: "model_not_supported" },
   429: { type: "rate_limit_error", code: "rate_limit_exceeded" },
@@ -19,7 +22,15 @@ export const DEFAULT_ERROR_MESSAGES = {
   401: "Invalid API key provided",
   402: "Payment required",
   403: "You exceeded your current quota",
-  404: "Model not found",
+  // 404 is deliberately NOT "Model not found": on the local CreditDaddy gateway
+  // lines (zcode-free / minimax-free / trae-free) a 404 means the endpoint path
+  // is wrong or the gateway does not serve it — the brand segment moved from
+  // /gateway/v1/messages to /gateway/<brand>/v1/messages — and saying "model
+  // not found" points the user at their model list instead of at the path they
+  // configured (issue #47). Upstream 404s that really are a missing model still
+  // carry their own message and are unaffected: buildErrorBody only falls back
+  // to this text when the caller supplies none.
+  404: "Not found (wrong endpoint path, or the model does not exist)",
   406: "Model not supported",
   429: "Rate limit exceeded",
   500: "Internal server error",

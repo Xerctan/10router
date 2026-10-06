@@ -71,7 +71,7 @@ ZCode 经常发放 Start Plan、Trust Build 以及周末狂欢额度（如 GLM-5
 > 3. 把**本 10Router 机器的 IP** 加入其白名单；
 > 4. **重启 CreditDaddy**——该开关是启动时读取的，不重启不生效。
 >
-> 路径输入框显示的是**实际生效的路径**（默认 `/gateway/zcode/v1/messages`，MiniMax 线为 `/gateway/minimax/v1/messages`），与后端 `auth.js` 的内置兜底一致；只有当你要直连 `zcode-api`（其端点为 `/v1/messages`）时才需要改。
+> 路径输入框显示的是**实际生效的路径**（默认 `/gateway/zcode/v1/messages`，MiniMax 线为 `/gateway/minimax/v1/messages`，Trae 线为 `/gateway/trae/v1/messages`），与后端 `auth.js` 的内置兜底一致。CreditDaddy 侧统一按品牌分线，**只有这三个形状的端点存在**；留空即用默认，一般不需要改。旧版的裸端点 `/gateway/v1/messages` 已随 CreditDaddy 迁移移除，若 10Router 返回 **404**，先确认填的路径带品牌段（`/gateway/zcode/…`），以及 CreditDaddy 版本是否已升到迁移之后。
 
 #### 第三步：调用模型
 通过 10Router 标准 OpenAI 兼容端点调用：
