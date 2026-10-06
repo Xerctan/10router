@@ -9,20 +9,60 @@
 ; 不可能）。
 ;
 ; 为什么必须提权：安装器（oneClick:false 的 assisted installer）本身以普通
-; 用户权限运行，taskkill 只能杀同权限或更低权限的进程。而 sidecar 由旧版 10Router
-; 以「以管理员身份运行」拉起（MITM 绑定 443 需要），是高权限进程——安装器直接
-; taskkill /IM 会被拒绝（access denied），旧卸载器在 CHECK_APP_RUNNING 里弹
-; 「10Router 无法关闭」后放弃。这里改用 UAC 提权（-Verb RunAs）从高权限上下文
-; 强杀：即便跳过 UAC 弹窗（拒绝提权），普通 taskkill 仍然会把「能杀的」托盘/
-; sidecar 杀掉，最坏情况退化为和之前一致，不会更糟。编码是 PowerShell
-; -EncodedCommand 的 UTF-16LE Base64 格式，直连系统 taskkill.exe 避免 PATH 投毒。
+; 用户权限运行，taskkill 只能杀同权限或更低权限的进程。而「以管理员身份运行」
+; 的 10Router 实例是预期存在的用户状态——MITM/隧道的排障指引会引导用户这样
+; 做（"Restart 10Router as administrator"）——非提权的 taskkill 对它 access
+; denied，electron-builder 的 CHECK_APP_RUNNING 宏自己也会连杀两轮后放弃并弹
+; 「无法关闭」。所以这里用 UAC 提权（-Verb RunAs）从高权限上下文强杀。
+;
+; v1.3.5 首版的教训（用户实测升级仍弹「无法关闭」）：提权是【静默】的——UAC
+; 弹窗没有任何上下文，用户不知道「taskkill.exe 要不要允许」是升级流程的一部分，
+; 随手点「否」就原样退回失败，而退出码被丢弃、没有任何解释。本版改为：
+;   1. 普通强杀后【先确认是否真有幸存者】——绝大多数机器没有，直接跳过提权，
+;      不再凭空弹 UAC；
+;   2. 有幸存者时【先解释再提权】：说明这是什么、UAC 该选什么；
+;   3. 提权后复查并把结果写进 DetailPrint，用户拒绝 UAC 时明确告知后果。
+; 编码是 PowerShell -EncodedCommand 的 UTF-16LE Base64 格式，直连系统
+; taskkill.exe 避免 PATH 投毒。
+
+; 幸存者检查用 nsProcess（electron-builder 自带该插件；CHECK_APP_RUNNING 宏
+; 也用它，但它的 include 在安装段才展开，customInit 在 .onInit 更早，需自备）。
+!ifndef NSPROCESS_INCLUDED_BY_INSTALLER
+  !include "nsProcess.nsh"
+  !define NSPROCESS_INCLUDED_BY_INSTALLER
+!endif
+
 !macro customInit
   DetailPrint "Stopping any running 10Router processes..."
   nsExec::ExecToStack 'taskkill /F /IM 10Router.exe /T'
   Pop $0   ; taskkill 退出码（进程不存在也会报 error，属预期）
   Pop $1   ; 输出（丢弃）
-  nsExec::ExecToStack 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand aQBmACAAKABHAGUAdAAtAFAAcgBvAGMAZQBzAHMAIAAtAE4AYQBtAGUAIAAxADAAUgBvAHUAdABlAHIAIAAtAEUAcgByAG8AcgBBAGMAdABpAG8AbgAgAFMAaQBsAGUAbgB0AGwAeQBDAG8AbgB0AGkAbgB1AGUAKQAgAHsAIABTAHQAYQByAHQALQBQAHIAbwBjAGUAcwBzACAALQBGAGkAbABlAFAAYQB0AGgAIAB0AGEAcwBrAGsAaQBsAGwALgBlAHgAZQAgAC0AQQByAGcAdQBtAGUAbgB0AEwAaQBzAHQAIABAACgAJwAvAEYAJwAsACcALwBJAE0AJwAsACcAMQAwAFIAbwB1AHQAZQByAC4AZQB4AGUAJwAsACcALwBUACcAKQAgAC0AVgBlAHIAYgAgAFIAdQBuAEEAcwAgAC0AVwBhAGkAdAAgAC0AVwBpAG4AZABvAHcAUwB0AHkAbABlACAASABpAGQAZABlAG4AIAB9AA=='
-  Pop $0   ; 提权脚本退出码（用户拒绝 UAC 属预期，忽略）
-  Pop $1
+  Sleep 800
+
+  ; 幸存者检查：不用 USERNAME 过滤——我们要看到一切实例，包括提权的。
+  ; nsProcess 找到时推 0，找不到推 603。
+  ${nsProcess::FindProcess} "10Router.exe" $R9
+  ${If} $R9 == 0
+    DetailPrint "10Router is still running (likely an elevated instance)."
+    ; 解释 + 征求同意后再弹 UAC。MessageBox 把按下的按钮压栈：IDOK=1，IDCANCEL=2。
+    MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION \
+      "检测到仍在运行的 10Router 进程（可能是以管理员身份运行的实例）。$\n$\n点击「确定」后将弹出 UAC 授权窗口——请选择「是」，以便安装器自动关闭它们。$\n选择「取消」则跳过自动关闭，稍后需按提示手动关闭。" \
+      IDOK 0 IDCANCEL 0
+    Pop $R8
+    ${If} $R8 == 1
+      nsExec::ExecToStack 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand aQBmACAAKABHAGUAdAAtAFAAcgBvAGMAZQBzAHMAIAAtAE4AYQBtAGUAIAAxADAAUgBvAHUAdABlAHIAIAAtAEUAcgByAG8AcgBBAGMAdABpAG8AbgAgAFMAaQBsAGUAbgB0AGwAeQBDAG8AbgB0AGkAbgB1AGUAKQAgAHsAIABTAHQAYQByAHQALQBQAHIAbwBjAGUAcwBzACAALQBGAGkAbABlAFAAYQB0AGgAIAB0AGEAcwBrAGsAaQBsAGwALgBlAHgAZQAgAC0AQQByAGcAdQBtAGUAbgB0AEwAaQBzAHQAIABAACgAJwAvAEYAJwAsACcALwBJAE0AJwAsACcAMQAwAFIAbwB1AHQAZQByAC4AZQB4AGUAJwAsACcALwBUACcAKQAgAC0AVgBlAHIAYgAgAFIAdQBuAEEAcwAgAC0AVwBhAGkAdAAgAC0AVwBpAG4AZABvAHcAUwB0AHkAbABlACAASABpAGQAZABlAG4AIAB9AA=='
+      Pop $0   ; 提权脚本退出码（用户拒绝 UAC 属预期，下方复查会给结论）
+      Pop $1
+      ${nsProcess::FindProcess} "10Router.exe" $R9
+      ${If} $R9 == 0
+        DetailPrint "10Router processes are STILL running (UAC declined or failed) - the installer will ask you to close them manually."
+      ${Else}
+        DetailPrint "Leftover elevated 10Router processes closed."
+      ${EndIf}
+    ${Else}
+      DetailPrint "Elevation skipped by user - the installer will ask you to close 10Router manually."
+    ${EndIf}
+  ${EndIf}
+
   Sleep 1500
 !macroend
