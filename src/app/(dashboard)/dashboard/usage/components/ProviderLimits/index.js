@@ -7,6 +7,7 @@ import QuotaPackBar from "@/shared/components/QuotaPackBar";
 import QuotaToolbar from "./QuotaToolbar";
 import QuotaWindowTimeline from "@/shared/components/QuotaWindowTimeline";
 import { detailRows, needsPerPackDetails } from "@/shared/utils/quotaRows";
+import { classifyConnectionCooldown } from "@/shared/utils/connectionCooldown";
 import {
   connectionsCacheKey,
   createLimiter,
@@ -1228,6 +1229,11 @@ export default function ProviderLimits() {
 
           // Use table layout for all providers
           const isInactive = conn.isActive === false;
+          // Classified, not read raw: this pill used to consult conn.testStatus
+          // directly, with no cooldown awareness at all, so a single model's
+          // 429 painted it red and left it red for the whole lock window even
+          // though the account kept serving every other model (issue #46).
+          const connState = classifyConnectionCooldown(conn).state;
           const isCodex = conn.provider === "codex";
           const claudeReset = conn.provider === "claude" ? quota?.raw?.resetCredits : null;
           const resetLabel = isCodex ? "Codex reset credit" : "Claude limit reset";
@@ -1302,14 +1308,16 @@ export default function ProviderLimits() {
                             className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                               isInactive
                                 ? "bg-surface-2 text-text-muted"
-                                : conn.testStatus === "active" || conn.testStatus === "success"
+                                : connState === "active" || connState === "success"
                                   ? "bg-green-500/10 text-green-600 dark:text-green-400"
-                                  : conn.testStatus === "error" || conn.testStatus === "expired" || conn.testStatus === "unavailable"
-                                    ? "bg-red-500/10 text-red-600 dark:text-red-400"
-                                    : "bg-surface-2 text-text-muted"
+                                  : connState === "partial"
+                                    ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                                    : connState === "error" || connState === "expired" || connState === "unavailable"
+                                      ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                                      : "bg-surface-2 text-text-muted"
                             }`}
                           >
-                            {isInactive ? "disabled" : conn.testStatus || "unknown"}
+                            {isInactive ? "disabled" : (connState === "partial" ? "partial" : connState || "unknown")}
                           </span>
                           {conn.providerSpecificData?.profileArn && (
                             <button

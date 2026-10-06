@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { getStatusVariant as getConnectionStatusVariant } from "@/shared/utils/connectionStatus";
+import { classifyConnectionCooldown } from "@/shared/utils/connectionCooldown";
 import { translate } from "@/i18n/runtime";
 import { extractAccountsVerificationUrl } from "@/shared/utils/validationUrl";
 import { translateQuotaError } from "@/shared/utils/quotaError";
@@ -155,36 +156,34 @@ export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst
         : null;
 
   // Use useState + useEffect for impure Date.now() to avoid calling during render
-  const [isCooldown, setIsCooldown] = useState(false);
+  const [cooldown, setCooldown] = useState({ state: "active", lockedModels: [], accountLocked: false, earliestUntil: null });
 
-  // Get earliest model lock timestamp (useEffect handles the Date.now() comparison)
-  const modelLockUntil = Object.entries(connection)
-    .filter(([k]) => k.startsWith("modelLock_"))
-    .map(([, v]) => v)
-    .filter(v => !!v)
-    .sort()[0] || null;
-
+  // Single source of truth for the cooldown reading (issue #46). This used to
+  // be recomputed twice in this file with two different filters: the value fed
+  // the countdown chip sorted lock STRINGS with no expiry check, while the
+  // boolean compared against Date.now() — so the chip could show a lock that had
+  // already lapsed while the badge said the account was fine. One helper, one
+  // answer, and the model names survive for the message below.
   useEffect(() => {
     const checkCooldown = () => {
-      const until = Object.entries(connection)
-        .filter(([k]) => k.startsWith("modelLock_"))
-        .map(([, v]) => v)
-        .filter(v => v && new Date(v).getTime() > Date.now())
-        .sort()[0] || null;
-      setIsCooldown(!!until);
+      setCooldown(classifyConnectionCooldown(connection));
     };
 
     checkCooldown();
-    const interval = modelLockUntil ? setInterval(checkCooldown, 1000) : null;
+    const hasAnyLock = Object.keys(connection).some((k) => k.startsWith("modelLock_") && connection[k]);
+    const interval = hasAnyLock ? setInterval(checkCooldown, 1000) : null;
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [modelLockUntil]);
+  }, [connection]);
 
-  // Determine effective status (override unavailable if cooldown expired)
-  const effectiveStatus = (connection.testStatus === "unavailable" && !isCooldown)
-    ? "active"  // Cooldown expired → treat as active
-    : connection.testStatus;
+  const { state: effectiveStatus, earliestUntil: modelLockUntil } = cooldown;
+  // Only a live lock shows a countdown. "partial" means some models are
+  // cooling; "unavailable" means the whole account is.
+  const isCooldown = effectiveStatus === "partial" || effectiveStatus === "unavailable";
+  // "partial" is a new state (#46); every other status is already a word a user
+  // can read, so only the new one needs a label.
+  const statusLabel = effectiveStatus === "partial" ? translate("Partial") : effectiveStatus;
 
   // Google VALIDATION_REQUIRED errors surface their "Verify your account" URL in
   // the message text — render it as a jump link instead of a dead red string.
@@ -242,7 +241,7 @@ export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst
           )}
           <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
             <Badge variant={getStatusVariant()} size="sm" dot>
-              {connection.isActive === false ? translate("disabled") : (effectiveStatus || translate("Unknown"))}
+              {connection.isActive === false ? translate("disabled") : (statusLabel || translate("Unknown"))}
             </Badge>
             <Badge variant="default" size="sm">
               {authLabel}

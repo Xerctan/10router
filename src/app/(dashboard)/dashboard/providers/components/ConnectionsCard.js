@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { translate } from "@/i18n/runtime";
 import { getStatusVariant as getConnectionStatusVariant } from "@/shared/utils/connectionStatus";
+import { classifyConnectionCooldown } from "@/shared/utils/connectionCooldown";
+import { translateQuotaError } from "@/shared/utils/quotaError";
 import PropTypes from "prop-types";
 import { Card, Badge, Button, Modal, Select, Toggle, EditConnectionModal, ConfirmModal } from "@/shared/components";
 
@@ -47,7 +49,6 @@ function formatExpiry(iso) {
 function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMoveUp, onMoveDown, onToggleActive, onUpdateProxy, onEdit, onDelete }) {
   const [showProxyDropdown, setShowProxyDropdown] = useState(false);
   const [updatingProxy, setUpdatingProxy] = useState(false);
-  const [isCooldown, setIsCooldown] = useState(false);
   const proxyDropdownRef = useRef(null);
 
   const proxyPoolMap = new Map((proxyPools || []).map((p) => [p.id, p]));
@@ -73,21 +74,26 @@ function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMov
   const noProxyText = boundProxyPool?.noProxy || connection.providerSpecificData?.connectionNoProxy || "";
   const proxyBadgeVariant = boundProxyPool?.isActive === true ? "success" : (boundProxyPoolId || hasLegacyProxy) ? "error" : "default";
 
-  const modelLockUntil = Object.entries(connection)
-    .filter(([k]) => k.startsWith("modelLock_"))
-    .map(([, v]) => v).filter(Boolean).sort()[0] || null;
+  // Single source of truth for the cooldown reading (issue #46) — this was a
+  // second hand-rolled copy of the rule in ConnectionRow.js and
+  // providerCardOrder.js, each with its own expiry filtering.
+  const [cooldown, setCooldown] = useState({ state: "active", lockedModels: [], accountLocked: false, earliestUntil: null });
 
   useEffect(() => {
     const check = () => {
-      const until = Object.entries(connection)
-        .filter(([k]) => k.startsWith("modelLock_"))
-        .map(([, v]) => v).filter(v => v && new Date(v).getTime() > Date.now()).sort()[0] || null;
-      setIsCooldown(!!until);
+      setCooldown(classifyConnectionCooldown(connection));
     };
     check();
-    const t = modelLockUntil ? setInterval(check, 1000) : null;
+    const hasAnyLock = Object.keys(connection).some((k) => k.startsWith("modelLock_") && connection[k]);
+    const t = hasAnyLock ? setInterval(check, 1000) : null;
     return () => { if (t) clearInterval(t); };
-  }, [modelLockUntil]);
+  }, [connection]);
+
+  const { state: effectiveStatus, earliestUntil: modelLockUntil } = cooldown;
+  const isCooldown = effectiveStatus === "partial" || effectiveStatus === "unavailable";
+  // "partial" is a new state (#46); every other status is already a word a user
+  // can read, so only the new one needs a label.
+  const statusLabel = effectiveStatus === "partial" ? translate("Partial") : effectiveStatus;
 
   useEffect(() => {
     if (!showProxyDropdown) return;
@@ -98,8 +104,6 @@ function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMov
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [showProxyDropdown]);
-
-  const effectiveStatus = connection.testStatus === "unavailable" && !isCooldown ? "active" : connection.testStatus;
 
   const getStatusVariant = () => getConnectionStatusVariant(connection.isActive, effectiveStatus);
 
@@ -129,7 +133,7 @@ function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMov
           <p className="text-sm font-medium truncate">{displayName}</p>
           <div className="flex flex-wrap items-center gap-2 mt-1">
             <Badge variant={getStatusVariant()} size="sm" dot>
-              {connection.isActive === false ? "disabled" : (effectiveStatus || "Unknown")}
+              {connection.isActive === false ? "disabled" : (statusLabel || "Unknown")}
             </Badge>
             {hasAnyProxy && <Badge variant={proxyBadgeVariant} size="sm">Proxy</Badge>}
             {connection.earliestPackageExpiry && (
@@ -144,7 +148,12 @@ function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMov
             )}
             {isCooldown && connection.isActive !== false && <CooldownTimer until={modelLockUntil} />}
             {connection.lastError && connection.isActive !== false && (
-              <span className="text-xs text-red-500 truncate max-w-[300px]" title={connection.lastError}>{connection.lastError}</span>
+              // Route through the same translator ConnectionRow.js uses. This
+              // used to dump the raw upstream JSON (up to 500 chars, stored
+              // verbatim by markAccountUnavailable) into a 300px red span, so
+              // the same connection showed a friendly sentence on the provider
+              // page and a wall of JSON here (#46).
+              <span className="text-xs text-red-500 truncate max-w-[300px]" title={translateQuotaError(connection.lastError)}>{translateQuotaError(connection.lastError)}</span>
             )}
             <span className="text-xs text-text-muted">#{connection.priority}</span>
           </div>

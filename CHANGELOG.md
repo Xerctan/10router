@@ -10,6 +10,17 @@
 
 ### 🐛 修复
 
+- **单个模型额度用完不再显示成「账号不可用」**（issue #46 收尾）：上一笔只把提示文案点名到模型，状态色仍是红的——「unavailable 且锁已过期 → 当作 active」这条启发式被**独立实现了四份**（`providerCardOrder.js` / `ConnectionRow.js` / `ConnectionsCard.js` / usage 页的 `ProviderLimits`），每份各写一套过期过滤，其中两处还存在「倒计时用的锁不过滤、状态用的锁过滤」的分裂，于是倒计时芯片可能显示一把早已过期的锁而徽章说已恢复。现收敛为单一纯函数 `classifyConnectionCooldown()`，新增第三态 **`partial`（部分受限，黄色）**：
+
+  | 状态 | 判据 | 呈现 |
+  |---|---|---|
+  | `partial` | 有活跃的 `modelLock_<model>`，无 `modelLock___all` | 黄色徽章 + 「部分受限」+ 倒计时；该连接**计入 connected** |
+  | `unavailable` | 有活跃的 `modelLock___all` | 红色（真·整账号） |
+  | `active` | 无活跃锁（含「`testStatus` 仍是 unavailable 但锁已过期」） | 绿色 |
+
+  连带修三处：`computeConnectionStats` 现把 `partial` 计入 connected（否则卡片会显示「1 Connected / 0 Error / 1 total」这种对不上的数）；usage 页那个连接状态胶囊此前**直接读 `conn.testStatus`**、完全没有冷却概念，是本 issue 最刺眼的一张脸；`ConnectionsCard.js` 此前把上游原始 JSON（最长 500 字符）直接吐进 300px 红色 span，同一条连接在供应商页显示友好句子、在媒体页显示一坨 JSON，现统一走 `translateQuotaError`。`Badge` 早有 `warning` 变体，未新增视觉语言。
+
+  测试：新增 `connection-cooldown.test.js`（14 例，含「过期锁不得让状态变红」「`__all` 优先于 partial」「earliestUntil 跳过过期锁」）、`connection-status-variant.test.js`（`getStatusVariant` 此前**零覆盖**，补 `partial → warning`）、`connection-cooldown-ux.test.js`（10 例源码文本防漂移——两处 JSX 组件在 vitest 的 node 环境下无法 import，这是仓库既有约定）；`provider-card-order.test.js` 扩 5 例。earliestUntil 的内联实现（`getEarliestModelLockUntil` 自己读挂钟、无法注入 `now`）已用交叉断言钉在引擎函数上。
 - **单个模型的额度用完，不再显示成「整个账号不可用」**（issue #46 第 1 步）：Google / Antigravity 的额度是**按模型**分桶的（5 小时个人额度每个模型各一份），我们存的锁也是按模型的，但提示文案一律写「该账号额度已用完」——用户看到的是一个红掉的账号，而实际上同一连接上的其它模型在整个窗口内照常可用。上游 payload 里本就带着 `"model": "gemini-3.8-flash-high"`，此前解析完就丢掉了。现补 `extractQuotaResetInfo().model` 并新增按模型措辞的模板（`zh-CN` / `zh-TW` 同步），文案改为「模型 X 的额度已用完…该账号的其它模型仍可正常使用」；不带 model 的 payload 仍走原账号级模板（那才是真的整账号耗尽）。**只改文案、不动路由** —— 选路本来就看 `modelLock_<model>`，是对的。
 - **用量「概览」空白、而「详情」列得出一堆 0/0 的行**（issue #48）：两个页签读的是两张表——概览读 `usageDaily`/`usageHistory`（`saveUsageStats` 写），详情读 `requestDetails`（`saveRequestDetail` 写）——而两者的写入门限原本不对称：上游没回 `usage` 时，`saveUsageStats` 见 0/0 直接丢行（`requestDetail.js` 的 `in === 0 && out === 0` 早退），`saveRequestDetail` 却照样把 `{prompt_tokens: 0, completion_tokens: 0}` 写进去，于是概览一个字都没有、详情每行都是 0。缺失的一环是**估算兜底**：SSE 路径一直有 `estimateUsage` 兜底（`stream.js` 四处），非流式路径只有 `extractUsageFromResponse`，认不出的 usage 形状就返回 null。现补上同款兜底（新增 `measureResponseTextLength` 一趟量出 OpenAI / Claude / Responses 三种形状的正文长度，含 reasoning），非流式与 forced-SSE-to-JSON 两条路径都改记同一个 `recordedUsage`，两个页签数字从此一致。**估算值只入库、不上线**：`sseToJsonHandler` 里发给客户端的 usage 一律取 `upstreamUsage`，避免把一个猜测当作真实花费报给调用方。新增 `nonstream-usage-estimate-fallback.test.js`（13 例，含「无 usage 时概览侧必须写非零行」「两个页签数字相同」「客户端收到的 usage 不被估算污染」）。
 - **超长上下文自动压缩默认触发比例 0.9 → 0.95**（`DEFAULT_SETTINGS.autoCompactRatio`）：自动压缩（Auto-compact，v1.2.1 引入）此前默认在实际窗口 90% 处触发，现上调到 95%——更贴近窗口上限才压缩，减少长会话里偏早触发对上下文的折损。阈值档位（80 / 90 / 95%）不变，仍可在「实验特性」卡片自行下调，总开关逻辑不动。

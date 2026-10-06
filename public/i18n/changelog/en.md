@@ -10,6 +10,7 @@ User-facing highlights per release. See [CHANGELOG.md](https://github.com/techys
 
 ### 🐛 Fixed
 
+- **A partially rate-limited connection now shows amber, not red** (issue #46) — a connection with one model in cooldown is still serving its other models, so it gets its own "Partial" state instead of being painted as a dead account. The status rule also had four hand-written copies that could disagree; they now share one implementation.
 - **One model's quota running out no longer reads as "this account is unavailable"** (issue #46) — Google/Antigravity quota is bucketed per model, and so is the lock we store, but the message always said the account was used up. Other models on the same connection keep working for the whole window. The message now names the model and says so; requests that genuinely exhaust the whole account are worded as before.
 - **Usage Overview is no longer empty while Details lists 0-token rows** (issue #48) — the two tabs read different tables, and a response that carried no token counts was dropped entirely from one while still being written (as 0 in / 0 out) to the other. The streaming path always estimated a fallback; the non-streaming paths did not. Both tabs now show the same, estimated, counts. Estimates are recorded in the dashboard only — the usage reported to your client is still exactly what the provider returned.
 - **Auto-compact default trigger ratio 0.9 → 0.95** — auto-compaction now fires closer to the context limit (threshold levels and the master switch are unchanged; still adjustable on the "Experimental" card).

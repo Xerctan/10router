@@ -20,19 +20,23 @@
 //   2  configured but every connection is disabled → sinks below connected
 //   3  never configured → sinks last
 
+import { classifyConnectionCooldown } from "@/shared/utils/connectionCooldown.js";
+
 export const DEFAULT_CARD_PRIORITY = 999;
 
 const MAX_SAFE = Number.MAX_SAFE_INTEGER;
-
 /**
- * Effective test status of one connection. A connection under an in-flight
- * model lock is treated as "active" (the lock is a cooldown, not a failure).
+ * Effective test status of one connection, accounting for its model locks.
+ *
+ * Delegates to classifyConnectionCooldown so the two detail rows and this
+ * module cannot drift (issue #46) — this used to be a fourth hand-rolled copy
+ * of the same rule. Note the returned value may now be "partial": one model
+ * cooling down while its siblings still serve is NOT an account-level error.
+ * Callers that only care about "healthy vs not" should compare against
+ * "unavailable" explicitly rather than assuming a two-way answer.
  */
 export function effectiveConnectionStatus(conn) {
-  const isCooldown = Object.entries(conn || {}).some(
-    ([k, v]) => k.startsWith("modelLock_") && v && new Date(v).getTime() > Date.now(),
-  );
-  return conn?.testStatus === "unavailable" && !isCooldown ? "active" : conn?.testStatus;
+  return classifyConnectionCooldown(conn).state;
 }
 
 /**
@@ -49,7 +53,11 @@ export function computeConnectionStats(connections, providerId, authTypes = null
   const connected = list.filter((c) => {
     if (c.isActive === false) return false;
     const status = effectiveConnectionStatus(c);
-    return status === "active" || status === "success";
+    // "partial" counts as connected: one model is cooling down, but this
+    // connection is still serving its siblings, so treating it as anything
+    // other than healthy would both hide it and make connected+error not add
+    // up to total (#46).
+    return status === "active" || status === "success" || status === "partial";
   }).length;
   const error = list.filter((c) => {
     const status = effectiveConnectionStatus(c);

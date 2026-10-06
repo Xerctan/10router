@@ -29,14 +29,37 @@ describe("effectiveConnectionStatus", () => {
     expect(effectiveConnectionStatus({ testStatus: "unavailable" })).toBe("active");
   });
 
-  it("keeps 'unavailable' while a model lock is still in flight (cooldown)", () => {
-    const conn = { testStatus: "unavailable", modelLock_gpt: future() };
-    expect(effectiveConnectionStatus(conn)).toBe("unavailable");
-  });
-
   it("treats an expired model lock as recovered (active)", () => {
     const conn = { testStatus: "unavailable", modelLock_gpt: "2000-01-01T00:00:00Z" };
     expect(effectiveConnectionStatus(conn)).toBe("active");
+  });
+
+  // Changed by issue #46. A per-model lock while the account is otherwise
+  // serving is "partial", NOT "unavailable": the sibling models on this same
+  // connection keep routing for the rest of the window, so counting it as an
+  // account-level error is what made the dashboard read as "dead".
+  it("reports a per-model lock as 'partial' rather than 'unavailable'", () => {
+    const conn = { testStatus: "unavailable", modelLock_gpt: future() };
+    expect(effectiveConnectionStatus(conn)).toBe("partial");
+  });
+
+  it("still reports 'unavailable' for a live account-wide lock", () => {
+    const conn = { testStatus: "unavailable", modelLock___all: future() };
+    expect(effectiveConnectionStatus(conn)).toBe("unavailable");
+  });
+
+  it("lets an account-wide lock outrank simultaneous per-model locks", () => {
+    const conn = {
+      testStatus: "unavailable",
+      modelLock___all: future(),
+      modelLock_gpt: future(),
+    };
+    expect(effectiveConnectionStatus(conn)).toBe("unavailable");
+  });
+
+  it("passes non-cooldown statuses through unchanged", () => {
+    expect(effectiveConnectionStatus({ testStatus: "error" })).toBe("error");
+    expect(effectiveConnectionStatus({ testStatus: "unknown" })).toBe("unknown");
   });
 });
 
@@ -51,6 +74,23 @@ describe("computeConnectionStats", () => {
   it("counts total/connected/error and excludes disabled connections", () => {
     const stats = computeConnectionStats(conns, "openai");
     expect(stats).toEqual({ connected: 1, error: 1, total: 3, allDisabled: false });
+  });
+
+  // #46: a per-model lock leaves the connection serving its siblings, so it
+  // must read as connected. If it fell through both buckets the card would show
+  // "1 Connected / 1 Error / 3 total" and the numbers would not add up.
+  it("counts a partially-locked connection as connected, not as an error", () => {
+    const stats = computeConnectionStats([
+      { id: "p", provider: "openai", authType: "apikey", testStatus: "unavailable", modelLock_gpt: future() },
+    ], "openai");
+    expect(stats).toEqual({ connected: 1, error: 0, total: 1, allDisabled: false });
+  });
+
+  it("still counts an account-wide lock as an error", () => {
+    const stats = computeConnectionStats([
+      { id: "d", provider: "openai", authType: "apikey", testStatus: "unavailable", modelLock___all: future() },
+    ], "openai");
+    expect(stats).toEqual({ connected: 0, error: 1, total: 1, allDisabled: false });
   });
 
   it("flags allDisabled only when every connection is off", () => {
