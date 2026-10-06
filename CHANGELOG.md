@@ -10,6 +10,7 @@
 
 ### 🐛 修复
 
+- **webFetch / webSearch 的锁不再写成账号级、且成功后能自己清掉**（issue #46 连带修复）：`search.js` 早就为搜索线单独引入了 `websearch:<provider>` 锁键（否则一次搜索失败会把共享的聊天 key 整个下线），`fetch.js` 却**既不传锁键也不传 model**——`markAccountUnavailable` 收到 `model=null`，于是写下一个账号级 `modelLock___all`，一次 webFetch 失败会把整条连接停掉；而两个 handler 成功后调 `clearAccountError` 时都没带 model，`clearAccountError` 只清 `modelLock_<model>`，所以自己写的锁谁也清不掉。现按 `search.js` 的既有做法给 fetch 补 `webfetch:<provider>` 锁键，两处都把**同一个键**贯穿「取凭据 → 写锁 → 清锁」三步（`getProviderCredentials` / `markAccountUnavailable` / `clearAccountError`）。新增 `web-handler-lock-key.test.js`（8 例源码文本守卫，`search.js` 此前无任何测试）；`fetch-success-clears-account.test.js` 的断言同步更新为三参数。
 - **单个模型额度用完不再显示成「账号不可用」**（issue #46 收尾）：上一笔只把提示文案点名到模型，状态色仍是红的——「unavailable 且锁已过期 → 当作 active」这条启发式被**独立实现了四份**（`providerCardOrder.js` / `ConnectionRow.js` / `ConnectionsCard.js` / usage 页的 `ProviderLimits`），每份各写一套过期过滤，其中两处还存在「倒计时用的锁不过滤、状态用的锁过滤」的分裂，于是倒计时芯片可能显示一把早已过期的锁而徽章说已恢复。现收敛为单一纯函数 `classifyConnectionCooldown()`，新增第三态 **`partial`（部分受限，黄色）**：
 
   | 状态 | 判据 | 呈现 |

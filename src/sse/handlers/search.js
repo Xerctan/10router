@@ -210,7 +210,12 @@ async function handleSingleProviderSearch(body, providerInput, request, apiKey, 
         });
       },
       onRequestSuccess: async () => {
-        await clearAccountError(credentials.connectionId, credentials);
+        // Must carry the same lock key the credentials were resolved under
+        // (searchLockKey), or this handler can never clear the per-model lock
+        // it wrote on failure — clearAccountError nulls `modelLock_<model>` for
+        // the model it is given, and without it the search lock outlives a
+        // success.
+        await clearAccountError(credentials.connectionId, credentials, searchLockKey);
       }
     });
 

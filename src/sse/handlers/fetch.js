@@ -158,8 +158,16 @@ async function handleSingleProviderFetch(body, providerInput, request, apiKey, s
   let lastError = null;
   let lastStatus = null;
 
+  // Lock scope for this handler. Mirrors search.js: without a model argument
+  // markAccountUnavailable would write an account-wide `__all` lock, taking the
+  // whole account offline for a single webFetch failure, and clearAccountError
+  // would have no key to clear on the way back. The same key must be used for
+  // credential resolution, the error lock and the success clear, or they
+  // address different locks.
+  const fetchLockKey = `webfetch:${providerId}`;
+
   while (true) {
-    const credentials = await getProviderCredentials(providerId, excludeConnectionIds);
+    const credentials = await getProviderCredentials(providerId, excludeConnectionIds, fetchLockKey);
 
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
@@ -199,13 +207,13 @@ async function handleSingleProviderFetch(body, providerInput, request, apiKey, s
     });
 
     if (result.success) {
-      await clearAccountError(credentials.connectionId, credentials);
+      await clearAccountError(credentials.connectionId, credentials, fetchLockKey);
       return new Response(JSON.stringify(result.data), {
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
       });
     }
 
-    const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, providerId);
+    const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, providerId, fetchLockKey);
 
     if (shouldFallback) {
       log.warn("AUTH", `Account ${credentials.connectionName} unavailable (${result.status}), trying fallback`);

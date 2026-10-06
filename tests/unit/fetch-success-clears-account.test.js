@@ -82,9 +82,14 @@ describe("web fetch account state", () => {
     }));
 
     expect(response.status).toBe(200);
+    // The lock key must be passed: clearAccountError nulls `modelLock_<model>`
+    // for the model it is handed, and webFetch locks under `webfetch:<provider>`
+    // (mirroring search.js). Without it a success could not clear the lock a
+    // failure had written.
     expect(mocks.clearAccountError).toHaveBeenCalledWith(
       "jina-connection",
       expect.objectContaining({ connectionName: "Jina Test" }),
+      "webfetch:jina-reader",
     );
     expect(mocks.markAccountUnavailable).not.toHaveBeenCalled();
   });
