@@ -10,6 +10,13 @@
 
 ### 🐛 修复
 
+- **单模型失败不再把整个连接标记为「不可用」**（issue #46 根因修复）：`markAccountUnavailable` 在写**按模型**的锁（`modelLock_<model>`）时，同一次写入里**无条件**附带 `testStatus: "unavailable"` —— 而选路自始至终只看那把按模型的锁（`auth.js:185-194`），也就是说一个模型的 429 会让整条连接显示为宕机、而它的兄弟模型在整个窗口内照常可用。现在 `testStatus` **只在锁键为 `modelLock___all`（真·账号级）时才写**。
+
+  `lastError` / `errorCode` / `lastErrorAt` **仍无条件写**：连接行要靠它们解释「这个模型为什么被锁」（`translateQuotaError` 从中取重置倒计时与模型名，`extractAccountsVerificationUrl` 也读它），去掉会让模型被静默锁住。被去掉的只是那句「整个账号已下线」的断言。
+
+  这是本次改动里唯一影响仪表盘之外行为的一处：CLI 工具页在连接无任何模型信息时，`conn.testStatus === "active"` 才给出「自行填写 model id」的建议；按模型失败后该建议现在会重新出现 —— 而这更正确（兄弟模型仍可路由，并没有理由把用户挡在门外）。
+
+  配套：`clearAccountError` 此前**零真实覆盖**（`tests/` 下 4 处引用全是 `vi.fn()` mock），其 `remainingActiveLocks.length === 0` 门控一行都没执行过，而那正是本次要动的判断。已先补 `clear-account-error-locks.test.js`（10 例，含「兄弟锁还活着时不复位」与两步恢复），**再**改写入逻辑；新增 `mark-account-unavailable-scope.test.js`（7 例）钉住两个断言：按模型失败不得写账号级 `testStatus`、账号级失败仍必须写。`codebuddy-channel-block.test.js` 里断言 429 会写 `testStatus` 的那例按新语义更新（它传了 model，本就是按模型锁）。
 - **CreditDaddy 三条线的 404 不再被误报成「模型不存在」**（issue #47）：报告者在 ZCode Free 上遇到永久 404，而提示文案指向模型列表，与真正原因无关。两件事：
 
   - **文案**：`errorConfig.js` 把 404 映射为 `code: "model_not_found"` / 文案 `"Model not found"`。这在本地网关上尤其误导——CreditDaddy 的网关端点已从 `/gateway/v1/messages` 迁到 `/gateway/<品牌>/v1/messages`（`zcode` / `minimax` / `trae`），**端点 404 与模型无关**，404 发生在路由阶段、还没走到模型解析。现文案改为「Not found (wrong endpoint path, or the model does not exist)」。`error.code` 是客户端据以编程的机器码，**保持 `model_not_found` 不变**（改动它属破坏性 API 变更）；且 `buildErrorBody` 只在调用方未提供 message 时才回落这句，所以上游自带文案的 404 不受影响——这也正是这个修法安全的原因。

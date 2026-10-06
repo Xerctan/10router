@@ -192,8 +192,13 @@ describe("markAccountUnavailable on 11128 — no account lock, channelScope repo
 
     expect(res.channelScope).toBe(false);
     const writes = dbMocks.updateProviderConnection.mock.calls.at(-1);
+    // Per-model lock (a model was passed) → the account-level flag is
+    // deliberately NOT written, since siblings keep serving (#46). The lock
+    // itself and the error detail still are.
     expect(Object.keys(writes[1]).some((k) => k.startsWith("modelLock_"))).toBe(true);
-    expect(writes[1].testStatus).toBe("unavailable");
+    expect(writes[1]).not.toHaveProperty("testStatus");
+    expect(writes[1].lastError).toBeTruthy();
+    expect(writes[1].errorCode).toBe(429);
   });
 });
 

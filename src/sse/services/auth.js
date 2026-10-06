@@ -1,6 +1,6 @@
 import { getProviderConnections, validateApiKey, updateProviderConnection, getSettings, getProxyPools } from "@/lib/localDb";
 import { resolveConnectionProxyConfig, pickProxyPoolId } from "@/lib/network/connectionProxy";
-import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLockUpdate, getEarliestModelLockUntil, channelBlockRemainingMs } from "open-sse/services/accountFallback.js";
+import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLockUpdate, getEarliestModelLockUntil, channelBlockRemainingMs, MODEL_LOCK_ALL } from "open-sse/services/accountFallback.js";
 import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
 import { resolveProviderId, FREE_PROVIDERS } from "@/shared/constants/providers.js";
 import { getUsageForProvider } from "open-sse/services/usage.js";
@@ -412,11 +412,24 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
   // 100-char cut dropped them and the friendly message rendered empty
   // placeholders). 500 is still short enough for the dashboard row.
   const reason = typeof errorText === "string" ? errorText.slice(0, 500) : "Provider error";
-  const lockUpdate = buildModelLockUpdate(githubResetAtMs ? null : model, cooldownMs);
+  const lockModel = githubResetAtMs ? null : model;
+  const lockUpdate = buildModelLockUpdate(lockModel, cooldownMs);
+
+  // The account-level testStatus is only honest for an ACCOUNT-wide lock.
+  // Writing it alongside a per-model lock is what made one model's 429 paint
+  // the whole connection as "unavailable" (issue #46): the quota is bucketed
+  // per model and selection only ever consulted modelLock_<model>, so every
+  // sibling model kept serving while the row said the account was dead.
+  //
+  // lastError / errorCode / lastErrorAt are still written unconditionally —
+  // the row renders them (translateQuotaError, extractAccountsVerificationUrl),
+  // and they are what explains WHY a model is locked. Only the boolean that
+  // claims "this whole account is down" becomes conditional.
+  const isAccountLock = Object.keys(lockUpdate)[0] === MODEL_LOCK_ALL;
 
   await updateProviderConnection(connectionId, {
     ...lockUpdate,
-    testStatus: "unavailable",
+    ...(isAccountLock ? { testStatus: "unavailable" } : {}),
     lastError: reason,
     errorCode: status,
     lastErrorAt: new Date().toISOString(),
