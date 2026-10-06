@@ -95,11 +95,35 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
     message === "stream stall timeout"
       ? "上游连接在响应中途失联（120 秒无任何数据）——通常是上游过载、网络抖动或渠道临时故障；本轮已自动终止以免客户端长时间挂起。请直接重试，或切换其他渠道/模型。"
       : "上游连接中断——通常是上游过载或网络抖动；本轮已自动终止。请直接重试，或切换其他渠道/模型。";
-  const onAbortTerminal = isResponsesPassthrough
-    ? buildAbortedResponsesTerminalBytes
-    : (message) => buildStreamErrorBytes(HTTP_STATUS.GATEWAY_TIMEOUT, friendlyAbort(message), sourceFormat);
-  const stallTimeoutMs = PROVIDERS[provider]?.stallTimeoutMs || STREAM_STALL_TIMEOUT_MS;
-  const transformedBody = pipeWithDisconnect(providerResponse, transformStream, streamController, onAbortTerminal, stallTimeoutMs);
+  // Placeholder row, upserted later by onStreamComplete. It is deliberately NOT
+  // marked "success": at this point the stream has produced nothing yet, and if
+  // the upstream dies mid-flight nothing comes back to correct it — an aborted
+  // request used to sit in the Details tab as a green 0-in / 0-out row forever,
+  // reading as a completed call that happened to be free (issue #48).
+  //
+  // Written BEFORE the pipe is built so the abort handler below can update the
+  // same row by id. The terminal-frame builder is wrapped rather than replaced:
+  // the client still gets exactly the same bytes, the row just also learns the
+  // request ended early.
+  const recordAbort = (message) => {
+    saveRequestDetail(buildRequestDetail({
+      provider, model, connectionId,
+      latency: { ttft: 0, total: Date.now() - requestStartTime },
+      tokens: { prompt_tokens: 0, completion_tokens: 0 },
+      request: extractRequestConfig(body, stream),
+      providerRequest: finalBody || translatedBody || null,
+      providerResponse: "[Streaming aborted before completion]",
+      response: { content: "[Streaming aborted]", thinking: null, type: "streaming" },
+      pxpipe,
+      status: "error"
+    }, { id: streamDetailId })).catch(err => {
+      console.error("[RequestDetail] Failed to record aborted stream:", err.message);
+    });
+    return message;
+  };
+  const abortTerminal = isResponsesPassthrough
+    ? (message) => buildAbortedResponsesTerminalBytes(recordAbort(message))
+    : (message) => buildStreamErrorBytes(HTTP_STATUS.GATEWAY_TIMEOUT, friendlyAbort(recordAbort(message)), sourceFormat);
 
   saveRequestDetail(buildRequestDetail({
     provider, model, connectionId,
@@ -110,11 +134,13 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
     providerResponse: "[Streaming - raw response not captured]",
     response: { content: "[Streaming in progress...]", thinking: null, type: "streaming" },
     pxpipe,
-    status: "success"
+    status: "streaming"
   }, { id: streamDetailId })).catch(err => {
     console.error("[RequestDetail] Failed to save streaming request:", err.message);
   });
 
+  const stallTimeoutMs = PROVIDERS[provider]?.stallTimeoutMs || STREAM_STALL_TIMEOUT_MS;
+  const transformedBody = pipeWithDisconnect(providerResponse, transformStream, streamController, abortTerminal, stallTimeoutMs);
   return {
     success: true,
     response: new Response(transformedBody, { headers: { ...SSE_HEADERS, ...upstreamResponseHeaders(providerResponse.headers) } })

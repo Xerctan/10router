@@ -10,6 +10,9 @@
 
 ### 🐛 修复
 
+- **中途夭折的流式请求不再留一行「绿色 0 token」的假成功**（issue #48 连带修复）：流式请求一开就先把占位行写进 `requestDetails`，但状态写的是 `status: "success"`；而 `UsageStats.js` 判圆点颜色的条件是 `!r.status || r.status === "ok" || r.status === "success"`。上游中途断链或触发 120 秒无数据看门狗时，abort 走的是 `streamController.handleError`（纯内存终止，**完全不碰数据库**），`onStreamComplete` 永远不会被调用——于是这行占位记录再没人修正，**长期**留在详情页里显示为一个「成功、0 输入 / 0 输出」的请求，读起来像一次刚好没花钱的正常调用。
+
+  两处改动：占位行状态改为 `streaming`（进行中就是进行中，不冒充成功）；把终止帧构造器包一层，abort 时按同一个 `id` upsert 回 `status: "error"`（`requestDetailsRepo` 的 upsert 冲突键正是 `id`，所以是原地更新而非追加一行）。`recordAbort(message)` 原样返回 message，**客户端收到的字节与之前完全一致**，只是那一行数据库记录知道了这次请求提前结束了。占位行的写入相应挪到建 pipe 之前——abort 处理器需要那一行已经存在。
 - **单模型失败不再把整个连接标记为「不可用」**（issue #46 根因修复）：`markAccountUnavailable` 在写**按模型**的锁（`modelLock_<model>`）时，同一次写入里**无条件**附带 `testStatus: "unavailable"` —— 而选路自始至终只看那把按模型的锁（`auth.js:185-194`），也就是说一个模型的 429 会让整条连接显示为宕机、而它的兄弟模型在整个窗口内照常可用。现在 `testStatus` **只在锁键为 `modelLock___all`（真·账号级）时才写**。
 
   `lastError` / `errorCode` / `lastErrorAt` **仍无条件写**：连接行要靠它们解释「这个模型为什么被锁」（`translateQuotaError` 从中取重置倒计时与模型名，`extractAccountsVerificationUrl` 也读它），去掉会让模型被静默锁住。被去掉的只是那句「整个账号已下线」的断言。
