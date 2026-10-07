@@ -45,9 +45,11 @@
   ${If} $R9 == 0
     DetailPrint "10Router is still running (likely an elevated instance)."
     ; 解释 + 征求同意后再弹 UAC。MessageBox 把按下的按钮压栈：IDOK=1，IDCANCEL=2。
+    ; /SD IDOK：静默安装（/S，自动化测试/无人值守）时自动选「确定」继续——
+    ; 否则该框在静默模式下也会显示并永久阻塞。交互安装不受影响（正常弹框）。
     MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION \
       "检测到仍在运行的 10Router 进程（可能是以管理员身份运行的实例）。$\n$\n点击「确定」后将弹出 UAC 授权窗口——请选择「是」，以便安装器自动关闭它们。$\n选择「取消」则跳过自动关闭，稍后需按提示手动关闭。" \
-      IDOK 0 IDCANCEL 0
+      /SD IDOK IDOK 0 IDCANCEL 0
     Pop $R8
     ${If} $R8 == 1
       nsExec::ExecToStack 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand aQBmACAAKABHAGUAdAAtAFAAcgBvAGMAZQBzAHMAIAAtAE4AYQBtAGUAIAAxADAAUgBvAHUAdABlAHIAIAAtAEUAcgByAG8AcgBBAGMAdABpAG8AbgAgAFMAaQBsAGUAbgB0AGwAeQBDAG8AbgB0AGkAbgB1AGUAKQAgAHsAIABTAHQAYQByAHQALQBQAHIAbwBjAGUAcwBzACAALQBGAGkAbABlAFAAYQB0AGgAIAB0AGEAcwBrAGsAaQBsAGwALgBlAHgAZQAgAC0AQQByAGcAdQBtAGUAbgB0AEwAaQBzAHQAIABAACgAJwAvAEYAJwAsACcALwBJAE0AJwAsACcAMQAwAFIAbwB1AHQAZQByAC4AZQB4AGUAJwAsACcALwBUACcAKQAgAC0AVgBlAHIAYgAgAFIAdQBuAEEAcwAgAC0AVwBhAGkAdAAgAC0AVwBpAG4AZABvAHcAUwB0AHkAbABlACAASABpAGQAZABlAG4AIAB9AA=='
@@ -82,7 +84,7 @@
   ; 键名 = UUID.v5(appId "com.techysy.10router", electron-builder NS namespace)，
   ; 确定性派生、跨机器稳定（tests/unit/installer-legacy-cleanup.test.js 有守卫，
   ; appId 变更会使本键失配而测试转红）。
-  !define LEGACY_UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\{d06897b6-43ce-5451-986c-a52486d415bb}"
+  !define LEGACY_UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\d06897b6-43ce-5451-986c-a52486d415bb"
   ReadRegStr $R7 HKCU "${LEGACY_UNINSTALL_KEY}" "UninstallString"
   ${If} $R7 != ""
     DetailPrint "Removing previous version's uninstaller entry (self-managed cleanup)..."

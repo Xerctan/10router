@@ -32,7 +32,11 @@ describe("legacy uninstall registry key derivation", () => {
     const guid = UUID.v5(appId, UUID.parse("50e065bc-3134-11e6-9bab-38c9862bdaf3"));
     // 本机实测（HKCU\...\Uninstall\ 下真实存在的键名）
     expect(guid).toBe("d06897b6-43ce-5451-986c-a52486d415bb");
-    expect(nsh).toContain(guid);
+    // 键路径必须以 GUID + 引号收尾：electron-builder 的 UNINSTALL_APP_KEY 是
+    // 【不带花括号】的纯 GUID——带上 {} 会删一个不存在的键，真键纹丝不动，
+    // 旧卸载器照跑（v1.3.6 首测翻车实录）。
+    expect(nsh).toContain(`Uninstall\\${guid}"`);
+    expect(nsh).not.toContain(`Uninstall\\{${guid}`);
   });
 });
 
