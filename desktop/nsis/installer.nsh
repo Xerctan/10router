@@ -64,5 +64,41 @@
     ${EndIf}
   ${EndIf}
 
+  ; ===== 自带清理：不再调用旧版本卸载器（v1.3.6）=====
+  ; electron-builder 的升级路径（installSection.nsh → uninstallOldVersion）会把
+  ; 【旧版本发布时冻结的卸载器】拷到 $PLUGINSDIR\old-uninstaller.exe 静默执行：
+  ; 其内部的 CHECK_APP_RUNNING 只要非零退出就 Abort，外层循环重试 5 次后弹
+  ; 「无法关闭」（appCannotBeClosed），静默路径则表现为
+  ; "Failed to uninstall old application files: 2"。v1.3.5 实测：机器上没有任何
+  ; 10Router 进程时也会触发（旧卸载器对自身的幽灵检测，无法外部修复）。
+  ;
+  ; 处理：新安装器自带清理——删除旧版卸载注册表键。uninstallOldVersion 首步
+  ; 读该键的 UninstallString，读不到即 ClearErrors+Return 整体跳过
+  ; （installUtil.nsh:157-166 模板原生路径），冻结代码根本不会执行。旧程序文件
+  ; 由新安装直接覆盖（Electron 应用同构，残留仅装饰性）；用户数据
+  ; （%APPDATA%\10router）不在触碰范围；INSTALL_REGISTRY_KEY（InstallLocation
+  ; /KeepShortcuts 依赖）保留不动。
+  ;
+  ; 键名 = UUID.v5(appId "com.techysy.10router", electron-builder NS namespace)，
+  ; 确定性派生、跨机器稳定（tests/unit/installer-legacy-cleanup.test.js 有守卫，
+  ; appId 变更会使本键失配而测试转红）。
+  !define LEGACY_UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\{d06897b6-43ce-5451-986c-a52486d415bb}"
+  ReadRegStr $R7 HKCU "${LEGACY_UNINSTALL_KEY}" "UninstallString"
+  ${If} $R7 != ""
+    DetailPrint "Removing previous version's uninstaller entry (self-managed cleanup)..."
+    ReadRegStr $R6 HKCU "${LEGACY_UNINSTALL_KEY}" "InstallLocation"
+    DeleteRegKey HKCU "${LEGACY_UNINSTALL_KEY}"
+    ; 历史上若装过 perMachine（HKLM），best-effort 清一下；无权限时静默失败
+    ClearErrors
+    DeleteRegKey HKLM "${LEGACY_UNINSTALL_KEY}"
+    ClearErrors
+    ${If} $R6 != ""
+      ${If} ${FileExists} "$R6\Uninstall 10Router.exe"
+        Delete "$R6\Uninstall 10Router.exe"
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+  !undef LEGACY_UNINSTALL_KEY
+
   Sleep 1500
 !macroend
