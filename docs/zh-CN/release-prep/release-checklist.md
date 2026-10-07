@@ -10,6 +10,7 @@
 - [ ] 回归门禁 + 三份注册表基线（providers / alias / oauth-urls）
 - [ ] `node scripts/audit-capabilities.mjs` 能力审计
 - [ ] 安全审查（凭据落盘、日志泄漏、虚拟 key 写路径、sudo argv 等）
+- [ ] **从上一版本原地升级验证**（不能只测全新安装——升级路径上要执行【旧版本发布时冻结的卸载器】，它的进程检查/清理逻辑在新装测试里测不到；v1.3.5 的「无法关闭」弹窗即在全新安装测试全绿的情况下漏到线上）
 - [ ] 新增供应商的 `public/providers/*.png` 图标齐全
 - [ ] desktop 新增文件已登记 `desktop/package.json` 的 `build.files`（漏登记 = 打包后功能静默消失）
 - [ ] ESLint 仅作参考：仓库基线并非零 error（v1.2.1 即 153 error），CI 不设卡，关注**净新增**

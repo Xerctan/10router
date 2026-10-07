@@ -2,6 +2,16 @@
 
 User-facing highlights per release. See [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md) for the full developer log.
 
+## v1.3.6 (2026-10-07)
+
+### ✨ New
+
+- **CreditDaddy gateway status on the free-provider cards** (issue #49) — the ZCode Free / MiniMax Free / Trae Free cards now probe the local gateway port (server-side TCP probe) and show at a glance whether CreditDaddy's gateway is reachable, with a download link and guidance when it is not.
+
+### 🐛 Fixed
+
+- **Upgrading no longer hits the "cannot close 10Router" dialog** — during an upgrade the installer used to run the PREVIOUS version's frozen uninstaller, whose process check could fail even with no 10Router process running (5 retries, then the dialog). The installer now removes the previous version's uninstaller entry itself and skips that frozen code entirely; user data is untouched.
+
 ## v1.3.5 (2026-10-05)
 
 ### ✨ New
