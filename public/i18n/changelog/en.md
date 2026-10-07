@@ -2,24 +2,16 @@
 
 User-facing highlights per release. See [CHANGELOG.md](https://github.com/techysy/10router/blob/main/CHANGELOG.md) for the full developer log.
 
-## v1.3.6 (2026-10-07)
-
-### ✨ New
-
-- **CreditDaddy gateway status on the free-provider cards** (issue #49) — the ZCode Free / MiniMax Free / Trae Free cards now probe the local gateway port (server-side TCP probe) and show at a glance whether CreditDaddy's gateway is reachable, with a download link and guidance when it is not.
-
-### 🐛 Fixed
-
-- **Upgrading no longer hits the "cannot close 10Router" dialog** — during an upgrade the installer used to run the PREVIOUS version's frozen uninstaller, whose process check could fail even with no 10Router process running (5 retries, then the dialog). The installer now removes the previous version's uninstaller entry itself and skips that frozen code entirely; user data is untouched.
-
 ## v1.3.5 (2026-10-05)
 
 ### ✨ New
 
+- **CreditDaddy gateway status on the free-provider cards** (issue #49) — the ZCode Free / MiniMax Free / Trae Free cards now probe the local gateway port (server-side TCP probe) and show at a glance whether CreditDaddy's gateway is reachable, with a download link and guidance when it is not.
 - **New Trae Free provider (`trae-free`)** — use Trae (SOLO) remote-agent credits through the local CreditDaddy gateway, same wiring as ZCode Free / MiniMax Free: no login card, shared host/port with a per-line path, 12 models (Doubao Seed Code, MiniMax M2.7, GLM 5 family, DeepSeek V4, Kimi K2.5/2.6, Qwen 3.5/3.6) and thinking-stream support. Its card now shows the official Trae (SOLO) desktop icon, extracted from the client executable.
 
 ### 🐛 Fixed
 
+- **Upgrading no longer hits the "cannot close 10Router" dialog (Windows installers in-place updated)** — the installer now removes the previous version's uninstaller entry itself and skips that frozen code entirely, preventing the ghost-process dialog and silent exit code 2; user data is untouched.
 - **A stream that dies mid-flight no longer leaves a green 0-token "success" row** (issue #48) — streaming requests write a placeholder row up front, and it was marked successful before the stream had produced anything. When the upstream then dropped, the abort path never touched the database, so that row was never corrected: a killed request sat in the Details list looking like a completed, free one. In-flight rows now read as in-flight, and an aborted stream is recorded as failed.
 - **One model failing no longer marks the whole connection unavailable** (issue #46) — this was the root of it: the per-model lock was being written alongside an account-level "unavailable" flag, even though routing only ever consulted the per-model lock. Sibling models kept working while the connection showed as dead. The flag is now only set for genuinely account-wide failures.
 - **A 404 on the CreditDaddy lines is no longer reported as "model not found"** (issue #47) — CreditDaddy moved its gateway endpoints to brand-scoped paths (`/gateway/zcode/…`, `/gateway/minimax/…`, `/gateway/trae/…`), so a 404 means the endpoint, not your model. The message now says so, and the card tells you what to check: that the path keeps its brand segment, and that a CreditDaddy build from before the rename still serves only the old unbranded path and should be upgraded.
