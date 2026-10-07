@@ -37,6 +37,10 @@ export default function NoAuthProxyCard({ providerId }) {
   const [gatewayHost, setGatewayHost] = useState("");
   const [gatewayPort, setGatewayPort] = useState("");
   const [gatewayPath, setGatewayPath] = useState("");
+  // CreditDaddy 网关连通性（#49 兑现）：免费线卡片对网关端口做服务端 TCP 探测，
+  // 不通时就地给出「装 CreditDaddy」的引导——这是不合并两个应用前提下，
+  // 对「不知道要装第二个」这一诉求的兑现。
+  const [gatewayProbe, setGatewayProbe] = useState({ state: "idle" });
 
   useEffect(() => {
     let cancelled = false;
@@ -58,6 +62,17 @@ export default function NoAuthProxyCard({ providerId }) {
           ? settingsData[CREDITDADDY_LINES[providerId].pathKey] || CREDITDADDY_LINES[providerId].defaultPath
           : ""
       );
+      // 设置加载后立即探测一次网关连通性。值直接取 settings（绕开 state 的
+      // 异步时序）；结果以服务端 TCP 探测为准，浏览器侧跨源探测不可靠。
+      if (CREDITDADDY_LINES[providerId]) {
+        const host = encodeURIComponent(settingsData.zcodeGatewayHost?.trim() || "127.0.0.1");
+        const port = encodeURIComponent(settingsData.zcodeGatewayPort?.trim() || "47860");
+        setGatewayProbe({ state: "probing" });
+        fetch(`/api/gateway-probe?host=${host}&port=${port}`, { cache: "no-store" })
+          .then((r) => r.ok ? r.json() : { reachable: false })
+          .then((d) => { if (!cancelled) setGatewayProbe({ state: d.reachable ? "online" : "offline" }); })
+          .catch(() => { if (!cancelled) setGatewayProbe({ state: "offline" }); });
+      }
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [providerId]);
@@ -101,6 +116,23 @@ export default function NoAuthProxyCard({ providerId }) {
   };
 
   // CreditDaddy 网关线:主机/端口共享（同一 daemon,本机留空 = 127.0.0.1;局域网填 IP;端口留空 = 47860）,路径按线分开
+
+  // 手动重探：按当前输入框的值探测（即即将保存的值）；保存成功后也会自动触发。
+  // 服务端 TCP 探测（/api/gateway-probe）——浏览器侧跨源连通性判断不可靠。
+  const probeGateway = useCallback(async () => {
+    if (!CREDITDADDY_LINES[providerId]) return;
+    setGatewayProbe({ state: "probing" });
+    try {
+      const host = encodeURIComponent(gatewayHost.trim() || "127.0.0.1");
+      const port = encodeURIComponent(gatewayPort.trim() || "47860");
+      const res = await fetch(`/api/gateway-probe?host=${host}&port=${port}`, { cache: "no-store" });
+      const data = res.ok ? await res.json() : { reachable: false };
+      setGatewayProbe({ state: data.reachable ? "online" : "offline" });
+    } catch {
+      setGatewayProbe({ state: "offline" });
+    }
+  }, [providerId, gatewayHost, gatewayPort]);
+
   const saveGatewayHost = useCallback(async (host, port, reqPath) => {
     setSaving(true);
     try {
@@ -118,12 +150,14 @@ export default function NoAuthProxyCard({ providerId }) {
       });
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 1500);
+      // 保存成功后按新配置重探网关连通性
+      probeGateway();
     } catch (e) {
       console.log("Save gateway host error:", e);
     } finally {
       setSaving(false);
     }
-  }, []);
+  }, [providerId, probeGateway]);
 
   const canRotate = proxyPools.length >= 2;
   const isRotation = rotateStrategy !== "none";
@@ -179,7 +213,50 @@ export default function NoAuthProxyCard({ providerId }) {
       </div>
       {CREDITDADDY_LINES[providerId] && (
         <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-black/5 dark:border-white/5">
-          <label className="text-sm font-medium text-text-main">{translate("CreditDaddy gateway host")}</label>
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-sm font-medium text-text-main">{translate("CreditDaddy gateway host")}</label>
+            <div className="flex items-center gap-1.5">
+              {gatewayProbe.state === "probing" && (
+                <span className="flex items-center gap-1 text-[11px] text-text-muted">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-gray-400 animate-pulse" />
+                  {translate("Probing gateway...")}
+                </span>
+              )}
+              {gatewayProbe.state === "online" && (
+                <span className="flex items-center gap-1 text-[11px] text-green-600 dark:text-green-400">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500" />
+                  {translate("Gateway reachable")}
+                </span>
+              )}
+              {gatewayProbe.state === "offline" && (
+                <span className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  {translate("Gateway unreachable")}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={probeGateway}
+                disabled={saving}
+                className="text-[11px] text-text-muted hover:text-primary transition-colors"
+              >
+                {translate("Re-probe")}
+              </button>
+            </div>
+          </div>
+          {gatewayProbe.state === "offline" && (
+            <div className="rounded-md bg-amber-500/10 border border-amber-500/20 px-2.5 py-2 text-xs text-amber-700 dark:text-amber-300">
+              {translate("Gateway unreachable — install/launch CreditDaddy and enable the gateway, then re-probe here.")}{" "}
+              <a
+                href="https://github.com/techysy/CreditDaddy/releases/latest"
+                target="_blank"
+                rel="noreferrer"
+                className="underline font-medium"
+              >
+                {translate("Download CreditDaddy")}
+              </a>
+            </div>
+          )}
           <div className="flex gap-2">
             <input
               value={gatewayHost}

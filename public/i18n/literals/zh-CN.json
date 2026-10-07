@@ -2005,6 +2005,12 @@
   "LAN (NAS, etc.): put the CreditDaddy machine IP above, then in the same CreditDaddy panel turn on \"Allow LAN access\" and add this 10Router machine's IP to the allowlist, then restart CreditDaddy.": "局域网（NAS 等）：在上方填 CreditDaddy 所在机器的 IP，再在同一面板里打开「允许局域网访问」并把本 10Router 机器的 IP 加入白名单，然后重启 CreditDaddy。",
   "The gateway is protected by an IP allowlist and checks no key, so there is nothing to enter here.": "网关由 IP 白名单保护、不校验任何 key，所以这里无需填凭据。",
   "Getting a 404? The path must keep its brand segment (e.g. /gateway/zcode/v1/messages) — CreditDaddy serves only the branded endpoints, and a build older than the rename still serves the old /gateway/v1/messages, so upgrade CreditDaddy rather than editing this field.": "遇到 404？路径必须保留品牌段（如 /gateway/zcode/v1/messages）——CreditDaddy 只提供带品牌名的端点；重命名之前的旧版本仍只提供 /gateway/v1/messages，所以请升级 CreditDaddy，而不是改这个输入框。",
+  "Probing gateway...": "正在探测网关…",
+  "Gateway reachable": "网关在线",
+  "Gateway unreachable": "网关未连通",
+  "Re-probe": "重新检测",
+  "Gateway unreachable — install/launch CreditDaddy and enable the gateway, then re-probe here.": "网关未连通——请安装/启动 CreditDaddy 并开启网关，然后回到这里重新检测。",
+  "Download CreditDaddy": "下载 CreditDaddy",
   "Synced CreditDaddy web session expired — plan credits may read low or missing. Re-export the account from CreditDaddy after logging in to Qoder web again.": "已同步的 CreditDaddy 网页会话已失效——套餐积分可能显示偏低或缺失。请在 CreditDaddy 重新登录 Qoder 网页后再次导出导入。",
   "Web session check failed for": "以下账号的网页会话校验失败：",
   "Web sessions verified": "网页会话校验通过"
