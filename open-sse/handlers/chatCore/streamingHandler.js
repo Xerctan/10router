@@ -46,7 +46,7 @@ function buildTransformStream({ provider, sourceFormat, targetFormat, userAgent,
 /**
  * Handle streaming response — pipe provider SSE through transform stream to client.
  */
-export async function handleStreamingResponse({ providerResponse, provider, model, sourceFormat, targetFormat, userAgent, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, reqLogger, toolNameMap, customToolNames, streamController, onStreamComplete, streamDetailId, pxpipe, reqTag, log }) {
+export async function handleStreamingResponse({ providerResponse, provider, model, sourceFormat, targetFormat, userAgent, body, stream, translatedBody, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, reqLogger, toolNameMap, customToolNames, streamController, onStreamComplete, streamDetailId, pxpipe, reqTag, log, finalizedRef = { current: false } }) {
   if (onRequestSuccess) {
     Promise.resolve()
       .then(onRequestSuccess)
@@ -106,6 +106,7 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
   // hook AND the terminal builder both reach for it.
   let abortRecorded = false;
   const recordAbort = (message) => {
+    if (finalizedRef.current) return message;
     if (abortRecorded) return message;
     abortRecorded = true;
     saveRequestDetail(buildRequestDetail({
@@ -124,8 +125,8 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
     return message;
   };
   const abortTerminal = isResponsesPassthrough
-    ? (message) => buildAbortedResponsesTerminalBytes(recordAbort(message))
-    : (message) => buildStreamErrorBytes(HTTP_STATUS.GATEWAY_TIMEOUT, friendlyAbort(recordAbort(message)), sourceFormat);
+    ? (message) => { finalizedRef.current = true; return buildAbortedResponsesTerminalBytes(recordAbort(message)); }
+    : (message) => { finalizedRef.current = true; return buildStreamErrorBytes(HTTP_STATUS.GATEWAY_TIMEOUT, friendlyAbort(recordAbort(message)), sourceFormat); };
 
   saveRequestDetail(buildRequestDetail({
     provider, model, connectionId,
@@ -149,6 +150,12 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
   // controller's two termination hooks makes every early-exit path finalize the
   // row; the once-guard in recordAbort dedupes against the terminal builder on
   // paths where both fire (upstream error → handleError AND emitTerminal).
+  // The row is finalized by whichever fires first — the terminal bytes below or
+  // onStreamComplete. A client that disconnects mid-flight reaches neither, so
+  // without this the placeholder above would sit "streaming" forever; the latch
+  // lets the wrapped controller reports claim the row, and (once onStreamComplete
+  // has written the real result) stops a later disconnect from overwriting a
+  // completed answer with an "aborted" error row — issue #48.
   const abortAwareController = {
     ...streamController,
     handleError: (e) => {
@@ -156,7 +163,7 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
       streamController.handleError(e);
     },
     handleDisconnect: (r) => {
-      recordAbort(typeof r === "string" ? r : "cancelled");
+      if (!finalizedRef.current) recordAbort(typeof r === "string" ? r : "cancelled");
       streamController.handleDisconnect(r);
     },
   };
@@ -170,10 +177,15 @@ export async function handleStreamingResponse({ providerResponse, provider, mode
 /**
  * Build onStreamComplete callback for streaming usage tracking.
  */
-export function buildOnStreamComplete({ provider, model, connectionId, apiKey, requestStartTime, body, stream, finalBody, translatedBody, clientRawRequest, pxpipe, reqTag, log }) {
+export function buildOnStreamComplete({ provider, model, connectionId, apiKey, requestStartTime, body, stream, finalBody, translatedBody, clientRawRequest, pxpipe, reqTag, log, finalizedRef = { current: false } }) {
   const streamDetailId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
   const onStreamComplete = (contentObj, usage, ttftAt) => {
+    // A terminal abort already wrote this row; the success write would overwrite
+    // the real failure reason with a partial "success".
+    if (finalizedRef.current) return;
+    finalizedRef.current = true;
+
     const latency = {
       ttft: ttftAt ? ttftAt - requestStartTime : Date.now() - requestStartTime,
       total: Date.now() - requestStartTime
