@@ -187,5 +187,22 @@ describe("qoder and qoder-cn quota normalization", () => {
         displayName: "Some Name",
       }),
     ).toBe("user@example.com");
+
+    // If user configured a custom name on Qoder/Qoder-CN, that custom name wins over displayName.
+    expect(
+      getConnectionLabel({
+        provider: "qoder-cn",
+        name: "主号",
+        displayName: "yu_shiyang",
+      }),
+    ).toBe("主号");
+    expect(
+      getConnectionLabel({
+        provider: "qoder",
+        name: "备用",
+        email: "i@shiyangyu.com",
+        displayName: "ShiYanG Yu",
+      }),
+    ).toBe("备用");
   });
 });

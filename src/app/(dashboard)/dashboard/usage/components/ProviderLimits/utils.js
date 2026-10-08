@@ -43,21 +43,24 @@ export function buildProviderFilterUrl(pathname, searchString, provider) {
 }
 
 export function getConnectionLabel(connection) {
-  // Qoder Intl stores the login email as the connection name (CN stores the
-  // username). Users don't want the email surfaced on the dashboard, so for
-  // Qoder prefer the human-readable profile name when available.
-  if (connection.provider === "qoder" || connection.provider === "qoder-cn") {
-    return (
-      connection.displayName?.trim() ||
-      connection.name?.trim() ||
-      connection.email?.trim() ||
-      null
-    );
+  const name = connection.name?.trim();
+  const email = connection.email?.trim();
+  const displayName = connection.displayName?.trim();
+
+  // If user explicitly configured a custom name that is distinct from the login email,
+  // honor that custom name across all providers (including Qoder).
+  if (name && name !== email) {
+    return name;
   }
-  return connection.name?.trim()
-    || connection.email?.trim()
-    || connection.displayName?.trim()
-    || null;
+
+  // Qoder Intl stores the login email as the connection name (CN stores the
+  // username). If no custom name was specified (i.e. name equals email or is empty),
+  // prefer the human-readable profile display name when available.
+  if (connection.provider === "qoder" || connection.provider === "qoder-cn") {
+    return displayName || name || email || null;
+  }
+
+  return name || email || displayName || null;
 }
 
 export function getConnectionQuotaRemaining(connection, quotaData) {

@@ -142,18 +142,26 @@ export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst
   const isXiaomi = connection.provider === "xiaomi-mimo" || connection.provider === "xiaomi-tokenplan";
   const xiaomiDisplayName = isXiaomi && xiaomiUid ? `MiMo ${xiaomiUid}` : null;
 
-  const displayName = connection.name?.trim()
+  const rawName = connection.name?.trim();
+  const rawEmail = connection.email?.trim();
+  const rawDisplay = connection.displayName?.trim();
+  const hasCustomName = Boolean(rawName && rawName !== rawEmail && (!rawDisplay || rawName !== rawDisplay));
+
+  const displayName = rawName
     || xiaomiDisplayName
-    || connection.email?.trim()
-    || connection.displayName?.trim()
+    || rawEmail
+    || rawDisplay
     || (isOAuthConnection ? "OAuth Account" : isCookieConnection ? "Cookie Account" : "API Key");
-  const secondaryDisplayName = connection.name?.trim() && connection.email?.trim() && connection.name.trim() !== connection.email.trim()
-    ? connection.email.trim()
-    : xiaomiDisplayName && connection.email?.trim() && connection.email.trim() !== xiaomiDisplayName
-      ? connection.email.trim()
-      : connection.name?.trim() && connection.displayName?.trim() && connection.name.trim() !== connection.displayName.trim()
-        ? connection.displayName.trim()
-        : null;
+
+  const secondaryDisplayName = hasCustomName
+    ? null
+    : rawName && rawEmail && rawName !== rawEmail
+      ? rawEmail
+      : xiaomiDisplayName && rawEmail && rawEmail !== xiaomiDisplayName
+        ? rawEmail
+        : rawName && rawDisplay && rawName !== rawDisplay
+          ? rawDisplay
+          : null;
 
   // Single source of truth for the cooldown reading (issue #46). This used to
   // be recomputed twice in this file with two different filters: the value fed
